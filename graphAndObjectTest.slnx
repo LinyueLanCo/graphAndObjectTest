@@ -1,0 +1,7 @@
+<Solution>
+  <Configurations>
+    <Platform Name="x64" />
+    <Platform Name="x86" />
+  </Configurations>
+  <Project Path="graphAndObjectTest.vcxproj" Id="8b5ba559-0094-41ab-bb7f-885a8e14f9c1" />
+</Solution>
