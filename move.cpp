@@ -35,6 +35,8 @@ int worldToScreenY(double worldY)
 
 // Alpha 透明图片绘制
 
+//将图片扩展为单独的sprite类，以实现逻辑与渲染的业务分离，后续还可以添加图层支持与序列帧动画的支持
+
 
 inline void putimage_alpha(int x, int y, IMAGE* img)
 {
@@ -55,10 +57,109 @@ inline void putimage_alpha(int x, int y, IMAGE* img)
         blend
     );
 }
+//重载一个版本，允许指定绘制尺寸，实现简单的缩放功能
+inline void putimage_alpha(int x, int y, int drawW, int drawH, IMAGE* img)
+{
+    int sourceW = img->getwidth();
+    int sourceH = img->getheight();
 
+    if (drawW < 1)
+    {
+        drawW = 1;
+    }
+
+    if (drawH < 1)
+    {
+        drawH = 1;
+    }
+
+    BLENDFUNCTION blend;
+    blend.BlendOp = AC_SRC_OVER;
+    blend.BlendFlags = 0;
+    blend.SourceConstantAlpha = 255;
+    blend.AlphaFormat = AC_SRC_ALPHA;
+
+    AlphaBlend(
+        GetImageHDC(NULL),
+        x, y, drawW, drawH,
+        GetImageHDC(img),
+        0, 0, sourceW, sourceH,
+        blend
+    );
+}
+
+//剥离并抽象出Sprite结构体，允许后续添加图层支持与序列帧动画的支持
+struct Sprite
+{
+    IMAGE img;
+	double offsetX;
+	double offsetY;
+
+    double scaleX;
+    double scaleY;
+
+    Sprite()
+    {
+        offsetX = 0;
+        offsetY = 0;
+
+        scaleX = 0;
+        scaleY = 0;
+    
+    }
+	//加载逻辑与IMAGE类分离
+    void load(const TCHAR* imagePath)
+    {
+        loadimage(&img, imagePath);
+    }
+    //拿到原始的长和宽
+	int getOriginalWidth()
+	{
+		return img.getwidth();
+	}
+	int getOriginalHeight()
+	{
+		return img.getheight();
+	}
+    //计算缩放之后的长和宽
+	int getDrawWidth()
+	{
+		return (int)(img.getwidth() * scaleX);
+	}
+	int getDrawHeight()
+	{
+		return (int)(img.getheight() * scaleY);
+	}
+	//计算偏移与缩放之后之后的渲染坐标
+    void setTransform(double newScaleX, double newScaleY, double newOffsetX, double newOffsetY)
+    {
+        scaleX = newScaleX;
+        scaleY = newScaleY;
+
+        offsetX = newOffsetX;
+        offsetY = newOffsetY;
+    }
+    //绘制逻辑
+    void draw(double ownerX, double ownerY)
+    {
+		//拿到缩放之后的长和宽
+        int drawW = getDrawWidth();
+        int drawH = getDrawHeight();
+		//计算偏移与缩放之后之后的渲染坐标
+        double spriteCenterX = ownerX + offsetX;
+        double spriteCenterY = ownerY + offsetY;
+		//因为世界坐标系以左下角为原点，而屏幕坐标系以左上角为原点，所以y轴的偏移需要反过来
+        double worldLeft = spriteCenterX - drawW / 2.0;
+        double worldTop = spriteCenterY + drawH / 2.0;
+		//将世界坐标转换为屏幕坐标
+        int drawX = worldToScreenX(worldLeft);
+        int drawY = worldToScreenY(worldTop);
+		//调用之前定义的支持缩放的Alpha透明图片绘制函数
+        putimage_alpha(drawX, drawY, drawW, drawH, &img);
+    }
+};
 
 // 碰撞盒
-
 
 struct RectBox
 {
@@ -127,7 +228,7 @@ bool isRangeOverlapping(double aMin, double aMax, double bMin, double bMax)
 class Player
 {
 private:
-    IMAGE img;
+    Sprite sprite;
 
     // 世界坐标，左下角原点
     // x / y 表示实体中心点
@@ -198,7 +299,7 @@ public:
         bool isGod
     )
     {
-        loadimage(&img, imagePath);
+        sprite.load(imagePath);
 
         x = startX;
         y = startY;
@@ -222,8 +323,8 @@ public:
 
         jumpKeyWasDown = false;
 
-        int imgW = img.getwidth();
-        int imgH = img.getheight();
+        int imgW = sprite.getOriginalWidth();
+        int imgH = sprite.getOriginalHeight();
 
         collisionBox.width = imgW;
         collisionBox.height = imgH;
@@ -676,26 +777,11 @@ public:
     // 渲染
     
 
-    int getScreenDrawX()
-    {
-        double worldLeft = x - img.getwidth() / 2.0;
 
-        return worldToScreenX(worldLeft);
-    }
-
-    int getScreenDrawY()
-    {
-        double worldTop = y + img.getheight() / 2.0;
-
-        return worldToScreenY(worldTop);
-    }
 
     void draw()
     {
-        int drawX = getScreenDrawX();
-        int drawY = getScreenDrawY();
-
-        putimage_alpha(drawX, drawY, &img);
+		sprite.draw(x, y);
 
         drawCollisionBox();
     }
@@ -724,6 +810,10 @@ public:
 
         rectangle(screenLeft, screenTop, screenRight, screenBottom);
     }
+	void setSpriteTransform(double scaleX, double scaleY, double offsetX, double offsetY)
+	{
+		sprite.setTransform(scaleX, scaleY, offsetX, offsetY);
+	}
 };
 
 
@@ -756,7 +846,12 @@ int main()
         Player(_T("player3.png"), 950, 850, false, true, true, false),
 
         Player(_T("player4.png"), 1300, 650, false, true, false, false)
+
     };
+    players[0].setSpriteTransform(1.2, 1.2, 0, 20);
+    players[1].setSpriteTransform(0.8, 0.8, 0, 0);
+    players[2].setSpriteTransform(1.0, 1.0, 30, 0);
+    players[3].setSpriteTransform(1.0, 1.3, 0, -20);
 
     bool lastOverlap[ENTITY_COUNT][ENTITY_COUNT] = {};
     bool lastCollisionState[ENTITY_COUNT] = {};
