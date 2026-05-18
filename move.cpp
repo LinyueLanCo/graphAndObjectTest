@@ -103,8 +103,8 @@ struct Sprite
         offsetX = 0;
         offsetY = 0;
 
-        scaleX = 0;
-        scaleY = 0;
+        scaleX = 1.0;
+        scaleY = 1.0;
     
     }
 	//加载逻辑与IMAGE类分离
@@ -282,10 +282,10 @@ public:
 
         collisionBox.width = 0;
         collisionBox.height = 0;
-		collisionBox.offsetX = 0;
-		collisionBox.offsetY = 0;
-		collisionBox.scaleX = 1;
-		collisionBox.scaleY = 1;
+		collisionBox.offsetX = 0.0;
+		collisionBox.offsetY = 0.0;
+		collisionBox.scaleX = 1.0;
+		collisionBox.scaleY = 1.0;
 
     }
 
@@ -328,10 +328,10 @@ public:
 
         collisionBox.width = imgW;
         collisionBox.height = imgH;
-		collisionBox.offsetX = 0;
-		collisionBox.offsetY = 0;
-		collisionBox.scaleX = 1;
-		collisionBox.scaleY = 1;
+		collisionBox.offsetX = 0.0;
+		collisionBox.offsetY = 0.0;
+		collisionBox.scaleX = 1.0;
+		collisionBox.scaleY = 1.0;
 
     }
 
@@ -848,10 +848,10 @@ int main()
         Player(_T("player4.png"), 1300, 650, false, true, false, false)
 
     };
-    players[0].setSpriteTransform(1.2, 1.2, 0, 20);
-    players[1].setSpriteTransform(0.8, 0.8, 0, 0);
-    players[2].setSpriteTransform(1.0, 1.0, 30, 0);
-    players[3].setSpriteTransform(1.0, 1.3, 0, -20);
+    //players[0].setSpriteTransform(1.2, 1.2, 0, 20);
+    //players[1].setSpriteTransform(0.8, 0.8, 0, 0);
+    //players[2].setSpriteTransform(1.0, 1.0, 30, 0);
+    //players[3].setSpriteTransform(4.0, 4.0, 0, 80);
 
     bool lastOverlap[ENTITY_COUNT][ENTITY_COUNT] = {};
     bool lastCollisionState[ENTITY_COUNT] = {};
