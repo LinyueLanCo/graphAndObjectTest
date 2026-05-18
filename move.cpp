@@ -3,6 +3,8 @@
 #include <conio.h>
 #include <cmath>
 #include <iostream>
+#include<fstream>
+//后续会添加外部
 using namespace std;
 
 #pragma comment(lib, "Msimg32.lib")
@@ -411,7 +413,7 @@ public:
         overlapping = false;
         collisionState = false;
 
-        sprinting = false;
+        //sprinting = false;
 
         blockedByEntity = false;
         blockedByWorld = false;
@@ -493,17 +495,41 @@ public:
             shiftDown = true;
         }
 
-        if (shiftDown)
+        bool hasMoveInput = false;
+
+        if (inputX != 0)
+        {
+            hasMoveInput = true;
+        }
+
+        bool wantSprint = false;
+
+        if (controlled && shiftDown && hasMoveInput)
+        {
+            wantSprint = true;
+        }
+
+        if (!wantSprint)
+        {
+            sprinting = false;
+        }
+        else
+        {
+            if (!sprinting && onGround)
+            {
+                sprinting = true;
+            }
+
+            // 如果 sprinting 本来就是 true，就允许它在空中继续保持
+        }
+
+        if (sprinting)
         {
             currentSpeed = speed * 2;
         }
-
         // 是否正在冲刺：
         // 必须是受控制实体，按下 Shift，并且有移动输入。
-        if (controlled && shiftDown && (inputX != 0 || inputY != 0))
-        {
-            sprinting = true;
-        }
+
 
         // god 模式：不受重力、不受阻挡碰撞影响，可以自由移动
         if (god)
@@ -933,12 +959,19 @@ int main()
         // 5. 输出冲刺状态变化
         for (int i = 0; i < ENTITY_COUNT; i++)
         {
-            if (players[i].isSprinting() && !lastSprintState[i])
+            bool nowSprinting = players[i].isSprinting();
+
+            if (nowSprinting && !lastSprintState[i])
             {
                 cout << "Entity " << i << " started sprinting." << endl;
             }
 
-            lastSprintState[i] = players[i].isSprinting();
+            if (!nowSprinting && lastSprintState[i])
+            {
+                cout << "Entity " << i << " ended sprinting." << endl;
+            }
+
+            lastSprintState[i] = nowSprinting;
         }
 
         // 6. 重叠事件检测,这里只检测真正重叠，贴边不算碰撞
