@@ -87,6 +87,17 @@ inline void putimage_alpha(int x, int y, int drawW, int drawH, IMAGE* img)
         blend
     );
 }
+//重大结构调整准备：将所有的涉及逻辑更新的事件与判定统一剥离，并抽象出level类，由level类来统一管理事件与判定，玩家类只负责输入、物理、状态更新与渲染，事件与判定的结果通过状态反馈给玩家类，由玩家类来控制状态的切换与渲染表现
+
+class level
+{
+	// 这里暂时不实现，后续会添加事件与判定的统一管理
+};
+
+//重大新增功能准备：卷轴移动/摄像机概念，渲染范围跟随玩家移动，伴随而来的是抽象出实际的游戏逻辑坐标系，与实际的窗口显示内容和坐标对应关系，以及坐标转换函数的实现
+
+
+
 
 //剥离并抽象出Sprite结构体，允许后续添加图层支持与序列帧动画的支持
 struct Sprite
@@ -157,6 +168,7 @@ struct Sprite
 		//调用之前定义的支持缩放的Alpha透明图片绘制函数
         putimage_alpha(drawX, drawY, drawW, drawH, &img);
     }
+	//后续可能将渲染逻辑从sprite里剥离，放进一个专门的render类，render负责处理相机位置与坐标转换，sprite只负责提供变换后的坐标与尺寸，render来调用绘制函数进行渲染
 };
 
 // 碰撞盒
@@ -859,7 +871,7 @@ int main()
     //players[0].setSpriteTransform(1.2, 1.2, 0, 20);
     //players[1].setSpriteTransform(0.8, 0.8, 0, 0);
     //players[2].setSpriteTransform(1.0, 1.0, 30, 0);
-    players[3].setSpriteTransform(4.0, 4.0, 0, 80);
+    players[3].setSpriteTransform(6.0, 6.0, 0, 160);
 
     bool lastOverlap[ENTITY_COUNT][ENTITY_COUNT] = {};
     bool lastCollisionState[ENTITY_COUNT] = {};
