@@ -245,7 +245,7 @@ private:
 
     bool overlapping;      // 是否与可碰撞对象真正重叠
     bool collisionState;   // 是否发生碰撞状态，用于控制碰撞箱颜色
-
+	bool InAir;          // 是否在空中
     bool onGround;         // 是否站在地面或平台上
     bool sprinting;        // 是否正在冲刺
 
@@ -274,6 +274,7 @@ public:
 
         onGround = false;
         sprinting = false;
+        InAir = false;
 
         blockedByEntity = false;
         blockedByWorld = false;
@@ -317,7 +318,7 @@ public:
 
         onGround = false;
         sprinting = false;
-
+        InAir = false;
         blockedByEntity = false;
         blockedByWorld = false;
 
@@ -354,7 +355,10 @@ public:
     {
         return onGround;
     }
-
+	bool isInAir()
+	{
+		return InAir;
+	}
     bool isSprinting()
     {
         return sprinting;
@@ -523,6 +527,7 @@ public:
         {
             velocityY = JUMP_SPEED;
             onGround = false;
+            InAir = true;
         }
 
         jumpKeyWasDown = jumpKeyDown;
@@ -550,6 +555,7 @@ public:
 
         // 每次执行垂直运动之前，先假设当前不在地面
         onGround = false;
+        InAir = true;
 
         double wantMoveY = velocityY;
 
@@ -561,6 +567,7 @@ public:
             if (wantMoveY < 0)
             {
                 onGround = true;
+                InAir = false;
             }
             else if (wantMoveY > 0)
             {
@@ -752,6 +759,7 @@ public:
             y += 0 - box.bottom;
             blockedByWorld = true;
             onGround = true;
+            InAir = false;
 
             if (velocityY < 0)
             {
@@ -851,12 +859,13 @@ int main()
     //players[0].setSpriteTransform(1.2, 1.2, 0, 20);
     //players[1].setSpriteTransform(0.8, 0.8, 0, 0);
     //players[2].setSpriteTransform(1.0, 1.0, 30, 0);
-    //players[3].setSpriteTransform(4.0, 4.0, 0, 80);
+    players[3].setSpriteTransform(4.0, 4.0, 0, 80);
 
     bool lastOverlap[ENTITY_COUNT][ENTITY_COUNT] = {};
     bool lastCollisionState[ENTITY_COUNT] = {};
     bool lastGroundState[ENTITY_COUNT] = {};
     bool lastSprintState[ENTITY_COUNT] = {};
+    bool lastInAirState[ENTITY_COUNT] = {}; 
 
     BeginBatchDraw();
 
@@ -900,7 +909,15 @@ int main()
 
             lastGroundState[i] = players[i].isOnGround();
         }
-
+		// 4. 输出起跳状态变化
+        for(int i = 0; i < ENTITY_COUNT; i++)
+        {
+            if(players[i].isInAir() && !lastInAirState[i])
+            {
+                cout << "Entity " << i << " is in air." << endl;
+            }
+            lastInAirState[i] = players[i].isInAir();
+        }
         // 5. 输出冲刺状态变化
         for (int i = 0; i < ENTITY_COUNT; i++)
         {
