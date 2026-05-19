@@ -90,7 +90,33 @@ inline void putimage_alpha(int x, int y, int drawW, int drawH, IMAGE* img)
     );
 }
 //重大结构调整准备：将所有的涉及逻辑更新的事件与判定统一剥离，并抽象出level类，由level类来统一管理事件与判定，玩家类只负责输入、物理、状态更新与渲染，事件与判定的结果通过状态反馈给玩家类，由玩家类来控制状态的切换与渲染表现
+inline void putimage_alpha_tile(
+    int x,
+    int y,
+    int drawW,
+    int drawH,
+	IMAGE* img,
+    int srcX,
+    int srcY,
+    int srcW,
+    int srcH
+)
+{
+    BLENDFUNCTION blend;
+    blend.BlendOp = AC_SRC_OVER;
+    blend.BlendFlags = 0;
+    blend.SourceConstantAlpha = 255;
+    blend.AlphaFormat = AC_SRC_ALPHA;
 
+    AlphaBlend
+    (
+        GetImageHDC(NULL),
+        x, y, drawW, drawH,
+        GetImageHDC(img),
+        srcX, srcY, srcW, srcH,
+        blend
+    );
+}
 class level
 {
 	// 这里暂时不实现，后续会添加事件与判定的统一管理
@@ -235,11 +261,252 @@ bool isRangeOverlapping(double aMin, double aMax, double bMin, double bMax)
     return true;
 }
 
+enum TileId
+{
+    TILE_EMPTY = 0
+};
+
+class TileMap
+{
+private:
+    IMAGE tileset;
+
+    int rows;
+    int cols;
+
+    // 原始 tileset 中每个 tile 的大小，比如你的图是 16x16
+    int sourceTileWidth;
+    int sourceTileHeight;
+
+    // 实际显示到游戏世界里的大小，比如放大到 48x48
+    int drawTileWidth;
+    int drawTileHeight;
+
+    // 动态二维数组
+    int** tiles;
+
+    // 整张地图在世界坐标里的偏移
+    double offsetX;
+    double offsetY;
+
+public:
+    TileMap()
+    {
+        rows = 0;
+        cols = 0;
+
+        sourceTileWidth = 16;
+        sourceTileHeight = 16;
+
+        drawTileWidth = 48;
+        drawTileHeight = 48;
+
+        tiles = NULL;
+
+        offsetX = 0;
+        offsetY = 0;
+    }
+
+    ~TileMap()
+    {
+        release();
+    }
+
+    void release()
+    {
+        if (tiles != NULL)
+        {
+            for (int row = 0; row < rows; row++)
+            {
+                delete[] tiles[row];
+            }
+
+            delete[] tiles;
+            tiles = NULL;
+        }
+
+        rows = 0;
+        cols = 0;
+    }
+
+    void setTileSize(
+        int newSourceTileWidth,
+        int newSourceTileHeight,
+        int newDrawTileWidth,
+        int newDrawTileHeight
+    )
+    {
+        sourceTileWidth = newSourceTileWidth;
+        sourceTileHeight = newSourceTileHeight;
+
+        drawTileWidth = newDrawTileWidth;
+        drawTileHeight = newDrawTileHeight;
+    }
+
+    void setOffset(double newOffsetX, double newOffsetY)
+    {
+        offsetX = newOffsetX;
+        offsetY = newOffsetY;
+    }
+
+    void loadTileset(const TCHAR* imagePath)
+    {
+        loadimage(&tileset, imagePath);
+    }
+
+    bool loadFromFile(const char* mapPath)
+    {
+        ifstream inFile(mapPath);
+
+        if (!inFile.is_open())
+        {
+            cout << "Failed to open map file: " << mapPath << endl;
+            return false;
+        }
+
+        release();
+
+        inFile >> rows >> cols;
+
+        if (rows <= 0 || cols <= 0)
+        {
+            cout << "Invalid map size." << endl;
+            return false;
+        }
+
+        tiles = new int* [rows];
+
+        for (int row = 0; row < rows; row++)
+        {
+            tiles[row] = new int[cols];
+
+            for (int col = 0; col < cols; col++)
+            {
+                inFile >> tiles[row][col];
+            }
+        }
+
+        inFile.close();
+
+        return true;
+    }
+
+    void draw()
+    {
+        for (int row = 0; row < rows; row++)
+        {
+            for (int col = 0; col < cols; col++)
+            {
+                drawTile(row, col);
+            }
+        }
+    }
+
+    void drawTile(int row, int col)
+    {
+        int tileId = tiles[row][col];
+
+        if (tileId == TILE_EMPTY)
+        {
+            return;
+        }
+
+        // 因为 0 是空格，所以真正对应 tileset 的编号要 -1
+        int realTileIndex = tileId - 1;
+
+        int tilesetCols = tileset.getwidth() / sourceTileWidth;
+
+        int srcX = (realTileIndex % tilesetCols) * sourceTileWidth;
+        int srcY = (realTileIndex / tilesetCols) * sourceTileHeight;
+
+        // row / col 是二维数组位置
+        // worldLeft / worldBottom 是世界坐标位置
+        double worldLeft = offsetX + col * drawTileWidth;
+        double worldBottom = offsetY + (rows - 1 - row) * drawTileHeight;
+        double worldTop = worldBottom + drawTileHeight;
+
+        // EasyX 绘制需要左上角，所以用 worldTop 转屏幕 Y
+        int drawX = worldToScreenX(worldLeft);
+        int drawY = worldToScreenY(worldTop);
+
+        putimage_alpha_tile(
+            drawX,
+            drawY,
+            drawTileWidth,
+            drawTileHeight,
+            &tileset,
+            srcX,
+            srcY,
+            sourceTileWidth,
+            sourceTileHeight
+        );
+    }
+
+    bool isSolidTile(int row, int col)
+    {
+        if (row < 0 || row >= rows || col < 0 || col >= cols)
+        {
+            return false;
+        }
+
+        int tileId = tiles[row][col];
+
+        // 第一版先简单处理：
+        // 只要不是空格，就当作有碰撞
+        if (tileId != TILE_EMPTY)
+        {
+            return true;
+        }
+
+        return false;
+    }
+
+    RectBox getTileWorldBox(int row, int col)
+    {
+        RectBox box;
+
+        double worldLeft = offsetX + col * drawTileWidth;
+        double worldBottom = offsetY + (rows - 1 - row) * drawTileHeight;
+
+        box.left = worldLeft;
+        box.right = worldLeft + drawTileWidth;
+        box.bottom = worldBottom;
+        box.top = worldBottom + drawTileHeight;
+
+        return box;
+    }
+
+    void drawDebugCollisionBoxes()
+    {
+        setlinecolor(YELLOW);
+
+        for (int row = 0; row < rows; row++)
+        {
+            for (int col = 0; col < cols; col++)
+            {
+                if (!isSolidTile(row, col))
+                {
+                    continue;
+                }
+
+                RectBox box = getTileWorldBox(row, col);
+
+                int screenLeft = worldToScreenX(box.left);
+                int screenRight = worldToScreenX(box.right);
+                int screenTop = worldToScreenY(box.top);
+                int screenBottom = worldToScreenY(box.bottom);
+
+                rectangle(screenLeft, screenTop, screenRight, screenBottom);
+            }
+        }
+    }
+};
+
 
 // 实体类
 
-
-class Player
+//修改为通用的entity类，允许后续添加不同类型的实体，玩家、敌人、NPC，可交互物体等，具有不同的行为与属性
+class Entity
 {
 private:
     Sprite sprite;
@@ -271,7 +538,7 @@ private:
     CollisionBox collisionBox;
 
 public:
-    Player()
+    Entity()
     {
         x = 0;
         y = 0;
@@ -304,7 +571,7 @@ public:
 
     }
 
-    Player(
+    Entity(
         const TCHAR* imagePath,
         double startX,
         double startY,
@@ -455,7 +722,7 @@ public:
     // 更新逻辑
     
 
-    void update(Player players[], int entityCount, int selfIndex)
+    void update(Entity players[], int entityCount, int selfIndex)
     {
         double inputX = 0;
         double inputY = 0;
@@ -502,9 +769,9 @@ public:
             hasMoveInput = true;
         }
 
-        bool wantSprint = false;
+		bool wantSprint = false;// 是否想要冲刺：
 
-        if (controlled && shiftDown && hasMoveInput)
+		if (controlled && shiftDown && hasMoveInput)// 冲刺条件：受控制、按下 Shift、有移动输入
         {
             wantSprint = true;
         }
@@ -571,7 +838,7 @@ public:
         jumpKeyWasDown = jumpKeyDown;
 
         // x 轴暂时不使用加速度
-        double wantMoveX = inputX * currentSpeed;
+		double wantMoveX = inputX * currentSpeed;//输入决定了想要移动的距离,公式为：速度 = 输入 * 速度值，所以想要移动的距离 = 输入 * 速度值 * 时间，时间为1tick，所以简化为输入 * 速度值
 
         double allowedMoveX = getAllowedMoveX(wantMoveX, players, entityCount, selfIndex);
 
@@ -595,9 +862,9 @@ public:
         onGround = false;
         InAir = true;
 
-        double wantMoveY = velocityY;
+		double wantMoveY = velocityY;//速度决定了想要移动的距离，公式为：距离 = 速度 * 时间，所以想要移动的距离 = 速度 * 时间，时间为1tick，所以简化为速度值
 
-        double allowedMoveY = getAllowedMoveY(wantMoveY, players, entityCount, selfIndex);
+		double allowedMoveY = getAllowedMoveY(wantMoveY, players, entityCount, selfIndex);//获取实际允许的移动距离
 
         if (fabs(allowedMoveY - wantMoveY) > EPS)
         {
@@ -626,7 +893,7 @@ public:
     // X 方向阻挡检测
     
 
-    double getAllowedMoveX(double moveX, Player players[], int entityCount, int selfIndex)
+    double getAllowedMoveX(double moveX, Entity players[], int entityCount, int selfIndex)
     {
         if (moveX == 0)
         {
@@ -698,7 +965,7 @@ public:
     // Y 方向阻挡检测
     
 
-    double getAllowedMoveY(double moveY, Player players[], int entityCount, int selfIndex)
+    double getAllowedMoveY(double moveY, Entity players[], int entityCount, int selfIndex)
     {
         if (moveY == 0)
         {
@@ -869,12 +1136,16 @@ int main()
 {
     initgraph(WINDOW_WIDTH, WINDOW_HEIGHT);
     setbkcolor(BLACK);
+	TileMap tileMap;
+    tileMap.setTileSize(16,16,48,48);
+	tileMap.loadTileset(_T("tileset.png"));
+	tileMap.loadFromFile("map.txt");
     cleardevice();
 
     IMAGE background;
     loadimage(&background, _T("background.jpg"));
-
-    Player players[ENTITY_COUNT] =
+	tileMap.draw();
+    Entity players[ENTITY_COUNT] =
     {
         // 参数：
         // 图片路径，
@@ -885,13 +1156,13 @@ int main()
         // 是否阻挡移动，
         // 是否 god
 
-        Player(_T("player1.png"), 200, 700, true, true, true, false),
+        Entity(_T("player1.png"), 200, 700, true, true, true, false),
 
-        Player(_T("player2.png"), 600, 900, false, true, false, false),
+        Entity(_T("player2.png"), 600, 900, false, true, false, false),
 
-        Player(_T("player3.png"), 950, 850, false, true, true, false),
+        Entity(_T("player3.png"), 950, 850, false, true, true, false),
 
-        Player(_T("player4.png"), 1300, 650, false, true, false, false)
+        Entity(_T("player4.png"), 1300, 650, false, true, false, false)
 
     };
     //players[0].setSpriteTransform(1.2, 1.2, 0, 20);
@@ -1006,8 +1277,10 @@ int main()
 
         // 7. 绘制
         cleardevice();
-
+        
         putimage(0, 0, &background);
+        putimage(0, 0, &background);
+        tileMap.draw();
 
         for (int i = 0; i < ENTITY_COUNT; i++)
         {
