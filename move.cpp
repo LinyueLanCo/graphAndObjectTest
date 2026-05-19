@@ -24,20 +24,69 @@ const double MAX_FALL_SPEED = -28.0;
 // 坐标转换
 
 
+struct Camera
+{
+    double x;
+    double y;
+
+    Camera()
+    {
+        x = 0;
+        y = 0;
+    }
+
+    void follow(double targetX, double targetY, int worldWidth, int worldHeight)
+    {
+        // 让目标尽量位于屏幕中心
+        x = targetX - WINDOW_WIDTH / 2;
+        y = targetY - WINDOW_HEIGHT / 2;
+
+        // 限制左边和下边，不能看到世界外面
+        if (x < 0)
+        {
+            x = 0;
+        }
+
+        if (y < 0)
+        {
+            y = 0;
+        }
+
+        // 如果世界比窗口还小，就不移动 camera
+        if (worldWidth <= WINDOW_WIDTH)
+        {
+            x = 0;
+        }
+        else if (x > worldWidth - WINDOW_WIDTH)
+        {
+            x = worldWidth - WINDOW_WIDTH;
+        }
+
+        if (worldHeight <= WINDOW_HEIGHT)
+        {
+            y = 0;
+        }
+        else if (y > worldHeight - WINDOW_HEIGHT)
+        {
+            y = worldHeight - WINDOW_HEIGHT;
+        }
+    }
+};
+
+Camera gCamera;
+
 int worldToScreenX(double worldX)
 {
-    return (int)worldX;
+    return (int)(worldX - gCamera.x);
 }
 
 int worldToScreenY(double worldY)
 {
-    return (int)(WINDOW_HEIGHT - worldY);
+    return (int)(WINDOW_HEIGHT - (worldY - gCamera.y));
 }
-
 
 // Alpha 透明图片绘制
 
-//将图片扩展为单独的sprite类，以实现逻辑与渲染的业务分离，后续还可以添加图层支持与序列帧动画的支持
 
 
 inline void putimage_alpha(int x, int y, IMAGE* img)
@@ -123,7 +172,6 @@ class level
 };
 
 //重大新增功能准备：卷轴移动/摄像机概念，渲染范围跟随玩家移动，伴随而来的是抽象出实际的游戏逻辑坐标系，与实际的窗口显示内容和坐标对应关系，以及坐标转换函数的实现
-
 
 
 
@@ -500,6 +548,14 @@ public:
             }
         }
     }
+	int getworldWidth()//根据列数和每个 tile 的显示宽度计算整个地图在世界坐标系中的宽度
+	{
+        return cols * drawTileWidth;
+	}
+	int getWOrldHeight()//根据行数和每个 tile 的显示高度计算整个地图在世界坐标系中的高度
+    {
+        return rows * drawTileHeight;
+    }
 };
 
 
@@ -529,7 +585,7 @@ private:
 	bool InAir;          // 是否在空中
     bool onGround;         // 是否站在地面或平台上
     bool sprinting;        // 是否正在冲刺
-
+    bool jumping;           //是否跳跃
     bool blockedByEntity;  // 本帧是否被实体阻挡
     bool blockedByWorld;   // 本帧是否被世界边界阻挡
 
@@ -556,7 +612,7 @@ public:
         onGround = false;
         sprinting = false;
         InAir = false;
-
+		jumping = false;
         blockedByEntity = false;
         blockedByWorld = false;
 
@@ -600,6 +656,7 @@ public:
         onGround = false;
         sprinting = false;
         InAir = false;
+		jumping = false;
         blockedByEntity = false;
         blockedByWorld = false;
 
@@ -644,7 +701,10 @@ public:
     {
         return sprinting;
     }
-
+	bool isJumping()
+	{
+		return jumping;
+	}
     bool hasCollisionState()
     {
         return collisionState;
@@ -659,7 +719,15 @@ public:
     {
         return blockedByWorld;
     }
-
+	double getX()//获取实体的世界坐标 X，注意这里返回的是实体中心点的坐标
+    {
+        return x;
+        
+    }
+	double getY()//获取实体的世界坐标 Y，注意这里返回的是实体中心点的坐标
+	{
+		return y;
+	}
     void setOverlapping(bool value)
     {
         overlapping = value;
@@ -675,7 +743,7 @@ public:
         collisionState = value;
     }
 
-    void clearFrameState()
+    void clearFrameState()//每帧需要清除/重新更新的状态
     {
         overlapping = false;
         collisionState = false;
@@ -685,14 +753,11 @@ public:
         blockedByEntity = false;
         blockedByWorld = false;
 
-        // 注意：
         // 这里不要清除 onGround。
         // onGround 是物理状态，不是单帧显示状态。
         // 它会在 update() 里的垂直运动阶段重新判断。
     }
 
-    
-    
     
 	//将定义的碰撞盒转换为坐标系下的实际范围，用作碰撞检测
     RectBox getWorldCollisionBoxAt(double testX, double testY)
@@ -722,7 +787,7 @@ public:
     // 更新逻辑
     
 
-    void update(Entity players[], int entityCount, int selfIndex)
+    void update(Entity players[], int entityCount, int selfIndex, int worldWidth, int worldHeight)
     {
         double inputX = 0;
         double inputY = 0;
@@ -812,7 +877,7 @@ public:
             x += inputX * currentSpeed;
             y += inputY * currentSpeed;
 
-            limitInWindow();
+            limitInWorld(worldWidth, worldHeight);
 
             return;
         }
@@ -833,6 +898,7 @@ public:
             velocityY = JUMP_SPEED;
             onGround = false;
             InAir = true;
+			jumping = true;
         }
 
         jumpKeyWasDown = jumpKeyDown;
@@ -873,6 +939,7 @@ public:
             {
                 onGround = true;
                 InAir = false;
+				jumping = false;
             }
             else if (wantMoveY > 0)
             {
@@ -886,7 +953,7 @@ public:
 
         y += allowedMoveY;
 
-        limitInWindow();
+        limitInWorld(worldWidth, worldHeight);
     }
 
     
@@ -1036,10 +1103,9 @@ public:
     }
 
     
-    // 世界边界限制
     
-
-    void limitInWindow()
+	//修改了世界边界限制的逻辑
+    void limitInWorld(int worldWidth, int worldHeight)
     {
         RectBox box = getWorldCollisionBox();
 
@@ -1051,9 +1117,9 @@ public:
 
         box = getWorldCollisionBox();
 
-        if (box.right > WINDOW_WIDTH)
+        if (box.right > worldWidth)
         {
-            x -= box.right - WINDOW_WIDTH;
+            x -= box.right - worldWidth;
             blockedByWorld = true;
         }
 
@@ -1065,7 +1131,7 @@ public:
             blockedByWorld = true;
             onGround = true;
             InAir = false;
-
+            jumping = false;
             if (velocityY < 0)
             {
                 velocityY = 0;
@@ -1074,9 +1140,9 @@ public:
 
         box = getWorldCollisionBox();
 
-        if (box.top > WINDOW_HEIGHT)
+        if (box.top > worldHeight)
         {
-            y -= box.top - WINDOW_HEIGHT;
+            y -= box.top - worldHeight;
             blockedByWorld = true;
 
             if (velocityY > 0)
@@ -1140,11 +1206,22 @@ int main()
     tileMap.setTileSize(16,16,48,48);
 	tileMap.loadTileset(_T("tileset.png"));
 	tileMap.loadFromFile("map.txt");
+    int worldWidth = tileMap.getworldWidth();
+    int worldHeight = tileMap.getWOrldHeight();
+
+    if (worldWidth < WINDOW_WIDTH)
+    {
+        worldWidth = WINDOW_WIDTH;
+    }
+
+    if (worldHeight < WINDOW_HEIGHT)
+    {
+        worldHeight = WINDOW_HEIGHT;
+    }
     cleardevice();
 
     IMAGE background;
     loadimage(&background, _T("background.jpg"));
-	tileMap.draw();
     Entity players[ENTITY_COUNT] =
     {
         // 参数：
@@ -1175,6 +1252,7 @@ int main()
     bool lastGroundState[ENTITY_COUNT] = {};
     bool lastSprintState[ENTITY_COUNT] = {};
     bool lastInAirState[ENTITY_COUNT] = {}; 
+	bool lastJumpingState[ENTITY_COUNT] = {}; 
 
     BeginBatchDraw();
 
@@ -1194,8 +1272,9 @@ int main()
         // 2. 更新所有实体
         for (int i = 0; i < ENTITY_COUNT; i++)
         {
-            players[i].update(players, ENTITY_COUNT, i);
+            players[i].update(players, ENTITY_COUNT, i, worldWidth, worldHeight);
         }
+        gCamera.follow(players[0].getX(), players[0].getY(), worldWidth, worldHeight);
 
         // 3. 输出碰撞状态变化
         for (int i = 0; i < ENTITY_COUNT; i++)
@@ -1218,7 +1297,7 @@ int main()
 
             lastGroundState[i] = players[i].isOnGround();
         }
-		// 4. 输出起跳状态变化
+		// 4. 输出是否在空中状态变化
         for(int i = 0; i < ENTITY_COUNT; i++)
         {
             if(players[i].isInAir() && !lastInAirState[i])
@@ -1226,6 +1305,23 @@ int main()
                 cout << "Entity " << i << " is in air." << endl;
             }
             lastInAirState[i] = players[i].isInAir();
+        }
+        //输出跳跃状态变化
+        for (int i = 0; i < ENTITY_COUNT; i++)
+        {
+            bool nowJumping = players[i].isJumping();
+
+            if (nowJumping && !lastJumpingState[i])
+            {
+                cout << "Entity " << i << " started jumping." << endl;
+            }
+
+            if (!nowJumping && lastJumpingState[i])
+            {
+                cout << "Entity " << i << " ended jumping." << endl;
+            }
+
+            lastJumpingState[i] = nowJumping;
         }
         // 5. 输出冲刺状态变化
         for (int i = 0; i < ENTITY_COUNT; i++)
@@ -1278,7 +1374,6 @@ int main()
         // 7. 绘制
         cleardevice();
         
-        putimage(0, 0, &background);
         putimage(0, 0, &background);
         tileMap.draw();
 
