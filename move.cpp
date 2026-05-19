@@ -171,9 +171,180 @@ class level
 	// 这里暂时不实现，后续会添加事件与判定的统一管理
 };
 
-//重大新增功能准备：卷轴移动/摄像机概念，渲染范围跟随玩家移动，伴随而来的是抽象出实际的游戏逻辑坐标系，与实际的窗口显示内容和坐标对应关系，以及坐标转换函数的实现
 
+//先单独定义一个animation类实现动画序列帧播放
 
+class Animation
+{
+private:
+    IMAGE image;
+    int frameCount;
+    int currentFrame;
+    int frameWidth;
+    int frameHeight;
+    bool isPlaying;
+    bool isLoop;
+
+    int frameInterval;//帧间隔
+    int frameTimer;//计时器
+    double scaleX;
+    double scaleY;
+    double offsetX;
+    double offsetY;
+public:
+    Animation()//基础构造
+    {
+        frameWidth = 0;
+        frameHeight = 0;
+        frameCount = 0;
+        currentFrame = 0;
+
+        frameInterval = 8;
+        frameTimer = 0;
+
+        isPlaying = true;
+        isLoop = true;
+
+        scaleX = 1.0;
+        scaleY = 1.0;
+        offsetX = 0;
+        offsetY = 0;
+    }
+    void load(const TCHAR* path, int frameWidth, int frameHeight, int frameCount)
+    {
+        loadimage(&image, path);
+        this->frameWidth = frameWidth;
+        this->frameHeight = frameHeight;
+        this->frameCount = frameCount;
+        
+        currentFrame = 0;
+        frameTimer = 0;
+        isPlaying = 1;
+    
+    }
+    void load(const TCHAR* path, int newFrameCount)
+    {
+        loadimage(&image, path);
+
+        frameCount = newFrameCount;
+
+        if (frameCount < 1)
+        {
+            frameCount = 1;
+        }
+
+        frameWidth = image.getwidth() / frameCount;
+        frameHeight = image.getheight();
+
+        currentFrame = 0;
+        frameTimer = 0;
+        isPlaying = true;
+    }
+    int getFrameWidth()
+    {
+        return frameWidth;
+    }
+
+    int getFrameHeight()
+    {
+        return frameHeight;
+    }
+    void setSpeed(int frameInterval)//设置帧间隔切换速度，也就是动画播放速度
+    {
+        if (frameInterval < 1)
+        {
+            frameInterval = 1;
+        }
+        this->frameInterval = frameInterval;
+    
+    }
+    void setLoop(bool value)//设置是否循环
+    {
+        isLoop = value;
+    }
+    void stop()//停止播放设置
+    {
+        isPlaying = false;
+    }
+    void setTransform(double newScaleX, double newScaleY, double newOffsetX, double newOffsetY)
+    {
+        scaleX = newScaleX;
+        scaleY = newScaleY;
+        offsetX = newOffsetX;
+        offsetY = newOffsetY;
+    }
+    void reset()
+    {
+        currentFrame = 0;
+        frameTimer = 0;
+    
+    }
+    void update()
+    {
+        if (!isPlaying)
+        {
+            return;
+        }
+        if (frameCount <= 0)
+        {
+            return;
+        }
+        frameTimer++;
+        if (frameTimer >= frameInterval)
+        {
+            frameTimer = 0;//每自增到interval，重置计数器
+            currentFrame++;
+            if (currentFrame >= frameCount)
+            {
+                if (isLoop)//判定是否启动循环播放，为真则当当前帧超出帧总数时重置回第一帧
+                {
+                    currentFrame = 0;
+                }
+                else//不启用loop，则使用最后一帧画面做结束画面，停止播放
+                {
+                    currentFrame = frameCount - 1;
+                    isPlaying = false;
+
+                }
+            }
+        }
+    
+    }
+    void draw(double ownerX, double ownerY)
+    {
+        if (frameCount <= 0)
+        {
+            return;
+        }
+
+        int drawW = (int)(frameWidth * scaleX);
+        int drawH = (int)(frameHeight * scaleY);
+
+        double spriteCenterX = ownerX + offsetX;
+        double spriteCenterY = ownerY + offsetY;
+
+        double worldLeft = spriteCenterX - drawW / 2.0;
+        double worldTop = spriteCenterY + drawH / 2.0;
+
+        int drawX = worldToScreenX(worldLeft);
+        int drawY = worldToScreenY(worldTop);
+
+        int srcX = currentFrame * frameWidth;
+        int srcY = 0;
+
+        putimage_alpha_tile(
+            drawX,
+            drawY,
+            drawW,
+            drawH,
+            &image,
+            srcX,
+            srcY,
+            frameWidth,
+            frameHeight
+        );
+    }
+};
 
 //剥离并抽象出Sprite结构体，允许后续添加图层支持与序列帧动画的支持
 struct Sprite
@@ -565,8 +736,8 @@ public:
 class Entity
 {
 private:
+    Animation animation;
     Sprite sprite;
-
     // 世界坐标，左下角原点
     // x / y 表示实体中心点
     double x;
@@ -634,10 +805,13 @@ public:
         bool isControlled,
         bool isCollidable,
         bool isBlocking,
-        bool isGod
+        bool isGod,
+        int frameCount = 1
     )
     {
-        sprite.load(imagePath);
+        animation.load(imagePath, frameCount);
+        animation.setSpeed(4);
+        animation.setLoop(true);
 
         x = startX;
         y = startY;
@@ -656,22 +830,21 @@ public:
         onGround = false;
         sprinting = false;
         InAir = false;
-		jumping = false;
+        jumping = false;
         blockedByEntity = false;
         blockedByWorld = false;
 
         jumpKeyWasDown = false;
 
-        int imgW = sprite.getOriginalWidth();
-        int imgH = sprite.getOriginalHeight();
+        int imgW = animation.getFrameWidth();
+        int imgH = animation.getFrameHeight();
 
         collisionBox.width = imgW;
         collisionBox.height = imgH;
-		collisionBox.offsetX = 0.0;
-		collisionBox.offsetY = 0.0;
-		collisionBox.scaleX = 1.0;
-		collisionBox.scaleY = 1.0;
-
+        collisionBox.offsetX = 0.0;
+        collisionBox.offsetY = 0.0;
+        collisionBox.scaleX = 1.0;
+        collisionBox.scaleY = 1.0;
     }
 
     bool isCollidable()
@@ -955,7 +1128,10 @@ public:
 
         limitInWorld(worldWidth, worldHeight);
     }
-
+    void updateAnimation()
+    {
+        animation.update();
+    }
     
     // X 方向阻挡检测
     
@@ -1160,7 +1336,7 @@ public:
 
     void draw()
     {
-		sprite.draw(x, y);
+		animation.draw(x, y);
 
         drawCollisionBox();
     }
@@ -1191,7 +1367,7 @@ public:
     }
 	void setSpriteTransform(double scaleX, double scaleY, double offsetX, double offsetY)
 	{
-		sprite.setTransform(scaleX, scaleY, offsetX, offsetY);
+		animation.setTransform(scaleX, scaleY, offsetX, offsetY);
 	}
 };
 
@@ -1200,6 +1376,7 @@ public:
 
 int main()
 {
+
     initgraph(WINDOW_WIDTH, WINDOW_HEIGHT);
     setbkcolor(BLACK);
 	TileMap tileMap;
@@ -1233,7 +1410,7 @@ int main()
         // 是否阻挡移动，
         // 是否 god
 
-        Entity(_T("player1.png"), 200, 700, true, true, true, false),
+        Entity(_T("player1_m.png"), 200, 700, true, true, true, false,8),
 
         Entity(_T("player2.png"), 600, 900, false, true, false, false),
 
@@ -1242,7 +1419,7 @@ int main()
         Entity(_T("player4.png"), 1300, 650, false, true, false, false)
 
     };
-    //players[0].setSpriteTransform(1.2, 1.2, 0, 20);
+    players[0].setSpriteTransform(6.0, 6.0, 0, 300);
     //players[1].setSpriteTransform(0.8, 0.8, 0, 0);
     //players[2].setSpriteTransform(1.0, 1.0, 30, 0);
     players[3].setSpriteTransform(6.0, 6.0, 0, 160);
@@ -1273,6 +1450,7 @@ int main()
         for (int i = 0; i < ENTITY_COUNT; i++)
         {
             players[i].update(players, ENTITY_COUNT, i, worldWidth, worldHeight);
+            players[i].updateAnimation();
         }
         gCamera.follow(players[0].getX(), players[0].getY(), worldWidth, worldHeight);
 
@@ -1381,7 +1559,8 @@ int main()
         {
             players[i].draw();
         }
-
+		RECT rect = { 0, 0, WINDOW_WIDTH, WINDOW_HEIGHT };
+		drawtext(_T("Use Arrow Keys to Move, Space to Jump, Shift to Sprint, Esc to Quit"), &rect, DT_CENTER | DT_TOP | DT_SINGLELINE);
         FlushBatchDraw();
 
         Sleep(16);
@@ -1389,6 +1568,9 @@ int main()
 
     EndBatchDraw();
     closegraph();
+
+
+
 
     return 0;
 }
