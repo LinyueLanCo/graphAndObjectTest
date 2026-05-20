@@ -139,16 +139,8 @@
     </Manifest>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="0515.cpp" />
-    <ClCompile Include="char.cpp" />
     <ClCompile Include="draggable.cpp" />
-    <ClCompile Include="game.cpp" />
-    <ClCompile Include="homework.cpp" />
     <ClCompile Include="move.cpp" />
-    <ClCompile Include="test.cpp" />
-  </ItemGroup>
-  <ItemGroup>
-    <ClInclude Include="char.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

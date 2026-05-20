@@ -15,31 +15,11 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="game.cpp">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="homework.cpp">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="char.cpp">
-      <Filter>头文件</Filter>
-    </ClCompile>
     <ClCompile Include="draggable.cpp">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="test.cpp">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="0515.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="move.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
-  </ItemGroup>
-  <ItemGroup>
-    <ClInclude Include="char.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
   </ItemGroup>
 </Project>
