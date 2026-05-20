@@ -702,6 +702,10 @@ private:
     bool jumpKeyWasDown;
     //做临时用，添加实体类型标签
     EntityType entityType;
+
+    //实体是否存活
+    bool isAlive;
+
     CollisionBox collisionBox;
 
 public:
@@ -738,6 +742,7 @@ public:
 		collisionBox.scaleY = 1.0;
 
         entityType = DEFAULT;
+        isAlive = 1;
     }
 
     Entity(
@@ -749,7 +754,8 @@ public:
         bool isBlocking,
         bool isGod,
         EntityType Type=DEFAULT,
-        int frameCount = 1
+        int frameCount = 1,
+        bool alive=1
     )
     {
         animation.load(imagePath, frameCount);
@@ -795,50 +801,64 @@ public:
     {
         return entityType;
     }
-    bool isCollidable()
+    bool isCollidable()//获取是否可碰撞检测
     {
         return collidable;
     }
 
-    bool isBlocking()
+    bool isBlocking()//获取是否可被阻挡
     {
         return blocking;
     }
 
-    bool isGod()
+    bool isGod()//获取是否为god
     {
         return god;
     }
 
-    bool isOnGround()
+    bool isOnGround()//获取是否在地上
     {
         return onGround;
     }
-	bool isInAir()
+	bool isInAir()//获取是否在空中
 	{
 		return InAir;
 	}
-    bool isSprinting()
+    bool isSprinting()//获取是否在奔跑
     {
         return sprinting;
     }
-	bool isJumping()
+	bool isJumping()//获取是否在跳跃
 	{
 		return jumping;
 	}
-    bool hasCollisionState()
+    bool hasCollisionState()//获取碰撞状态
     {
         return collisionState;
     }
 
-    bool isBlockedByEntity()
+    bool isBlockedByEntity()//获取是否被阻挡
     {
         return blockedByEntity;
     }
 
-    bool isBlockedByWorld()
+    bool isBlockedByWorld()//获取是否被世界边界阻挡
     {
         return blockedByWorld;
+    }
+    bool getIsAlive()
+    {
+        return isAlive;
+    }
+
+    void setIsAlive(bool value)
+    {
+        isAlive = value;
+    }
+    void killEntity()
+    {
+        this->isAlive = 0;
+    
     }
 	double getX()//获取实体的世界坐标 X，注意这里返回的是实体中心点的坐标
     {
@@ -849,7 +869,7 @@ public:
 	{
 		return y;
 	}
-    void setOverlapping(bool value)
+    void setOverlapping(bool value)//设置重叠状态
     {
         overlapping = value;
 
@@ -859,7 +879,7 @@ public:
         }
     }
 
-    void setCollisionState(bool value)
+    void setCollisionState(bool value)//设置碰撞状态
     {
         collisionState = value;
     }
@@ -1369,19 +1389,19 @@ int main()
         // 是否阻挡移动，
         // 是否 god
 
-        Entity(_T("assets\\tex\\entities\\characters\\player1_m.png"), 200, 700, true, true, true, false,PLAYER,8),
+        Entity(_T("assets\\tex\\entities\\characters\\player1_m.png"), 200, 700, true, true, true, false,PLAYER,8,1),
 
-        Entity(_T("assets\\tex\\entities\\characters\\player2.png"), 600, 900, false, true, false, false,ENTITY),
+        Entity(_T("assets\\tex\\entities\\characters\\player2.png"), 600, 900, false, true, false, false,ENTITY,1),
 
-        Entity(_T("assets\\tex\\entities\\characters\\player3.png"), 950, 850, false, true, true, false,ENTITY),
+        Entity(_T("assets\\tex\\entities\\characters\\player3.png"), 950, 850, false, true, true, false,ENTITY,1),
 
-        Entity(_T("assets\\tex\\entities\\characters\\player4.png"), 1300, 650, false, true, false, false,ENTITY),
+        Entity(_T("assets\\tex\\entities\\characters\\player4.png"), 1300, 650, false, true, false, false,ENTITY,1),
         
-        Entity(_T("assets\\tex\\entities\\items\\MonedaD.png"),256,256,false,true,false,true,COIN,5),
+        Entity(_T("assets\\tex\\entities\\items\\MonedaD.png"),256,256,false,true,false,true,COIN,5,1),
 
-        Entity(_T("assets\\tex\\entities\\items\\MonedaP.png"),256+48+16,256,false,true,false,true,COIN,5),
+        Entity(_T("assets\\tex\\entities\\items\\MonedaP.png"),256+48+16,256,false,true,false,true,COIN,5,1),
 
-        Entity(_T("assets\\tex\\entities\\items\\MonedaR.png"),256 + (48 * 2) + (16 * 2),256,false,true,false,true,COIN,5)
+        Entity(_T("assets\\tex\\entities\\items\\MonedaR.png"),256 + (48 * 2) + (16 * 2),256,false,true,false,true,COIN,5,1)
         
 
 
@@ -1396,13 +1416,20 @@ int main()
     entitys[0].setAnimationSpeed(3);
     entitys[4].setAnimationSpeed(3);
 
+
+    //存储上次tick的各种状态
     bool lastOverlap[ENTITY_COUNT][ENTITY_COUNT] = {};
     bool lastCollisionState[ENTITY_COUNT] = {};
     bool lastGroundState[ENTITY_COUNT] = {};
     bool lastSprintState[ENTITY_COUNT] = {};
     bool lastInAirState[ENTITY_COUNT] = {}; 
 	bool lastJumpingState[ENTITY_COUNT] = {}; 
-
+    bool lastAliveState[ENTITY_COUNT] = {};
+    //先更新一次所有实体的存活状态
+    for (int i = 0; i < ENTITY_COUNT; i++)
+    {
+        lastAliveState[i] = entitys[i].getIsAlive();
+    }
     BeginBatchDraw();
 
     while (true)
@@ -1415,12 +1442,20 @@ int main()
         // 1. 清除上一帧状态
         for (int i = 0; i < ENTITY_COUNT; i++)
         {
+            if (!entitys[i].getIsAlive())
+            {
+                continue;
+            }
             entitys[i].clearFrameState();
         }
 
         // 2. 更新所有实体
         for (int i = 0; i < ENTITY_COUNT; i++)
         {
+            if (!entitys[i].getIsAlive())
+            {
+                continue;
+            }
             entitys[i].update(entitys, ENTITY_COUNT, i, worldWidth, worldHeight);
             entitys[i].updateanimatedSprite();
         }
@@ -1429,6 +1464,7 @@ int main()
         // 3. 输出碰撞状态变化
         for (int i = 0; i < ENTITY_COUNT; i++)
         {
+
             if (entitys[i].hasCollisionState() && !lastCollisionState[i])
             {
                 cout << "Entity " << i << " collision state started." << endl;
@@ -1436,7 +1472,18 @@ int main()
 
             lastCollisionState[i] = entitys[i].hasCollisionState();
         }
+        //输出死亡变化
+        for (int i = 0; i < ENTITY_COUNT; i++)
+        {
+            bool nowAlive = entitys[i].getIsAlive();//获取当前帧的存活状态
 
+            if (!nowAlive && lastAliveState[i])
+            {
+                cout << "Entity " << i << " died." << endl;
+            }
+
+            lastAliveState[i] = nowAlive;//将当前帧的存活状态存入state里
+        }
         // 4. 输出落地状态变化
         for (int i = 0; i < ENTITY_COUNT; i++)
         {
@@ -1496,6 +1543,11 @@ int main()
         {
             for (int j = i + 1; j < ENTITY_COUNT; j++)
             {
+                //先进行死亡检测
+                if (!entitys[i].getIsAlive() || !entitys[j].getIsAlive())
+                {
+                    continue;
+                }//再判定两者是否都是可碰撞检测
                 if (!entitys[i].isCollidable() || !entitys[j].isCollidable())
                 {
                     continue;
@@ -1522,10 +1574,12 @@ int main()
                         {
                             cout << "Player picked coin: " << j << endl;
                             PlaySoundW(_T("assets\\sound\\entities\\item\\coin_pickup.wav"), NULL,  SND_ASYNC | SND_NOSTOP);
+                            entitys[j].killEntity();
                         }
                         else if (typeA == COIN && typeB == PLAYER)
                         {
                             cout << "Player picked coin: " << i << endl;
+                            entitys[j].killEntity();
                         }
                         else if (typeA == PLAYER && typeB == ENTITY)
                         {
@@ -1538,8 +1592,10 @@ int main()
                     }
                 }
 
-                lastOverlap[i][j] = overlapping;
-
+                if (!entitys[i].getIsAlive()|| !entitys[j].getIsAlive())
+                {
+                    continue;
+                }
                 lastOverlap[i][j] = overlapping;
             }
         }
@@ -1552,6 +1608,10 @@ int main()
 
         for (int i = 0; i < ENTITY_COUNT; i++)
         {
+            if (!entitys[i].getIsAlive())
+            {
+                continue;
+            }
             entitys[i].draw();
         }
 		RECT rect = { 0, 0, WINDOW_WIDTH, WINDOW_HEIGHT };
