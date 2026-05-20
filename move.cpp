@@ -174,7 +174,7 @@ class level
 
 //先单独定义一个animation类实现动画序列帧播放
 
-class Animation
+class animatedSprite
 {
 private:
     IMAGE image;
@@ -192,7 +192,7 @@ private:
     double offsetX;
     double offsetY;
 public:
-    Animation()//基础构造
+    animatedSprite()//基础构造
     {
         frameWidth = 0;
         frameHeight = 0;
@@ -346,77 +346,6 @@ public:
     }
 };
 
-//剥离并抽象出Sprite结构体，允许后续添加图层支持与序列帧动画的支持
-struct Sprite
-{
-    IMAGE img;
-	double offsetX;
-	double offsetY;
-
-    double scaleX;
-    double scaleY;
-
-    Sprite()
-    {
-        offsetX = 0;
-        offsetY = 0;
-
-        scaleX = 1.0;
-        scaleY = 1.0;
-    
-    }
-	//加载逻辑与IMAGE类分离
-    void load(const TCHAR* imagePath)
-    {
-        loadimage(&img, imagePath);
-    }
-    //拿到原始的长和宽
-	int getOriginalWidth()
-	{
-		return img.getwidth();
-	}
-	int getOriginalHeight()
-	{
-		return img.getheight();
-	}
-    //计算缩放之后的长和宽
-	int getDrawWidth()
-	{
-		return (int)(img.getwidth() * scaleX);
-	}
-	int getDrawHeight()
-	{
-		return (int)(img.getheight() * scaleY);
-	}
-	//计算偏移与缩放之后之后的渲染坐标
-    void setTransform(double newScaleX, double newScaleY, double newOffsetX, double newOffsetY)
-    {
-        scaleX = newScaleX;
-        scaleY = newScaleY;
-
-        offsetX = newOffsetX;
-        offsetY = newOffsetY;
-    }
-    //绘制逻辑
-    void draw(double ownerX, double ownerY)
-    {
-		//拿到缩放之后的长和宽
-        int drawW = getDrawWidth();
-        int drawH = getDrawHeight();
-		//计算偏移与缩放之后之后的渲染坐标
-        double spriteCenterX = ownerX + offsetX;
-        double spriteCenterY = ownerY + offsetY;
-		//因为世界坐标系以左下角为原点，而屏幕坐标系以左上角为原点，所以y轴的偏移需要反过来
-        double worldLeft = spriteCenterX - drawW / 2.0;
-        double worldTop = spriteCenterY + drawH / 2.0;
-		//将世界坐标转换为屏幕坐标
-        int drawX = worldToScreenX(worldLeft);
-        int drawY = worldToScreenY(worldTop);
-		//调用之前定义的支持缩放的Alpha透明图片绘制函数
-        putimage_alpha(drawX, drawY, drawW, drawH, &img);
-    }
-	//后续可能将渲染逻辑从sprite里剥离，放进一个专门的render类，render负责处理相机位置与坐标转换，sprite只负责提供变换后的坐标与尺寸，render来调用绘制函数进行渲染
-};
 
 // 碰撞盒
 
@@ -736,8 +665,7 @@ public:
 class Entity
 {
 private:
-    Animation animation;
-    Sprite sprite;
+    animatedSprite animation;
     // 世界坐标，左下角原点
     // x / y 表示实体中心点
     double x;
@@ -1128,7 +1056,7 @@ public:
 
         limitInWorld(worldWidth, worldHeight);
     }
-    void updateAnimation()
+    void updateanimatedSprite()
     {
         animation.update();
     }
@@ -1450,7 +1378,7 @@ int main()
         for (int i = 0; i < ENTITY_COUNT; i++)
         {
             players[i].update(players, ENTITY_COUNT, i, worldWidth, worldHeight);
-            players[i].updateAnimation();
+            players[i].updateanimatedSprite();
         }
         gCamera.follow(players[0].getX(), players[0].getY(), worldWidth, worldHeight);
 
