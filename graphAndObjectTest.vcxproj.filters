@@ -18,7 +18,7 @@
     <ClCompile Include="draggable.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="move.cpp">
+    <ClCompile Include="game.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
   </ItemGroup>
