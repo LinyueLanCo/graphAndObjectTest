@@ -16,8 +16,8 @@ const int ENTITY_COUNT = 7;
 const double EPS = 0.001;
 
 // 重力相关参数
-const double GRAVITY = 0.6;
-const double JUMP_SPEED = 18.0;
+const double GRAVITY = 1.98;
+const double JUMP_SPEED = 28.0;
 const double MAX_FALL_SPEED = -28.0;
 
 
@@ -188,6 +188,8 @@ enum AnimationState
     ANIM_IDLE_R,
     ANIM_WALK_LEFT,
     ANIM_WALK_RIGHT,
+    ANIM_RUN_LEFT,
+    ANIM_RUN_RIGHT,
     ANIM_COUNT
 };
 // Alpha 透明图片绘制
@@ -674,7 +676,6 @@ public:
             return;
         }
 
-        // 因为 0 是空格，所以真正对应 tileset 的编号要 -1
         int realTileIndex = tileId - 1;
 
         int tilesetCols = tileset.getwidth() / sourceTileWidth;
@@ -682,21 +683,34 @@ public:
         int srcX = (realTileIndex % tilesetCols) * sourceTileWidth;
         int srcY = (realTileIndex / tilesetCols) * sourceTileHeight;
 
-        // row / col 是二维数组位置
-        // worldLeft / worldBottom 是世界坐标位置
         double worldLeft = offsetX + col * drawTileWidth;
         double worldBottom = offsetY + (rows - 1 - row) * drawTileHeight;
+        double worldRight = worldLeft + drawTileWidth;
         double worldTop = worldBottom + drawTileHeight;
 
-        // EasyX 绘制需要左上角，所以用 worldTop 转屏幕 Y
-        int drawX = worldToScreenX(worldLeft);
-        int drawY = worldToScreenY(worldTop);
+        int screenLeft = worldToScreenX(worldLeft);
+        int screenRight = worldToScreenX(worldRight);
+        int screenTop = worldToScreenY(worldTop);
+        int screenBottom = worldToScreenY(worldBottom);
+
+        int screenTileW = screenRight - screenLeft;
+        int screenTileH = screenBottom - screenTop;
+
+        if (screenTileW < 1)
+        {
+            screenTileW = 1;
+        }
+
+        if (screenTileH < 1)
+        {
+            screenTileH = 1;
+        }
 
         putimage_alpha_tile(
-            drawX,
-            drawY,
-            drawTileWidth,
-            drawTileHeight,
+            screenLeft,
+            screenTop,
+            screenTileW,
+            screenTileH,
             &tileset,
             srcX,
             srcY,
@@ -1060,7 +1074,14 @@ public:
         {
             animation.load(_T("assets\\tex\\entities\\characters\\player1_walk_R.png"), 8);
         }
-
+        else if (newState == ANIM_RUN_LEFT)
+        {
+            animation.load(_T("assets\\tex\\entities\\characters\\player1_run_L.png"), 8);
+        }
+        else if (newState == ANIM_RUN_RIGHT)
+        {
+            animation.load(_T("assets\\tex\\entities\\characters\\player1_run_R.png"), 8);
+        }
         animation.setSpeed(3);
         animation.setLoop(true);
     }
@@ -1120,14 +1141,26 @@ public:
             if (inputX < 0)
             {
                 currentFacingDirection = LEFT;
-
-                changeAnimation(ANIM_WALK_LEFT);
+                if (sprinting)
+                {
+                    changeAnimation(ANIM_RUN_LEFT);
+                }
+                else
+                {
+                    changeAnimation(ANIM_WALK_LEFT);
+                }
             }
             else if (inputX > 0)
             {
                 currentFacingDirection = RIGHT;
-
-                changeAnimation(ANIM_WALK_RIGHT);
+                if (sprinting)
+                {
+                    changeAnimation(ANIM_RUN_RIGHT);
+                }
+                else
+                {
+                    changeAnimation(ANIM_WALK_RIGHT);
+                }
             }
             else
             {
@@ -1513,12 +1546,7 @@ public:
 
 //声音播放支持，声音当然也跟sprite等类似是一个单独的类，也具有多种状态
 
-const TCHAR* playerAnimPaths[ANIM_COUNT] =
-{
-    _T("assets\\tex\\entities\\characters\\player1_idle.png"),
-    _T("assets\\tex\\entities\\characters\\player1_walk_L.png"),
-    _T("assets\\tex\\entities\\characters\\player1_walk_R.png")
-};
+
 
 
 //测试镜头跟随
@@ -1558,9 +1586,21 @@ void updateCameraFollow(Entity entitys[], int entityCount, int worldWidth, int w
     {
         gCameraFollowTargetIndex = 0;
     }
-
+    if (GetAsyncKeyState('B') & 0x8000)
+    {
+        gCamera.zoomTo(0.3);
+    }
+    else if (GetAsyncKeyState('V') & 0x8000)
+    {
+        gCamera.zoomTo(3.0);
+    }
+    else
+    {
+        gCamera.zoomTo(1.0);
+    }
     gCamera.updateZoom();
 
+    //切换相机跟随方式
     gCamera.followSmooth(
         entitys[gCameraFollowTargetIndex].getX(),
         entitys[gCameraFollowTargetIndex].getY(),
