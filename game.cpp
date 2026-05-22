@@ -39,13 +39,19 @@ struct Camera
 {
     double x;
     double y;
-
+    double cameraOffsetX;
+    double cameraOffsetY;
+    double cameraScaleX;
+    double cameraScaleY;
     Camera()
     {
         x = 0;
         y = 0;
+        cameraOffsetX = 0.0;
+        cameraOffsetY = 0.0;
+        cameraScaleX = 0.0;
+        cameraScaleY = 0.0;
     }
-
     void follow(double targetX, double targetY, int worldWidth, int worldHeight)
     {
         // 让目标尽量位于屏幕中心
@@ -96,8 +102,29 @@ int worldToScreenY(double worldY)
     return (int)(WINDOW_HEIGHT - (worldY - gCamera.y));
 }
 
-// Alpha 透明图片绘制
+class Sound
+{
 
+
+
+};
+enum AnimationState
+{
+    ANIM_IDLE_L,
+    ANIM_IDLE_R,
+    ANIM_WALK_LEFT,
+    ANIM_WALK_RIGHT,
+    ANIM_COUNT
+};
+// Alpha 透明图片绘制
+enum facingDirection
+{
+    LEFT,
+    RIGHT,
+    UP,
+    DOWN
+
+};
 
 
 inline void putimage_alpha(int x, int y, IMAGE* img)
@@ -705,9 +732,10 @@ private:
 
     //实体是否存活
     bool isAlive;
-
+    
     CollisionBox collisionBox;
-
+    AnimationState currentAnimState;//记录当前的动画状态
+    facingDirection currentFacingDirection;//记录当前操作的有效朝向
 public:
     Entity()
     {
@@ -925,24 +953,60 @@ public:
     }
 
     
+    void setCollisionScale(double scaleX, double scaleY)
+    {
+        collisionBox.scaleX = scaleX;
+        collisionBox.scaleY = scaleY;
+    }
+    void changeAnimation(AnimationState newState)
+    {
+        if (currentAnimState == newState)
+        {
+            return;
+        }
+
+        currentAnimState = newState;
+
+        if (newState == ANIM_IDLE_L)
+        {
+            animation.load(_T("assets\\tex\\entities\\characters\\player1_idle_L.png"), 8);
+        }
+        else if (newState == ANIM_IDLE_R)
+        {
+            animation.load(_T("assets\\tex\\entities\\characters\\player1_idle_R.png"), 8);
+        }
+        else if (newState == ANIM_WALK_LEFT)
+        {
+            animation.load(_T("assets\\tex\\entities\\characters\\player1_walk_L.png"), 8);
+        }
+        else if (newState == ANIM_WALK_RIGHT)
+        {
+            animation.load(_T("assets\\tex\\entities\\characters\\player1_walk_R.png"), 8);
+        }
+
+        animation.setSpeed(3);
+        animation.setLoop(true);
+    }
     // 更新逻辑
-    
 
     void update(Entity entitys[], int entityCount, int selfIndex, int worldWidth, int worldHeight)
     {
         double inputX = 0;
         double inputY = 0;
-
+        bool leftDown = 0;
+        bool rightDown = 0;
         if (controlled)
         {
             if (GetAsyncKeyState(VK_LEFT) & 0x8000)
             {
                 inputX = -1;
+                leftDown = 1;
             }
 
             if (GetAsyncKeyState(VK_RIGHT) & 0x8000)
             {
                 inputX = 1;
+                rightDown = 1;
             }
 
             if (god)
@@ -960,7 +1024,6 @@ public:
         }
 
         double currentSpeed = speed;
-
         bool shiftDown = false;
 
         if (controlled && (GetAsyncKeyState(VK_SHIFT) & 0x8000))
@@ -974,7 +1037,32 @@ public:
         {
             hasMoveInput = true;
         }
+        if (controlled)
+        {
+            if (inputX < 0)
+            {
+                currentFacingDirection = LEFT;
 
+                changeAnimation(ANIM_WALK_LEFT);
+            }
+            else if (inputX > 0)
+            {
+                currentFacingDirection = RIGHT;
+
+                changeAnimation(ANIM_WALK_RIGHT);
+            }
+            else
+            {
+                if(currentFacingDirection==LEFT)
+                {
+                    changeAnimation(ANIM_IDLE_L);
+                }
+                if (currentFacingDirection == RIGHT)
+                {
+                    changeAnimation(ANIM_IDLE_R);
+                }
+            }
+        }
 		bool wantSprint = false;// 是否想要冲刺：
 
 		if (controlled && shiftDown && hasMoveInput)// 冲刺条件：受控制、按下 Shift、有移动输入
@@ -1346,13 +1434,13 @@ public:
 };
 
 //声音播放支持，声音当然也跟sprite等类似是一个单独的类，也具有多种状态
-class Sound
+
+const TCHAR* playerAnimPaths[ANIM_COUNT] =
 {
-
-
-
+    _T("assets\\tex\\entities\\characters\\player1_idle.png"),
+    _T("assets\\tex\\entities\\characters\\player1_walk_L.png"),
+    _T("assets\\tex\\entities\\characters\\player1_walk_R.png")
 };
-
 int main()
 {
 
@@ -1389,7 +1477,7 @@ int main()
         // 是否阻挡移动，
         // 是否 god
 
-        Entity(_T("assets\\tex\\entities\\characters\\player1_m.png"), 200, 700, true, true, true, false,PLAYER,8,1),
+        Entity(_T("assets\\tex\\entities\\characters\\player1_Idle_L.png"), 200, 700, true, true, true, false,PLAYER,8,1),
 
         Entity(_T("assets\\tex\\entities\\characters\\player2.png"), 600, 900, false, true, false, false,ENTITY,1),
 
@@ -1406,7 +1494,7 @@ int main()
 
 
     };
-    entitys[0].setSpriteTransform(2.0, 2.0, 0, 0);
+    entitys[0].setSpriteTransform(4.0, 4.0, 0, 0);
     //entitys[1].setSpriteTransform(0.8, 0.8, 0, 0);
     //entitys[2].setSpriteTransform(1.0, 1.0, 30, 0);
     entitys[3].setSpriteTransform(2.0, 2.0, 0, 0);
@@ -1415,7 +1503,7 @@ int main()
     entitys[6].setSpriteTransform(4.0, 4.0, 0, 0);
     entitys[0].setAnimationSpeed(3);
     entitys[4].setAnimationSpeed(3);
-
+    entitys[0].setCollisionScale(4,4);
 
     //存储上次tick的各种状态
     bool lastOverlap[ENTITY_COUNT][ENTITY_COUNT] = {};
@@ -1433,7 +1521,7 @@ int main()
     BeginBatchDraw();
 
     while (true)
-    {
+    {   
         if (GetAsyncKeyState(VK_ESCAPE) & 0x8000)
         {
             break;
