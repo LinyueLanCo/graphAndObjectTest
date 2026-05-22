@@ -35,71 +35,145 @@ enum EntityType
 };
 
 
+
+//镜头系统，处理逻辑绘制起点到屏幕窗口上的转换，现在支持镜头的offset和zoom，由此引申出镜头的smoothFollow也就是平滑跟随
 struct Camera
 {
     double x;
     double y;
-    double cameraOffsetX;
-    double cameraOffsetY;
-    double cameraScaleX;
-    double cameraScaleY;
+
+    double zoom;
+
+    double targetX;
+    double targetY;
+    double targetZoom;
+
     Camera()
     {
         x = 0;
         y = 0;
-        cameraOffsetX = 0.0;
-        cameraOffsetY = 0.0;
-        cameraScaleX = 0.0;
-        cameraScaleY = 0.0;
+
+        zoom = 1.0;
+
+        targetX = 0;
+        targetY = 0;
+        targetZoom = 1.0;
     }
-    void follow(double targetX, double targetY, int worldWidth, int worldHeight)
+
+    double getVisibleWorldWidth()
     {
-        // 让目标尽量位于屏幕中心
-        x = targetX - WINDOW_WIDTH / 2;
-        y = targetY - WINDOW_HEIGHT / 2;
+        return WINDOW_WIDTH / zoom;
+    }
 
-        // 限制左边和下边，不能看到世界外面
-        if (x < 0)
+    double getVisibleWorldHeight()
+    {
+        return WINDOW_HEIGHT / zoom;
+    }
+
+    void followInstant(double targetWorldX, double targetWorldY, int worldWidth, int worldHeight)
+    {
+        double visibleW = getVisibleWorldWidth();
+        double visibleH = getVisibleWorldHeight();
+
+        x = targetWorldX - visibleW / 2.0;
+        y = targetWorldY - visibleH / 2.0;
+
+        limitInWorld(worldWidth, worldHeight);
+    }
+
+    void followSmooth(double targetWorldX, double targetWorldY, int worldWidth, int worldHeight)
+    {
+        double visibleW = getVisibleWorldWidth();
+        double visibleH = getVisibleWorldHeight();
+
+        targetX = targetWorldX - visibleW / 2.0;
+        targetY = targetWorldY - visibleH / 2.0;
+
+        // 数值越小越“拖”，越大越紧跟
+        double followSpeed = 0.08;
+
+        x += (targetX - x) * followSpeed;
+        y += (targetY - y) * followSpeed;
+
+        limitInWorld(worldWidth, worldHeight);
+    }
+
+    void zoomTo(double newZoom)
+    {
+        if (newZoom < 0.2)
         {
-            x = 0;
+            newZoom = 0.2;
         }
 
-        if (y < 0)
+        if (newZoom > 5.0)
         {
-            y = 0;
+            newZoom = 5.0;
         }
 
-        // 如果世界比窗口还小，就不移动 camera
-        if (worldWidth <= WINDOW_WIDTH)
+        targetZoom = newZoom;
+    }
+
+    void updateZoom()
+    {
+        double zoomSpeed = 0.08;
+        zoom += (targetZoom - zoom) * zoomSpeed;
+    }
+
+    void limitInWorld(int worldWidth, int worldHeight)
+    {
+        double visibleW = getVisibleWorldWidth();
+        double visibleH = getVisibleWorldHeight();
+
+        if (worldWidth <= visibleW)
         {
-            x = 0;
+            x = (worldWidth - visibleW) / 2.0;
         }
-        else if (x > worldWidth - WINDOW_WIDTH)
+        else
         {
-            x = worldWidth - WINDOW_WIDTH;
+            if (x < 0)
+            {
+                x = 0;
+            }
+
+            if (x > worldWidth - visibleW)
+            {
+                x = worldWidth - visibleW;
+            }
         }
 
-        if (worldHeight <= WINDOW_HEIGHT)
+        if (worldHeight <= visibleH)
         {
-            y = 0;
+            y = (worldHeight - visibleH) / 2.0;
         }
-        else if (y > worldHeight - WINDOW_HEIGHT)
+        else
         {
-            y = worldHeight - WINDOW_HEIGHT;
+            if (y < 0)
+            {
+                y = 0;
+            }
+
+            if (y > worldHeight - visibleH)
+            {
+                y = worldHeight - visibleH;
+            }
         }
     }
 };
-
 Camera gCamera;
 
 int worldToScreenX(double worldX)
 {
-    return (int)(worldX - gCamera.x);
+    return (int)((worldX - gCamera.x) * gCamera.zoom);
 }
 
 int worldToScreenY(double worldY)
 {
-    return (int)(WINDOW_HEIGHT - (worldY - gCamera.y));
+    return (int)(WINDOW_HEIGHT - (worldY - gCamera.y) * gCamera.zoom);
+}
+
+int worldSizeToScreen(double worldSize)
+{
+    return (int)(worldSize * gCamera.zoom);
 }
 
 class Sound
@@ -355,17 +429,20 @@ public:
             return;
         }
 
-        int drawW = (int)(frameWidth * scaleX);
-        int drawH = (int)(frameHeight * scaleY);
+        double worldDrawW = frameWidth * scaleX;
+        double worldDrawH = frameHeight * scaleY;
 
         double spriteCenterX = ownerX + offsetX;
         double spriteCenterY = ownerY + offsetY;
 
-        double worldLeft = spriteCenterX - drawW / 2.0;
-        double worldTop = spriteCenterY + drawH / 2.0;
+        double worldLeft = spriteCenterX - worldDrawW / 2.0;
+        double worldTop = spriteCenterY + worldDrawH / 2.0;
 
         int drawX = worldToScreenX(worldLeft);
         int drawY = worldToScreenY(worldTop);
+
+        int screenDrawW = worldSizeToScreen(worldDrawW);
+        int screenDrawH = worldSizeToScreen(worldDrawH);
 
         int srcX = currentFrame * frameWidth;
         int srcY = 0;
@@ -373,8 +450,8 @@ public:
         putimage_alpha_tile(
             drawX,
             drawY,
-            drawW,
-            drawH,
+            screenDrawW,
+            screenDrawH,
             &image,
             srcX,
             srcY,
@@ -1009,6 +1086,7 @@ public:
                 rightDown = 1;
             }
 
+
             if (god)
             {
                 if (GetAsyncKeyState(VK_UP) & 0x8000)
@@ -1441,6 +1519,55 @@ const TCHAR* playerAnimPaths[ANIM_COUNT] =
     _T("assets\\tex\\entities\\characters\\player1_walk_L.png"),
     _T("assets\\tex\\entities\\characters\\player1_walk_R.png")
 };
+
+
+//测试镜头跟随
+int gCameraFollowTargetIndex = 0;
+
+
+
+//设置镜头跟随目标
+void setCameraFollowTarget(int newTargetIndex, Entity entitys[], int entityCount)
+{
+    if (newTargetIndex < 0 || newTargetIndex >= entityCount)
+    {
+        return;
+    }
+
+    if (!entitys[newTargetIndex].getIsAlive())
+    {
+        return;
+    }
+
+    gCameraFollowTargetIndex = newTargetIndex;
+
+    cout << "Camera follow target changed to Entity "
+        << gCameraFollowTargetIndex << endl;
+}
+
+
+//更新镜头跟随目标
+void updateCameraFollow(Entity entitys[], int entityCount, int worldWidth, int worldHeight)
+{
+    if (gCameraFollowTargetIndex < 0 || gCameraFollowTargetIndex >= entityCount)
+    {
+        gCameraFollowTargetIndex = 0;
+    }
+
+    if (!entitys[gCameraFollowTargetIndex].getIsAlive())
+    {
+        gCameraFollowTargetIndex = 0;
+    }
+
+    gCamera.updateZoom();
+
+    gCamera.followSmooth(
+        entitys[gCameraFollowTargetIndex].getX(),
+        entitys[gCameraFollowTargetIndex].getY(),
+        worldWidth,
+        worldHeight
+    );
+}
 int main()
 {
 
@@ -1547,8 +1674,27 @@ int main()
             entitys[i].update(entitys, ENTITY_COUNT, i, worldWidth, worldHeight);
             entitys[i].updateanimatedSprite();
         }
-        gCamera.follow(entitys[0].getX(), entitys[0].getY(), worldWidth, worldHeight);
+        if (GetAsyncKeyState(VK_F1) & 0x0001)
+        {
+            setCameraFollowTarget(0, entitys, ENTITY_COUNT);
+        }
 
+        if (GetAsyncKeyState(VK_F2) & 0x0001)
+        {
+            setCameraFollowTarget(1, entitys, ENTITY_COUNT);
+        }
+
+        if (GetAsyncKeyState(VK_F3) & 0x0001)
+        {
+            setCameraFollowTarget(2, entitys, ENTITY_COUNT);
+        }
+
+        if (GetAsyncKeyState(VK_F4) & 0x0001)
+        {
+            setCameraFollowTarget(3, entitys, ENTITY_COUNT);
+        }
+
+        updateCameraFollow(entitys, ENTITY_COUNT, worldWidth, worldHeight);
         // 3. 输出碰撞状态变化
         for (int i = 0; i < ENTITY_COUNT; i++)
         {
