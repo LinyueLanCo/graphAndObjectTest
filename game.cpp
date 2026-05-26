@@ -2095,7 +2095,7 @@ int main()
 		//drawtext(_T("Use Arrow Keys to Move, Space to Jump, Shift to Sprint, Esc to Quit"), &rect, DT_CENTER | DT_TOP | DT_SINGLELINE);
 
 
-        drawListPanel();
+        //drawListPanel();
         FlushBatchDraw();
 
         Sleep(16);
