@@ -802,7 +802,7 @@ enum UIAnchor
     UI_BOTTOM_RIGHT,
     UI_CENTER
 };
-
+//ui盒子结构体，定义原点坐标，高度和宽度
 struct UIBox
 {
     int x;
@@ -810,12 +810,12 @@ struct UIBox
     int w;
     int h;
 };
-
+//基于锚点的放置ui盒子，锚点为视口的边
 UIBox makeUIBoxByAnchor(
     int w,
     int h,
     UIAnchor anchor,
-    int marginX,
+    int marginX,//定义marginX和marginY变量以控制与左上角边框的间距
     int marginY
 )
 {
@@ -823,27 +823,32 @@ UIBox makeUIBoxByAnchor(
 
     box.w = w;
     box.h = h;
-
+    //定义锚点：
+    //左上
     if (anchor == UI_TOP_LEFT)
     {
         box.x = marginX;
         box.y = marginY;
     }
+    //右上
     else if (anchor == UI_TOP_RIGHT)
     {
         box.x = WINDOW_WIDTH - w - marginX;
         box.y = marginY;
     }
+    //左下
     else if (anchor == UI_BOTTOM_LEFT)
     {
         box.x = marginX;
         box.y = WINDOW_HEIGHT - h - marginY;
     }
+    //右下
     else if (anchor == UI_BOTTOM_RIGHT)
     {
         box.x = WINDOW_WIDTH - w - marginX;
         box.y = WINDOW_HEIGHT - h - marginY;
     }
+    //居中
     else
     {
         box.x = WINDOW_WIDTH / 2 - w / 2;
@@ -852,7 +857,7 @@ UIBox makeUIBoxByAnchor(
 
     return box;
 }
-
+//绘制ui盒子
 void drawUIBox(UIBox box, COLORREF fillColor, COLORREF borderColor)
 {
     setfillcolor(fillColor);
@@ -865,13 +870,13 @@ void drawUIBox(UIBox box, COLORREF fillColor, COLORREF borderColor)
         box.y + box.h
     );
 }
-
+//绘制列表面板
 void drawListPanel()
 {
     UIBox panel = makeUIBoxByAnchor(
-        320,
-        420,
-        UI_TOP_LEFT,
+        480,
+        600,
+        UI_TOP_RIGHT,
         32,
         32
     );
@@ -882,7 +887,7 @@ void drawListPanel()
     int itemH = 36;
     int gap = 8;
 
-    for (int i = 0; i < 6; i++)
+    for (int i = 0; i <7; i++)
     {
         UIBox item;
 
