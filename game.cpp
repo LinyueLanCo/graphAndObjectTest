@@ -81,13 +81,20 @@ struct Camera
         limitInWorld(worldWidth, worldHeight);
     }
 
-    void followSmooth(double targetWorldX, double targetWorldY, int worldWidth, int worldHeight)
+    void followSmooth(
+        double targetWorldX,
+        double targetWorldY,
+        int worldWidth,
+        int worldHeight,
+        double offsetWorldX,
+        double offsetWorldY
+    )
     {
         double visibleW = getVisibleWorldWidth();
         double visibleH = getVisibleWorldHeight();
 
-        targetX = targetWorldX - visibleW / 2.0;
-        targetY = targetWorldY - visibleH / 2.0;
+        targetX = targetWorldX - visibleW / 2.0 + offsetWorldX;
+        targetY = targetWorldY - visibleH / 2.0 + offsetWorldY;
 
         // 数值越小越“拖”，越大越紧跟
         double followSpeed = 0.08;
@@ -779,14 +786,130 @@ public:
     }
 	int getworldWidth()//根据列数和每个 tile 的显示宽度计算整个地图在世界坐标系中的宽度
 	{
-        return cols * drawTileWidth;
+        return cols * drawTileWidth*3;
 	}
 	int getWOrldHeight()//根据行数和每个 tile 的显示高度计算整个地图在世界坐标系中的高度
     {
-        return rows * drawTileHeight;
+        return rows * drawTileHeight*3;
     }
 };
+//ui层
+enum UIAnchor
+{
+    UI_TOP_LEFT,
+    UI_TOP_RIGHT,
+    UI_BOTTOM_LEFT,
+    UI_BOTTOM_RIGHT,
+    UI_CENTER
+};
 
+struct UIBox
+{
+    int x;
+    int y;
+    int w;
+    int h;
+};
+
+UIBox makeUIBoxByAnchor(
+    int w,
+    int h,
+    UIAnchor anchor,
+    int marginX,
+    int marginY
+)
+{
+    UIBox box;
+
+    box.w = w;
+    box.h = h;
+
+    if (anchor == UI_TOP_LEFT)
+    {
+        box.x = marginX;
+        box.y = marginY;
+    }
+    else if (anchor == UI_TOP_RIGHT)
+    {
+        box.x = WINDOW_WIDTH - w - marginX;
+        box.y = marginY;
+    }
+    else if (anchor == UI_BOTTOM_LEFT)
+    {
+        box.x = marginX;
+        box.y = WINDOW_HEIGHT - h - marginY;
+    }
+    else if (anchor == UI_BOTTOM_RIGHT)
+    {
+        box.x = WINDOW_WIDTH - w - marginX;
+        box.y = WINDOW_HEIGHT - h - marginY;
+    }
+    else
+    {
+        box.x = WINDOW_WIDTH / 2 - w / 2;
+        box.y = WINDOW_HEIGHT / 2 - h / 2;
+    }
+
+    return box;
+}
+
+void drawUIBox(UIBox box, COLORREF fillColor, COLORREF borderColor)
+{
+    setfillcolor(fillColor);
+    setlinecolor(borderColor);
+
+    fillrectangle(
+        box.x,
+        box.y,
+        box.x + box.w,
+        box.y + box.h
+    );
+}
+
+void drawListPanel()
+{
+    UIBox panel = makeUIBoxByAnchor(
+        320,
+        420,
+        UI_TOP_LEFT,
+        32,
+        32
+    );
+
+    drawUIBox(panel, RGB(30, 30, 30), WHITE);
+
+    int padding = 16;
+    int itemH = 36;
+    int gap = 8;
+
+    for (int i = 0; i < 6; i++)
+    {
+        UIBox item;
+
+        item.x = panel.x + padding;
+        item.y = panel.y + padding + i * (itemH + gap);
+        item.w = panel.w - padding * 2;
+        item.h = itemH;
+
+        drawUIBox(item, RGB(70, 70, 70), RGB(180, 180, 180));
+    }
+
+    UIBox button1;
+    button1.x = panel.x + padding;
+    button1.y = panel.y + panel.h - padding - 40;
+    button1.w = 120;
+    button1.h = 40;
+
+    drawUIBox(button1, RGB(90, 90, 90), WHITE);
+
+    UIBox button2;
+    button2.x = button1.x + button1.w + 12;
+    button2.y = button1.y;
+    button2.w = 120;
+    button2.h = 40;
+
+    drawUIBox(button2, RGB(90, 90, 90), WHITE);
+}
 
 // 实体类
 
@@ -1575,7 +1698,14 @@ void setCameraFollowTarget(int newTargetIndex, Entity entitys[], int entityCount
 
 
 //更新镜头跟随目标
-void updateCameraFollow(Entity entitys[], int entityCount, int worldWidth, int worldHeight)
+void updateCameraFollow(
+    Entity entitys[],
+    int entityCount,
+    int worldWidth,
+    int worldHeight,
+    int mouseOffsetX,
+    int mouseOffsetY
+)
 {
     if (gCameraFollowTargetIndex < 0 || gCameraFollowTargetIndex >= entityCount)
     {
@@ -1586,6 +1716,7 @@ void updateCameraFollow(Entity entitys[], int entityCount, int worldWidth, int w
     {
         gCameraFollowTargetIndex = 0;
     }
+
     if (GetAsyncKeyState('B') & 0x8000)
     {
         gCamera.zoomTo(0.3);
@@ -1598,14 +1729,43 @@ void updateCameraFollow(Entity entitys[], int entityCount, int worldWidth, int w
     {
         gCamera.zoomTo(1.0);
     }
+
     gCamera.updateZoom();
 
-    //切换相机跟随方式
+    // 鼠标引导相机偏移强度
+    // 0.0 = 完全不受鼠标影响
+    // 0.25 = 鼠标偏移的 25% 用于相机偏移
+    // 0.5 = 更明显
+    double lookStrength = 0.25;
+
+    // 死区，避免鼠标在中心附近轻微抖动导致相机一直晃
+    int deadZone = 20;
+
+    if (abs(mouseOffsetX) < deadZone)
+    {
+        mouseOffsetX = 0;
+    }
+
+    if (abs(mouseOffsetY) < deadZone)
+    {
+        mouseOffsetY = 0;
+    }
+
+    // 屏幕像素偏移 -> 世界坐标偏移
+    double offsetWorldX = mouseOffsetX / gCamera.zoom * lookStrength;
+
+    // 注意这里要反过来：
+    // 鼠标在屏幕上方时 mouseOffsetY 是负数，
+    // 但是世界坐标里向上应该是正数。
+    double offsetWorldY = -mouseOffsetY / gCamera.zoom * lookStrength;
+
     gCamera.followSmooth(
         entitys[gCameraFollowTargetIndex].getX(),
         entitys[gCameraFollowTargetIndex].getY(),
         worldWidth,
-        worldHeight
+        worldHeight,
+        offsetWorldX,
+        offsetWorldY
     );
 }
 int main()
@@ -1680,15 +1840,46 @@ int main()
     bool lastInAirState[ENTITY_COUNT] = {}; 
 	bool lastJumpingState[ENTITY_COUNT] = {}; 
     bool lastAliveState[ENTITY_COUNT] = {};
+    int lastMouseX = 0;
+    int lastMouseY = 0;
+    int lastOffsetX = 0;
+    int lastOffsetY = 0;
     //先更新一次所有实体的存活状态
     for (int i = 0; i < ENTITY_COUNT; i++)
     {
         lastAliveState[i] = entitys[i].getIsAlive();
     }
-    BeginBatchDraw();
 
+
+    int mouseX = WINDOW_WIDTH / 2;
+    int mouseY = WINDOW_HEIGHT / 2;
+
+    int mouseOffsetX = 0;
+    int mouseOffsetY = 0;
+
+
+    BeginBatchDraw();
+    //游戏主循环
     while (true)
     {   
+        ExMessage msg;
+
+        while (peekmessage(&msg, EX_MOUSE))
+        {
+            if (msg.message == WM_MOUSEMOVE)
+            {
+                mouseX = msg.x;
+                mouseY = msg.y;
+            }
+
+            if (msg.message == WM_LBUTTONDOWN)
+            {
+                cout << "Left mouse down: " << msg.x << " " << msg.y << endl;
+            }
+        }
+
+        mouseOffsetX = mouseX - WINDOW_WIDTH / 2;
+        mouseOffsetY = mouseY - WINDOW_HEIGHT / 2;
         if (GetAsyncKeyState(VK_ESCAPE) & 0x8000)
         {
             break;
@@ -1711,6 +1902,7 @@ int main()
             {
                 continue;
             }
+            
             entitys[i].update(entitys, ENTITY_COUNT, i, worldWidth, worldHeight);
             entitys[i].updateanimatedSprite();
         }
@@ -1734,8 +1926,14 @@ int main()
             setCameraFollowTarget(3, entitys, ENTITY_COUNT);
         }
 
-        updateCameraFollow(entitys, ENTITY_COUNT, worldWidth, worldHeight);
-        // 3. 输出碰撞状态变化
+        updateCameraFollow(
+            entitys,
+            ENTITY_COUNT,
+            worldWidth,
+            worldHeight,
+            mouseOffsetX,
+            mouseOffsetY
+        );        // 3. 输出碰撞状态变化
         for (int i = 0; i < ENTITY_COUNT; i++)
         {
 
@@ -1888,8 +2086,11 @@ int main()
             }
             entitys[i].draw();
         }
-		RECT rect = { 0, 0, WINDOW_WIDTH, WINDOW_HEIGHT };
-		drawtext(_T("Use Arrow Keys to Move, Space to Jump, Shift to Sprint, Esc to Quit"), &rect, DT_CENTER | DT_TOP | DT_SINGLELINE);
+		//RECT rect = { 0, 0, WINDOW_WIDTH, WINDOW_HEIGHT };
+		//drawtext(_T("Use Arrow Keys to Move, Space to Jump, Shift to Sprint, Esc to Quit"), &rect, DT_CENTER | DT_TOP | DT_SINGLELINE);
+
+
+        drawListPanel();
         FlushBatchDraw();
 
         Sleep(16);
