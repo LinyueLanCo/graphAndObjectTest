@@ -1357,7 +1357,8 @@ public:
 		currentAnimState = ANIM_COUNT;
 		currentFacingDirection = LEFT;
 
-        entityType = Type;
+		entityType = Type;
+		isAlive = alive;
     }
     EntityType getEntityType()
     {
@@ -2397,122 +2398,67 @@ void updateCameraFollow(
         offsetWorldY
     );
 }
-int main()
+
+
+
+class Level
 {
-
-    initgraph(WINDOW_WIDTH, WINDOW_HEIGHT);
-    setbkcolor(BLACK);
+private:
 	TileMap tileMap;
-    tileMap.setTileSize(16,16,48,48);
-	tileMap.loadTileset(_T("assets\\tex\\maps\\tileset.png"));
-	tileMap.loadFromFile("assets\\tex\\maps\\map.txt");
-    int worldWidth = tileMap.getworldWidth();
-    int worldHeight = tileMap.getWOrldHeight();
+	IMAGE background;
 
-    if (worldWidth < WINDOW_WIDTH)
-    {
-        worldWidth = WINDOW_WIDTH;
-    }
+	Entity entitys[ENTITY_COUNT];
 
-    if (worldHeight < WINDOW_HEIGHT)
-    {
-        worldHeight = WINDOW_HEIGHT;
-    }
 	SmoothUIPanel listPanel;
-    //创建输入管理
-    InputManager input;
-    //创建玩家控制器
-    PlayerController playerController;
 
-    //创建移动处理
-    MovementHandle movementHandle;
+	PlayerController playerController;
+	MovementHandle movementHandle;
 
-	listPanel.init(480, 600, UI_TOP_LEFT, 32, 32);
-    cleardevice();
+	int worldWidth;
+	int worldHeight;
 
-    IMAGE background;
-    loadimage(&background, _T("assets\\tex\\maps\\background.jpg"));
-    Entity entitys[ENTITY_COUNT] =
-    {
-        // 参数：
-        // 图片路径，
-        // 世界坐标 x，
-        // 世界坐标 y，
-        // 是否受控制，
-        // 是否参与重叠事件，
-        // 是否阻挡移动，
-        // 是否 god
+	bool lastOverlap[ENTITY_COUNT][ENTITY_COUNT];
+	bool lastCollisionState[ENTITY_COUNT];
+	bool lastGroundState[ENTITY_COUNT];
+	bool lastSprintState[ENTITY_COUNT];
+	bool lastInAirState[ENTITY_COUNT];
+	bool lastJumpingState[ENTITY_COUNT];
+	bool lastAliveState[ENTITY_COUNT];
 
-        Entity(_T("assets\\tex\\entities\\characters\\player1_Idle_L.png"), 200, 700, true, true, true, false,PLAYER,8,1),
+public:
+	Level()
+		: entitys
+		{
+			Entity(_T("assets\\tex\\entities\\characters\\player1_Idle_L.png"), 200, 700, true, true, true, false, PLAYER, 8, 1),
 
-        Entity(_T("assets\\tex\\entities\\characters\\player2.png"), 600, 900, false, true, false, false,ENTITY,1),
+			Entity(_T("assets\\tex\\entities\\characters\\player2.png"), 600, 900, false, true, false, false, ENTITY, 1),
 
-        Entity(_T("assets\\tex\\entities\\characters\\player3.png"), 950, 850, false, true, true, false,ENTITY,1),
+			Entity(_T("assets\\tex\\entities\\characters\\player3.png"), 950, 850, false, true, true, false, ENTITY, 1),
 
-        Entity(_T("assets\\tex\\entities\\characters\\player4.png"), 1300, 650, false, true, false, false,ENTITY,1),
-        
-        Entity(_T("assets\\tex\\entities\\items\\MonedaD.png"),256,256,false,true,false,true,COIN,5,1),
+			Entity(_T("assets\\tex\\entities\\characters\\player4.png"), 1300, 650, false, true, false, false, ENTITY, 1),
 
-        Entity(_T("assets\\tex\\entities\\items\\MonedaP.png"),256+48+16,256,false,true,false,true,COIN,5,1),
+			Entity(_T("assets\\tex\\entities\\items\\MonedaD.png"), 256, 256, false, true, false, true, COIN, 5, 1),
 
-        Entity(_T("assets\\tex\\entities\\items\\MonedaR.png"),256 + (48 * 2) + (16 * 2),256,false,true,false,true,COIN,5,1)
-        
+			Entity(_T("assets\\tex\\entities\\items\\MonedaP.png"), 256 + 48 + 16, 256, false, true, false, true, COIN, 5, 1),
 
+			Entity(_T("assets\\tex\\entities\\items\\MonedaR.png"), 256 + (48 * 2) + (16 * 2), 256, false, true, false, true, COIN, 5, 1)
+		}
+	{
+		worldWidth = WINDOW_WIDTH;
+		worldHeight = WINDOW_HEIGHT;
+	}
 
-    };
-    entitys[0].setSpriteTransform(4.0, 4.0, 0, 0);
-    //entitys[1].setSpriteTransform(0.8, 0.8, 0, 0);
-    //entitys[2].setSpriteTransform(1.0, 1.0, 30, 0);
-    entitys[3].setSpriteTransform(2.0, 2.0, 0, 0);
-    entitys[4].setSpriteTransform(4.0, 4.0, 0, 0);
-    entitys[5].setSpriteTransform(4.0, 4.0, 0, 0);
-    entitys[6].setSpriteTransform(4.0, 4.0, 0, 0);
-    entitys[0].setAnimationSpeed(3);
-    entitys[4].setAnimationSpeed(3);
-    entitys[0].setCollisionScale(4,4);
+	void init()
+	{
+		initMap();
+		initBackground();
+		initUI();
+		initEntitySettings();
+		initLastStates();
+	}
 
-    //存储上次tick的各种状态
-    bool lastOverlap[ENTITY_COUNT][ENTITY_COUNT] = {};
-    bool lastCollisionState[ENTITY_COUNT] = {};
-    bool lastGroundState[ENTITY_COUNT] = {};
-    bool lastSprintState[ENTITY_COUNT] = {};
-    bool lastInAirState[ENTITY_COUNT] = {}; 
-	bool lastJumpingState[ENTITY_COUNT] = {}; 
-    bool lastAliveState[ENTITY_COUNT] = {};
-    int lastMouseX = 0;
-    int lastMouseY = 0;
-    int lastOffsetX = 0;
-    int lastOffsetY = 0;
-    //先更新一次所有实体的存活状态
-    for (int i = 0; i < ENTITY_COUNT; i++)
-    {
-        lastAliveState[i] = entitys[i].getIsAlive();
-    }
-
-
-    int mouseX = WINDOW_WIDTH / 2;
-    int mouseY = WINDOW_HEIGHT / 2;
-
-    int mouseOffsetX = 0;
-    int mouseOffsetY = 0;
-
-
-    BeginBatchDraw();
-    //游戏主循环
-    while (true)
-    {   
-        //输入更新
-        input.update();
-        
-        int mouseX = input.getMouseX();
-		int mouseY = input.getMouseY();
-	
-        int mouseOffsetX = input.getMouseOffsetX();
-		int mouseOffsetY = input.getMouseOffsetY();
-        if (input.isKeyDown(VK_ESCAPE))
-        {
-            break;
-        }
+	void update(InputManager& input)
+	{
 		if (input.isMouseLeftPressed())
 		{
 			cout << "Left mouse down: "
@@ -2521,31 +2467,136 @@ int main()
 				<< input.getMouseY()
 				<< endl;
 		}
-        // 1. 清除上一帧状态
-        for (int i = 0; i < ENTITY_COUNT; i++)
-        {
-            if (!entitys[i].getIsAlive())
-            {
-                continue;
-            }
-            entitys[i].clearFrameState();
-        }
 
-        // 2. 更新所有实体
-        for (int i = 0; i < ENTITY_COUNT; i++)
-        {
-            if (!entitys[i].getIsAlive())
-            {
-                continue;
-            }
-            
+		clearEntityFrameState();
+
+		updateEntities(input);
+
+		handleCameraInput(input);
+		handleUIInput(input);
+
+		updateCamera(input);
+
+		updateDebugStates();
+
+		updateOverlapEvents();
+
+		listPanel.update();
+	}
+
+	void draw()
+	{
+		putimage(0, 0, &background);
+
+		tileMap.draw();
+
+		for (int i = 0; i < ENTITY_COUNT; i++)
+		{
+			if (!entitys[i].getIsAlive())
+			{
+				continue;
+			}
+
+			entitys[i].draw();
+		}
+
+		drawListPanel(listPanel.getBox());
+	}
+
+private:
+	void initMap()
+	{
+		tileMap.setTileSize(16, 16, 48, 48);
+		tileMap.loadTileset(_T("assets\\tex\\maps\\tileset.png"));
+		tileMap.loadFromFile("assets\\tex\\maps\\map.txt");
+
+		worldWidth = tileMap.getworldWidth();
+		worldHeight = tileMap.getWOrldHeight();
+
+		if (worldWidth < WINDOW_WIDTH)
+		{
+			worldWidth = WINDOW_WIDTH;
+		}
+
+		if (worldHeight < WINDOW_HEIGHT)
+		{
+			worldHeight = WINDOW_HEIGHT;
+		}
+	}
+
+	void initBackground()
+	{
+		loadimage(&background, _T("assets\\tex\\maps\\background.jpg"));
+	}
+
+	void initUI()
+	{
+		listPanel.init(480, 600, UI_TOP_LEFT, 32, 32);
+	}
+
+	void initEntitySettings()
+	{
+		entitys[0].setSpriteTransform(4.0, 4.0, 0, 0);
+
+		entitys[3].setSpriteTransform(2.0, 2.0, 0, 0);
+
+		entitys[4].setSpriteTransform(4.0, 4.0, 0, 0);
+		entitys[5].setSpriteTransform(4.0, 4.0, 0, 0);
+		entitys[6].setSpriteTransform(4.0, 4.0, 0, 0);
+
+		entitys[0].setAnimationSpeed(3);
+		entitys[4].setAnimationSpeed(3);
+
+		entitys[0].setCollisionScale(4, 4);
+	}
+
+	void initLastStates()
+	{
+		for (int i = 0; i < ENTITY_COUNT; i++)
+		{
+			lastCollisionState[i] = false;
+			lastGroundState[i] = false;
+			lastSprintState[i] = false;
+			lastInAirState[i] = false;
+			lastJumpingState[i] = false;
+			lastAliveState[i] = entitys[i].getIsAlive();
+
+			for (int j = 0; j < ENTITY_COUNT; j++)
+			{
+				lastOverlap[i][j] = false;
+			}
+		}
+	}
+
+	void clearEntityFrameState()
+	{
+		for (int i = 0; i < ENTITY_COUNT; i++)
+		{
+			if (!entitys[i].getIsAlive())
+			{
+				continue;
+			}
+
+			entitys[i].clearFrameState();
+		}
+	}
+
+	void updateEntities(InputManager& input)
+	{
+		for (int i = 0; i < ENTITY_COUNT; i++)
+		{
+			if (!entitys[i].getIsAlive())
+			{
+				continue;
+			}
+
 			BehaviorIntent intent;
 
 			if (i == 0)
 			{
 				intent = playerController.makeIntent(input, entitys[i].isGod());
 			}
-            //计算 sprinting / jumping / onGround 等状态
+
 			movementHandle.update(
 				entitys[i],
 				intent,
@@ -2554,30 +2605,38 @@ int main()
 				i,
 				worldWidth,
 				worldHeight
-			);            //根据 intent.moveX 和 sprinting 切动画
+			);
+
 			entitys[i].updateAnimationByIntent(intent);
-            //推进动画帧
 			entitys[i].updateAnimatedSprite();
-        }
-        if (input.isKeyPressed(VK_F1))
-        {
-            setCameraFollowTarget(0, entitys, ENTITY_COUNT);
-        }
+		}
+	}
 
-        if (input.isKeyPressed(VK_F2))
-        {
-            setCameraFollowTarget(1, entitys, ENTITY_COUNT);
-        }
+	void handleCameraInput(InputManager& input)
+	{
+		if (input.isKeyPressed(VK_F1))
+		{
+			setCameraFollowTarget(0, entitys, ENTITY_COUNT);
+		}
 
-        if (input.isKeyPressed(VK_F3))
-        {
-            setCameraFollowTarget(2, entitys, ENTITY_COUNT);
-        }
+		if (input.isKeyPressed(VK_F2))
+		{
+			setCameraFollowTarget(1, entitys, ENTITY_COUNT);
+		}
 
-        if (input.isKeyPressed(VK_F4))
-        {
-            setCameraFollowTarget(3, entitys, ENTITY_COUNT);
-        }
+		if (input.isKeyPressed(VK_F3))
+		{
+			setCameraFollowTarget(2, entitys, ENTITY_COUNT);
+		}
+
+		if (input.isKeyPressed(VK_F4))
+		{
+			setCameraFollowTarget(3, entitys, ENTITY_COUNT);
+		}
+	}
+
+	void handleUIInput(InputManager& input)
+	{
 		if (input.isKeyPressed('W'))
 		{
 			listPanel.setAnchor(UI_TOP_LEFT);
@@ -2597,181 +2656,211 @@ int main()
 		{
 			listPanel.setAnchor(UI_BOTTOM_RIGHT);
 		}
-        updateCameraFollow(
-            entitys,
-            ENTITY_COUNT,
-            worldWidth,
-            worldHeight,
-            mouseOffsetX,
-            mouseOffsetY
-        );        // 3. 输出碰撞状态变化
-        for (int i = 0; i < ENTITY_COUNT; i++)
-        {
+	}
 
-            if (entitys[i].hasCollisionState() && !lastCollisionState[i])
-            {
-                cout << "Entity " << i << " collision state started." << endl;
-            }
+	void updateCamera(InputManager& input)
+	{
+		updateCameraFollow(
+			entitys,
+			ENTITY_COUNT,
+			worldWidth,
+			worldHeight,
+			input.getMouseOffsetX(),
+			input.getMouseOffsetY()
+		);
+	}
 
-            lastCollisionState[i] = entitys[i].hasCollisionState();
-        }
-        //输出死亡变化
-        for (int i = 0; i < ENTITY_COUNT; i++)
-        {
-            bool nowAlive = entitys[i].getIsAlive();//获取当前帧的存活状态
+	void updateDebugStates()
+	{
+		for (int i = 0; i < ENTITY_COUNT; i++)
+		{
+			if (entitys[i].hasCollisionState() && !lastCollisionState[i])
+			{
+				cout << "Entity " << i << " collision state started." << endl;
+			}
 
-            if (!nowAlive && lastAliveState[i])
-            {
-                cout << "Entity " << i << " died." << endl;
-            }
+			lastCollisionState[i] = entitys[i].hasCollisionState();
+		}
 
-            lastAliveState[i] = nowAlive;//将当前帧的存活状态存入state里
-        }
-        // 4. 输出落地状态变化
-        for (int i = 0; i < ENTITY_COUNT; i++)
-        {
-            if (entitys[i].isOnGround() && !lastGroundState[i])
-            {
-                cout << "Entity " << i << " is on ground." << endl;
-            }
+		for (int i = 0; i < ENTITY_COUNT; i++)
+		{
+			bool nowAlive = entitys[i].getIsAlive();
 
-            lastGroundState[i] = entitys[i].isOnGround();
-        }
-		// 4. 输出是否在空中状态变化
-        for(int i = 0; i < ENTITY_COUNT; i++)
-        {
-            if(entitys[i].isInAir() && !lastInAirState[i])
-            {
-                cout << "Entity " << i << " is in air." << endl;
-            }
-            lastInAirState[i] = entitys[i].isInAir();
-        }
-        //输出跳跃状态变化
-        for (int i = 0; i < ENTITY_COUNT; i++)
-        {
-            bool nowJumping = entitys[i].isJumping();
+			if (!nowAlive && lastAliveState[i])
+			{
+				cout << "Entity " << i << " died." << endl;
+			}
 
-            if (nowJumping && !lastJumpingState[i])
-            {
-                cout << "Entity " << i << " started jumping." << endl;
-            }
+			lastAliveState[i] = nowAlive;
+		}
 
-            if (!nowJumping && lastJumpingState[i])
-            {
-                cout << "Entity " << i << " ended jumping." << endl;
-            }
+		for (int i = 0; i < ENTITY_COUNT; i++)
+		{
+			if (entitys[i].isOnGround() && !lastGroundState[i])
+			{
+				cout << "Entity " << i << " is on ground." << endl;
+			}
 
-            lastJumpingState[i] = nowJumping;
-        }
-        // 5. 输出冲刺状态变化
-        for (int i = 0; i < ENTITY_COUNT; i++)
-        {
-            bool nowSprinting = entitys[i].isSprinting();
+			lastGroundState[i] = entitys[i].isOnGround();
+		}
 
-            if (nowSprinting && !lastSprintState[i])
-            {
-                cout << "Entity " << i << " started sprinting." << endl;
-            }
+		for (int i = 0; i < ENTITY_COUNT; i++)
+		{
+			if (entitys[i].isInAir() && !lastInAirState[i])
+			{
+				cout << "Entity " << i << " is in air." << endl;
+			}
 
-            if (!nowSprinting && lastSprintState[i])
-            {
-                cout << "Entity " << i << " ended sprinting." << endl;
-            }
+			lastInAirState[i] = entitys[i].isInAir();
+		}
 
-            lastSprintState[i] = nowSprinting;
-        }
+		for (int i = 0; i < ENTITY_COUNT; i++)
+		{
+			bool nowJumping = entitys[i].isJumping();
 
-        // 6. 重叠事件检测,这里只检测真正重叠，贴边不算碰撞
-        for (int i = 0; i < ENTITY_COUNT; i++)
-        {
-            for (int j = i + 1; j < ENTITY_COUNT; j++)
-            {
-                //先进行死亡检测
-                if (!entitys[i].getIsAlive() || !entitys[j].getIsAlive())
-                {
-                    continue;
-                }//再判定两者是否都是可碰撞检测
-                if (!entitys[i].isCollidable() || !entitys[j].isCollidable())
-                {
-                    continue;
-                }
+			if (nowJumping && !lastJumpingState[i])
+			{
+				cout << "Entity " << i << " started jumping." << endl;
+			}
 
-                RectBox a = entitys[i].getWorldCollisionBox();
-                RectBox b = entitys[j].getWorldCollisionBox();
+			if (!nowJumping && lastJumpingState[i])
+			{
+				cout << "Entity " << i << " ended jumping." << endl;
+			}
 
-                bool overlapping = isRectOverlapping(a, b);
+			lastJumpingState[i] = nowJumping;
+		}
 
-                if (overlapping)
-                {
-                    entitys[i].setOverlapping(true);
-                    entitys[j].setOverlapping(true);
+		for (int i = 0; i < ENTITY_COUNT; i++)
+		{
+			bool nowSprinting = entitys[i].isSprinting();
 
-                    if (!lastOverlap[i][j])
-                    {
-                        cout << "Entity " << i << " overlaps with Entity " << j << endl;
+			if (nowSprinting && !lastSprintState[i])
+			{
+				cout << "Entity " << i << " started sprinting." << endl;
+			}
 
-                        EntityType typeA = entitys[i].getEntityType();
-                        EntityType typeB = entitys[j].getEntityType();
+			if (!nowSprinting && lastSprintState[i])
+			{
+				cout << "Entity " << i << " ended sprinting." << endl;
+			}
 
-                        if (typeA == PLAYER && typeB == COIN)
-                        {
-                            cout << "Player picked coin: " << j << endl;
-                            PlaySoundW(_T("assets\\sound\\entities\\item\\coin_pickup.wav"), NULL,  SND_ASYNC | SND_NOSTOP);
-                            entitys[j].killEntity();
-                        }
-                        else if (typeA == COIN && typeB == PLAYER)
-                        {
-                            cout << "Player picked coin: " << i << endl;
-                            entitys[j].killEntity();
-                        }
-                        else if (typeA == PLAYER && typeB == ENTITY)
-                        {
-                            cout << "Player touched normal entity: " << j << endl;
-                        }
-                        else if (typeA == ENTITY && typeB == PLAYER)
-                        {
-                            cout << "Player touched normal entity: " << i << endl;
-                        }
-                    }
-                }
+			lastSprintState[i] = nowSprinting;
+		}
+	}
 
-                if (!entitys[i].getIsAlive()|| !entitys[j].getIsAlive())
-                {
-                    continue;
-                }
-                lastOverlap[i][j] = overlapping;
-            }
-        }
-        listPanel.update();
-        // 7. 绘制
-        cleardevice();
-        
-        putimage(0, 0, &background);
-        tileMap.draw();
+	void updateOverlapEvents()
+	{
+		for (int i = 0; i < ENTITY_COUNT; i++)
+		{
+			for (int j = i + 1; j < ENTITY_COUNT; j++)
+			{
+				if (!entitys[i].getIsAlive() || !entitys[j].getIsAlive())
+				{
+					continue;
+				}
 
-        for (int i = 0; i < ENTITY_COUNT; i++)
-        {
-            if (!entitys[i].getIsAlive())
-            {
-                continue;
-            }
-            entitys[i].draw();
-        }
-		//RECT rect = { 0, 0, WINDOW_WIDTH, WINDOW_HEIGHT };
-		//drawtext(_T("Use Arrow Keys to Move, Space to Jump, Shift to Sprint, Esc to Quit"), &rect, DT_CENTER | DT_TOP | DT_SINGLELINE);
+				if (!entitys[i].isCollidable() || !entitys[j].isCollidable())
+				{
+					continue;
+				}
 
+				RectBox a = entitys[i].getWorldCollisionBox();
+				RectBox b = entitys[j].getWorldCollisionBox();
 
-        drawListPanel(listPanel.getBox());   
-        FlushBatchDraw();
+				bool overlapping = isRectOverlapping(a, b);
 
-        Sleep(16);
-    }
+				if (overlapping)
+				{
+					entitys[i].setOverlapping(true);
+					entitys[j].setOverlapping(true);
 
-    EndBatchDraw();
-    closegraph();
+					if (!lastOverlap[i][j])
+					{
+						cout << "Entity " << i << " overlaps with Entity " << j << endl;
 
+						EntityType typeA = entitys[i].getEntityType();
+						EntityType typeB = entitys[j].getEntityType();
 
+						if (typeA == PLAYER && typeB == COIN)
+						{
+							cout << "Player picked coin: " << j << endl;
 
+							PlaySoundW(
+								_T("assets\\sound\\entities\\item\\coin_pickup.wav"),
+								NULL,
+								SND_ASYNC | SND_NOSTOP
+							);
 
-    return 0;
+							entitys[j].killEntity();
+						}
+						else if (typeA == COIN && typeB == PLAYER)
+						{
+							cout << "Player picked coin: " << i << endl;
+
+							PlaySoundW(
+								_T("assets\\sound\\entities\\item\\coin_pickup.wav"),
+								NULL,
+								SND_ASYNC | SND_NOSTOP
+							);
+
+							entitys[i].killEntity();
+						}
+						else if (typeA == PLAYER && typeB == ENTITY)
+						{
+							cout << "Player touched normal entity: " << j << endl;
+						}
+						else if (typeA == ENTITY && typeB == PLAYER)
+						{
+							cout << "Player touched normal entity: " << i << endl;
+						}
+					}
+				}
+
+				if (!entitys[i].getIsAlive() || !entitys[j].getIsAlive())
+				{
+					continue;
+				}
+
+				lastOverlap[i][j] = overlapping;
+			}
+		}
+	}
+};
+int main()
+{
+	initgraph(WINDOW_WIDTH, WINDOW_HEIGHT);
+	setbkcolor(BLACK);
+
+	InputManager input;
+	Level level;
+
+	level.init();
+
+	BeginBatchDraw();
+
+	while (true)
+	{
+		input.update();
+
+		if (input.isKeyDown(VK_ESCAPE))
+		{
+			break;
+		}
+
+		level.update(input);
+
+		cleardevice();
+
+		level.draw();
+
+		FlushBatchDraw();
+
+		Sleep(16);
+	}
+
+	EndBatchDraw();
+	closegraph();
+
+	return 0;
 }
