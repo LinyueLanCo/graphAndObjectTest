@@ -20,23 +20,82 @@ const double GRAVITY = 1.98;
 const double JUMP_SPEED = 28.0;
 const double MAX_FALL_SPEED = -28.0;
 
+/*
+============================================================
+当前代码的核心数据流向
+============================================================
+
+main()
+    -> 创建 InputManager 和 Level
+    -> level.init() 负责加载当前关卡的地图、背景、实体、UI、初始状态
+    -> while 主循环：
+        1. input.update()
+           统一采集键盘/鼠标状态，形成 keyNow/keyLast 等输入缓存。
+
+        2. level.update(input)
+           Level 作为当前关卡的调度者，决定各系统的更新顺序：
+           清理上一帧临时状态 -> 生成玩家意图 -> 移动系统 -> 碰撞系统
+           -> 相机/UI输入 -> 调试状态输出 -> 重叠事件 -> UI更新。
+
+        3. cleardevice()
+        4. level.draw()
+           绘制背景、地图、实体、UI。
+
+        5. FlushBatchDraw()
+           将本帧绘制结果显示出来。
+
+玩家移动数据流：
+    键盘输入
+        -> InputManager
+        -> PlayerController::makeIntent()
+        -> BehaviorIntent
+        -> MovementHandle::update()
+        -> CollisionHandle 计算 allowedMoveX / allowedMoveY
+        -> MovementHandle 把允许位移写回 Entity 的 x/y/velocity/onGround 等状态
+        -> Entity::updateAnimationByIntent()
+        -> Entity::draw()
+
+职责边界：
+    InputManager      只负责“输入采集”
+    PlayerController  只负责“输入 -> 行为意图”
+    BehaviorIntent    只保存“这一帧想做什么”
+    MovementHandle    负责“速度、冲刺、跳跃、重力、期望位移”
+    CollisionHandle   负责“阻挡检测、允许位移、世界边界修正、重叠判断”
+    Level             负责“当前关卡的对象持有、初始化、更新调度和绘制调度”
+    Entity            主要保存实体数据，并提供碰撞盒、动画、绘制等接口
+============================================================
+*/
+
 
 // 坐标转换
+// 当前工程使用“世界坐标”和“屏幕坐标”两套坐标：
+// - 世界坐标：逻辑坐标，原点在左下角，Entity 的 x/y 表示实体中心点。
+// - 屏幕坐标：EasyX 绘制坐标，原点在窗口左上角。
+// - Camera 记录当前视口在世界坐标中的左下角位置和缩放系数 zoom。
+// 公式：
+//   screenX = (worldX - cameraX) * zoom
+//   screenY = WINDOW_HEIGHT - (worldY - cameraY) * zoom
+//   screenSize = worldSize * zoom
 
 
 //做临时用，枚举实体类型
 
 enum EntityType
 {
-    PLAYER=1,
-    ENTITY=2,
-    COIN=3,
-    DEFAULT=4
+    PLAYER = 1,
+    ENTITY = 2,
+    COIN = 3,
+    DEFAULT = 4
 };
 
 
 
-//镜头系统，处理逻辑绘制起点到屏幕窗口上的转换，现在支持镜头的offset和zoom，由此引申出镜头的smoothFollow也就是平滑跟随
+// Camera：
+ // 负责把“世界中的一个区域”映射到屏幕上。
+ // x/y 表示摄像机左下角在世界坐标中的位置；zoom 表示缩放。
+ // followSmooth 使用 lerp 公式做平滑跟随：
+ //   current += (target - current) * speed
+ // 这个公式的效果是：距离目标越远移动越快，越接近目标越慢。
 struct Camera
 {
     double x;
@@ -265,7 +324,7 @@ inline void putimage_alpha_tile(
     int y,
     int drawW,
     int drawH,
-	IMAGE* img,
+    IMAGE* img,
     int srcX,
     int srcY,
     int srcW,
@@ -289,12 +348,21 @@ inline void putimage_alpha_tile(
 }
 class level
 {
-	// 这里暂时不实现，后续会添加事件与判定的统一管理
+    // 这里暂时不实现，后续会添加事件与判定的统一管理
 };
 
 
-//带动画支持的sprite
-
+// animatedSprite：
+ // 带帧动画支持的精灵类。
+ // 它只关心“图片帧如何播放”和“如何根据 Entity 的世界坐标绘制到屏幕上”。
+ // 注意：它不负责实体逻辑、不负责输入、不负责碰撞。
+ // 绘制公式：
+ //   worldDrawW = frameWidth * scaleX
+ //   worldDrawH = frameHeight * scaleY
+ //   spriteCenter = ownerPosition + offset
+ //   drawLeft = spriteCenterX - worldDrawW / 2
+ //   drawTop  = spriteCenterY + worldDrawH / 2
+ // 再通过 worldToScreenX/Y 转成屏幕坐标。
 class animatedSprite
 {
 private:
@@ -337,11 +405,11 @@ public:
         this->frameWidth = frameWidth;
         this->frameHeight = frameHeight;
         this->frameCount = frameCount;
-        
+
         currentFrame = 0;
         frameTimer = 0;
         isPlaying = 1;
-    
+
     }
     void load(const TCHAR* path, int newFrameCount)
     {
@@ -377,7 +445,7 @@ public:
             frameInterval = 1;
         }
         this->frameInterval = frameInterval;
-    
+
     }
     void setLoop(bool value)//设置是否循环
     {
@@ -398,7 +466,7 @@ public:
     {
         currentFrame = 0;
         frameTimer = 0;
-    
+
     }
     void update()
     {
@@ -429,7 +497,7 @@ public:
                 }
             }
         }
-    
+
     }
     void draw(double ownerX, double ownerY)
     {
@@ -471,8 +539,10 @@ public:
 };
 
 
-// 碰撞盒
-
+// RectBox：
+ // 世界坐标下真正用于检测的 AABB 矩形盒。
+ // left/right/bottom/top 分别表示四条边。
+ // 当前项目中的碰撞检测本质都是基于这个结构。
 struct RectBox
 {
     double left;
@@ -481,14 +551,19 @@ struct RectBox
     double top;
 };
 
+// CollisionBox：
+ // Entity 本地碰撞盒配置。
+ // width/height 通常来自精灵原始帧尺寸。
+ // scaleX/scaleY 用于把碰撞盒按实体缩放。
+ // offsetX/offsetY 用于让碰撞盒中心相对实体中心产生偏移。
 struct CollisionBox
 {
     double width;
     double height;
     double offsetX;
-	double offsetY;
-	double scaleX;
-	double scaleY;
+    double offsetY;
+    double scaleX;
+    double scaleY;
 };
 
 // 矩形重叠检测：贴边不算碰撞
@@ -538,6 +613,10 @@ enum TileId
     TILE_EMPTY = 0
 };
 
+// TileMap：
+ // 负责加载 tileset 和地图文本数据，并把 tile 绘制到世界坐标中。
+ // 当前地图只负责显示，实体阻挡暂时主要来自 Entity 的 blocking 碰撞盒。
+ // 后续可以扩展为：tile 碰撞、地图触发器、地图层级、视口剔除等。
 class TileMap
 {
 private:
@@ -784,13 +863,13 @@ public:
             }
         }
     }
-	int getworldWidth()//根据列数和每个 tile 的显示宽度计算整个地图在世界坐标系中的宽度
-	{
-        return cols * drawTileWidth*3;
-	}
-	int getWOrldHeight()//根据行数和每个 tile 的显示高度计算整个地图在世界坐标系中的高度
+    int getworldWidth()//根据列数和每个 tile 的显示宽度计算整个地图在世界坐标系中的宽度
     {
-        return rows * drawTileHeight*3;
+        return cols * drawTileWidth * 3;
+    }
+    int getWOrldHeight()//根据行数和每个 tile 的显示高度计算整个地图在世界坐标系中的高度
+    {
+        return rows * drawTileHeight * 3;
     }
 };
 //ui层
@@ -857,100 +936,106 @@ UIBox makeUIBoxByAnchor(
 
     return box;
 }
+// SmoothUIPanel：
+ // 一个临时 UI 面板结构，支持锚点切换和平滑移动。
+ // 平滑移动公式：
+ //   x += (targetX - x) * moveSpeed
+ //   y += (targetY - y) * moveSpeed
+ // 这和 Camera 的平滑跟随是同类 lerp 思想。
 struct SmoothUIPanel
 {
-	double x;
-	double y;
+    double x;
+    double y;
 
-	double targetX;
-	double targetY;
+    double targetX;
+    double targetY;
 
-	int w;
-	int h;
+    int w;
+    int h;
 
-	int marginX;
-	int marginY;
+    int marginX;
+    int marginY;
 
-	UIAnchor targetAnchor;
+    UIAnchor targetAnchor;
 
-	double moveSpeed;
+    double moveSpeed;
 
-	SmoothUIPanel()
-	{
-		x = 0;
-		y = 0;
+    SmoothUIPanel()
+    {
+        x = 0;
+        y = 0;
 
-		targetX = 0;
-		targetY = 0;
+        targetX = 0;
+        targetY = 0;
 
-		w = 0;
-		h = 0;
+        w = 0;
+        h = 0;
 
-		marginX = 0;
-		marginY = 0;
+        marginX = 0;
+        marginY = 0;
 
-		targetAnchor = UI_TOP_LEFT;
+        targetAnchor = UI_TOP_LEFT;
 
-		moveSpeed = 0.2;
-	}
+        moveSpeed = 0.2;
+    }
 
-	void init(int newW, int newH, UIAnchor startAnchor, int newMarginX, int newMarginY)
-	{
-		w = newW;
-		h = newH;
+    void init(int newW, int newH, UIAnchor startAnchor, int newMarginX, int newMarginY)
+    {
+        w = newW;
+        h = newH;
 
-		marginX = newMarginX;
-		marginY = newMarginY;
+        marginX = newMarginX;
+        marginY = newMarginY;
 
-		targetAnchor = startAnchor;
+        targetAnchor = startAnchor;
 
-		UIBox startBox = makeUIBoxByAnchor(w, h, startAnchor, marginX, marginY);
+        UIBox startBox = makeUIBoxByAnchor(w, h, startAnchor, marginX, marginY);
 
-		x = startBox.x;
-		y = startBox.y;
+        x = startBox.x;
+        y = startBox.y;
 
-		targetX = startBox.x;
-		targetY = startBox.y;
-	}
+        targetX = startBox.x;
+        targetY = startBox.y;
+    }
 
-	void setAnchor(UIAnchor newAnchor)
-	{
-		targetAnchor = newAnchor;
+    void setAnchor(UIAnchor newAnchor)
+    {
+        targetAnchor = newAnchor;
 
-		UIBox targetBox = makeUIBoxByAnchor(w, h, targetAnchor, marginX, marginY);
+        UIBox targetBox = makeUIBoxByAnchor(w, h, targetAnchor, marginX, marginY);
 
-		targetX = targetBox.x;
-		targetY = targetBox.y;
-	}
+        targetX = targetBox.x;
+        targetY = targetBox.y;
+    }
 
-	void update()
-	{
-		x += (targetX - x) * moveSpeed;
-		y += (targetY - y) * moveSpeed;
+    void update()
+    {
+        x += (targetX - x) * moveSpeed;
+        y += (targetY - y) * moveSpeed;
 
-		// 防止最后因为小数无限接近但不到达
-		if (fabs(targetX - x) < 0.1)
-		{
-			x = targetX;
-		}
+        // 防止最后因为小数无限接近但不到达
+        if (fabs(targetX - x) < 0.1)
+        {
+            x = targetX;
+        }
 
-		if (fabs(targetY - y) < 0.1)
-		{
-			y = targetY;
-		}
-	}
+        if (fabs(targetY - y) < 0.1)
+        {
+            y = targetY;
+        }
+    }
 
-	UIBox getBox()
-	{
-		UIBox box;
+    UIBox getBox()
+    {
+        UIBox box;
 
-		box.x = (int)x;
-		box.y = (int)y;
-		box.w = w;
-		box.h = h;
+        box.x = (int)x;
+        box.y = (int)y;
+        box.w = w;
+        box.h = h;
 
-		return box;
-	}
+        return box;
+    }
 };
 
 //绘制ui盒子
@@ -971,270 +1056,327 @@ void drawUIBox(UIBox box, COLORREF fillColor, COLORREF borderColor)
 //绘制列表面板
 void drawListPanel(UIBox panel)
 {
-	drawUIBox(panel, RGB(255, 255, 255), WHITE);
+    drawUIBox(panel, RGB(255, 255, 255), WHITE);
 
-	int padding = 16;
-	int itemH = 36;
-	int gap = 8;
+    int padding = 16;
+    int itemH = 36;
+    int gap = 8;
 
-	for (int i = 0; i < 7; i++)
-	{
-		UIBox item;
+    for (int i = 0; i < 7; i++)
+    {
+        UIBox item;
 
-		item.x = panel.x + padding;
-		item.y = panel.y + padding + i * (itemH + gap);
-		item.w = 4 * itemH;
-		item.h = itemH;
+        item.x = panel.x + padding;
+        item.y = panel.y + padding + i * (itemH + gap);
+        item.w = 4 * itemH;
+        item.h = itemH;
 
-		drawUIBox(item, RGB(255, 0, 0), RGB(180, 180, 180));
-	}
+        drawUIBox(item, RGB(255, 0, 0), RGB(180, 180, 180));
+    }
 
-	UIBox button1;
-	button1.x = panel.x + padding;
-	button1.y = panel.y + panel.h - padding - 40;
-	button1.w = 120;
-	button1.h = 40;
+    UIBox button1;
+    button1.x = panel.x + padding;
+    button1.y = panel.y + panel.h - padding - 40;
+    button1.w = 120;
+    button1.h = 40;
 
-	drawUIBox(button1, RGB(90, 90, 90), WHITE);
+    drawUIBox(button1, RGB(90, 90, 90), WHITE);
 
-	UIBox button2;
-	button2.x = button1.x + button1.w + 12;
-	button2.y = button1.y;
-	button2.w = 120;
-	button2.h = 40;
+    UIBox button2;
+    button2.x = button1.x + button1.w + 12;
+    button2.y = button1.y;
+    button2.w = 120;
+    button2.h = 40;
 
-	drawUIBox(button2, RGB(90, 90, 90), WHITE);
+    drawUIBox(button2, RGB(90, 90, 90), WHITE);
 }
 
-//剥离出操作管理，现在由inputManager统一创建各种按键接受输入操作
+// InputManager：
+ // 统一采集键盘和鼠标输入。
+ // keyNow 表示当前帧是否按下；keyLast 表示上一帧是否按下。
+ // 因此可以得到三种状态：
+ //   isKeyDown     = 当前帧按下
+ //   isKeyPressed  = 当前帧按下 && 上一帧没按下，即“刚按下”
+ //   isKeyReleased = 当前帧没按下 && 上一帧按下，即“刚松开”
+ // 这样 Entity 不再直接调用 GetAsyncKeyState，从而实现输入层解耦。
 class InputManager
 {
 private:
-	bool keyNow[256];
-	bool keyLast[256];
+    bool keyNow[256];
+    bool keyLast[256];
 
-	bool mouseLeftNow;
-	bool mouseLeftLast;
+    bool mouseLeftNow;
+    bool mouseLeftLast;
 
-	int mouseX;
-	int mouseY;
+    int mouseX;
+    int mouseY;
 
 public:
-	InputManager()
-	{
-		for (int i = 0; i < 256; i++)
-		{
-			keyNow[i] = false;
-			keyLast[i] = false;
-		}
+    InputManager()
+    {
+        for (int i = 0; i < 256; i++)
+        {
+            keyNow[i] = false;
+            keyLast[i] = false;
+        }
 
-		mouseLeftNow = false;
-		mouseLeftLast = false;
+        mouseLeftNow = false;
+        mouseLeftLast = false;
 
-		mouseX = WINDOW_WIDTH / 2;
-		mouseY = WINDOW_HEIGHT / 2;
-	}
+        mouseX = WINDOW_WIDTH / 2;
+        mouseY = WINDOW_HEIGHT / 2;
+    }
 
-	void update()
-	{
-		for (int i = 0; i < 256; i++)
-		{
-			keyLast[i] = keyNow[i];
-			keyNow[i] = (GetAsyncKeyState(i) & 0x8000) != 0;
-		}
+    void update()
+    {
+        for (int i = 0; i < 256; i++)
+        {
+            keyLast[i] = keyNow[i];
+            keyNow[i] = (GetAsyncKeyState(i) & 0x8000) != 0;
+        }
 
-		mouseLeftLast = mouseLeftNow;
+        mouseLeftLast = mouseLeftNow;
 
-		ExMessage msg;
+        ExMessage msg;
 
-		while (peekmessage(&msg, EX_MOUSE))
-		{
-			if (msg.message == WM_MOUSEMOVE)
-			{
-				mouseX = msg.x;
-				mouseY = msg.y;
-			}
+        while (peekmessage(&msg, EX_MOUSE))
+        {
+            if (msg.message == WM_MOUSEMOVE)
+            {
+                mouseX = msg.x;
+                mouseY = msg.y;
+            }
 
-			if (msg.message == WM_LBUTTONDOWN)
-			{
-				mouseLeftNow = true;
-			}
+            if (msg.message == WM_LBUTTONDOWN)
+            {
+                mouseLeftNow = true;
+            }
 
-			if (msg.message == WM_LBUTTONUP)
-			{
-				mouseLeftNow = false;
-			}
-		}
-	}
+            if (msg.message == WM_LBUTTONUP)
+            {
+                mouseLeftNow = false;
+            }
+        }
+    }
 
-	bool isKeyDown(int key)
-	{
-		return keyNow[key];
-	}
+    bool isKeyDown(int key)
+    {
+        return keyNow[key];
+    }
 
-	bool isKeyPressed(int key)
-	{
-		return keyNow[key] && !keyLast[key];
-	}
+    bool isKeyPressed(int key)
+    {
+        return keyNow[key] && !keyLast[key];
+    }
 
-	bool isKeyReleased(int key)
-	{
-		return !keyNow[key] && keyLast[key];
-	}
+    bool isKeyReleased(int key)
+    {
+        return !keyNow[key] && keyLast[key];
+    }
 
-	bool isMouseLeftDown()
-	{
-		return mouseLeftNow;
-	}
+    bool isMouseLeftDown()
+    {
+        return mouseLeftNow;
+    }
 
-	bool isMouseLeftPressed()
-	{
-		return mouseLeftNow && !mouseLeftLast;
-	}
+    bool isMouseLeftPressed()
+    {
+        return mouseLeftNow && !mouseLeftLast;
+    }
 
-	bool isMouseLeftReleased()
-	{
-		return !mouseLeftNow && mouseLeftLast;
-	}
+    bool isMouseLeftReleased()
+    {
+        return !mouseLeftNow && mouseLeftLast;
+    }
 
-	int getMouseX()
-	{
-		return mouseX;
-	}
+    int getMouseX()
+    {
+        return mouseX;
+    }
 
-	int getMouseY()
-	{
-		return mouseY;
-	}
+    int getMouseY()
+    {
+        return mouseY;
+    }
 
-	int getMouseOffsetX()
-	{
-		return mouseX - WINDOW_WIDTH / 2;
-	}
+    int getMouseOffsetX()
+    {
+        return mouseX - WINDOW_WIDTH / 2;
+    }
 
-	int getMouseOffsetY()
-	{
-		return mouseY - WINDOW_HEIGHT / 2;
-	}
+    int getMouseOffsetY()
+    {
+        return mouseY - WINDOW_HEIGHT / 2;
+    }
 };
-//抽象出玩家意图结构体负责处理移动/行为逻辑
+// BehaviorIntent：
+ // 行为意图数据包，只描述“这一帧想做什么”，不描述“具体怎么做”。
+ // 例如：
+ //   moveX = 1        表示想向右移动
+ //   wantJump = true  表示想跳跃
+ //   wantSprint=true  表示想冲刺
+ // 它不应该保存 velocity、allowedMove、onGround 等物理计算结果。
 struct BehaviorIntent
 {
-	double moveX;
-	double moveY;
+    double moveX;
+    double moveY;
 
-	bool wantJump;
-	bool wantSprint;
-	bool wantInteract;
+    bool wantJump;
+    bool wantSprint;
+    bool wantInteract;
 
-	BehaviorIntent()
-	{
-		moveX = 0;
-		moveY = 0;
+    BehaviorIntent()
+    {
+        moveX = 0;
+        moveY = 0;
 
-		wantJump = false;
-		wantSprint = false;
-		wantInteract = false;
-	}
+        wantJump = false;
+        wantSprint = false;
+        wantInteract = false;
+    }
 };
 
-//抽象出玩家控制器负责直接接受inputManager传入的数据
+// PlayerController：
+ // 负责把 InputManager 中的原始输入翻译成 BehaviorIntent。
+ // 也就是：
+ //   键盘状态 -> 玩家意图
+ // 它不负责修改 Entity 坐标，也不负责碰撞、动画、物理。
+ // 后续 AIController、SequenceController 也可以生成同样的 BehaviorIntent。
 class PlayerController
 {
 public:
-	BehaviorIntent makeIntent(InputManager& input, bool god)
-	{
-		BehaviorIntent intent;
+    BehaviorIntent makeIntent(InputManager& input, bool god)
+    {
+        BehaviorIntent intent;
 
-		if (input.isKeyDown(VK_LEFT))
-		{
-			intent.moveX = -1;
-		}
+        if (input.isKeyDown(VK_LEFT))
+        {
+            intent.moveX = -1;
+        }
 
-		if (input.isKeyDown(VK_RIGHT))
-		{
-			intent.moveX = 1;
-		}
+        if (input.isKeyDown(VK_RIGHT))
+        {
+            intent.moveX = 1;
+        }
 
-		if (god)
-		{
-			if (input.isKeyDown(VK_UP))
-			{
-				intent.moveY = 1;
-			}
+        if (god)
+        {
+            if (input.isKeyDown(VK_UP))
+            {
+                intent.moveY = 1;
+            }
 
-			if (input.isKeyDown(VK_DOWN))
-			{
-				intent.moveY = -1;
-			}
-		}
+            if (input.isKeyDown(VK_DOWN))
+            {
+                intent.moveY = -1;
+            }
+        }
 
-		intent.wantSprint = input.isKeyDown(VK_SHIFT);
-		intent.wantJump = input.isKeyPressed(VK_SPACE);
-		intent.wantInteract = input.isKeyPressed('E');
+        intent.wantSprint = input.isKeyDown(VK_SHIFT);
+        intent.wantJump = input.isKeyPressed(VK_SPACE);
+        intent.wantInteract = input.isKeyPressed('E');
 
-		return intent;
-	}
+        return intent;
+    }
 };
 
 //前置声明
 // 前置声明
 class Entity;
 
-// 碰撞处理：负责阻挡检测、允许位移计算、世界边界修正
+// CollisionHandle：
+ // 碰撞底层能力提供者。
+ // 主要职责：
+ //   1. 判断两个 AABB 是否重叠：isRectOverlapping
+ //   2. 判断一维范围是否重叠：isRangeOverlapping
+ //   3. 根据期望位移计算允许位移：getAllowedMoveX/Y
+ //   4. 把实体限制在世界边界内：limitInWorld
+ //
+ // 阻挡碰撞和重叠事件的底层都和 AABB / overlap 有关，
+ // 但是用途不同：
+ //   - 重叠事件：关心“两个盒子现在有没有重叠”
+ //   - 阻挡移动：关心“想移动这么多，最多允许移动多少”
+ //
+ // 当前 getAllowedMoveX/Y 并不是简单地“把实体移动到下一帧再判断是否 overlap”，
+ // 而是用当前碰撞盒 + 移动方向 + 另一轴范围重叠，计算离最近阻挡物还有多远。
+ // 它本质上是在“阻止下一帧发生 overlap”。
 class CollisionHandle
 {
 public:
-	bool isRectOverlapping(RectBox a, RectBox b);
+    bool isRectOverlapping(RectBox a, RectBox b);
 
-	bool isRangeOverlapping(
-		double aMin,
-		double aMax,
-		double bMin,
-		double bMax
-	);
+    bool isRangeOverlapping(
+        double aMin,
+        double aMax,
+        double bMin,
+        double bMax
+    );
 
-	double getAllowedMoveX(
-		Entity& self,
-		double moveX,
-		Entity entitys[],
-		int entityCount,
-		int selfIndex
-	);
+    double getAllowedMoveX(
+        Entity& self,
+        double moveX,
+        Entity entitys[],
+        int entityCount,
+        int selfIndex
+    );
 
-	double getAllowedMoveY(
-		Entity& self,
-		double moveY,
-		Entity entitys[],
-		int entityCount,
-		int selfIndex
-	);
+    double getAllowedMoveY(
+        Entity& self,
+        double moveY,
+        Entity entitys[],
+        int entityCount,
+        int selfIndex
+    );
 
-	void limitInWorld(
-		Entity& self,
-		int worldWidth,
-		int worldHeight
-	);
+    void limitInWorld(
+        Entity& self,
+        int worldWidth,
+        int worldHeight
+    );
 };
 
 
-//剥离出移动逻辑处理，吃里所有的移动，包括移动，跳跃，奔跑等
+// MovementHandle：
+ // 移动/物理执行系统。
+ // 它读取 BehaviorIntent，计算速度、冲刺、跳跃、重力和期望位移。
+ // 它不亲自判断碰撞细节，而是把 wantMoveX/wantMoveY 交给 CollisionHandle，
+ // 得到 allowedMoveX/allowedMoveY 后，再把结果写回 Entity。
+ //
+ // 重要公式：
+ //   currentSpeed = speed 或 speed * 2
+ //   wantMoveX = inputX * currentSpeed
+ //   velocityY -= GRAVITY
+ //   wantMoveY = velocityY
+ //   actualMove = allowedMove
 class MovementHandle
 {
 public:
-	void update(
-		Entity& self,
-		BehaviorIntent intent,
-		Entity entitys[],
-		int entityCount,
-		int selfIndex,
-		int worldWidth,
-		int worldHeight,
-		CollisionHandle& collisionHandle
-	);
+    void update(
+        Entity& self,
+        BehaviorIntent intent,
+        Entity entitys[],
+        int entityCount,
+        int selfIndex,
+        int worldWidth,
+        int worldHeight,
+        CollisionHandle& collisionHandle
+    );
 };// 实体类
 
-//通用的entity类，目前包含了实体的所有基础逻辑处理包括碰撞输入速度处理碰撞检测等
+// Entity：
+ // 实体数据容器 + 少量表现接口。
+ // 当前 Entity 仍然保留了一些历史 update/getAllowedMove/limitInWorld 旧逻辑，
+ // 但主流程已经通过 Level -> MovementHandle -> CollisionHandle 进行更新。
+ // 后续可以逐步删除 Entity::update()、Entity::getAllowedMoveX/Y()、Entity::limitInWorld()
+ // 让 Entity 更接近纯数据容器。
+ //
+ // Entity 当前主要保存：
+ //   - 世界坐标 x/y
+ //   - 速度 speed / velocityY
+ //   - 状态 onGround / InAir / sprinting / jumping / isAlive
+ //   - 碰撞配置 collisionBox
+ //   - 动画 animation
+ //   - 类型 entityType
 class Entity
 {
     //声明友元使MovementHandle可以访问entity的私有数据
@@ -1257,7 +1399,7 @@ private:
 
     bool overlapping;      // 是否与可碰撞对象真正重叠
     bool collisionState;   // 是否发生碰撞状态，用于控制碰撞箱颜色
-	bool InAir;          // 是否在空中
+    bool InAir;          // 是否在空中
     bool onGround;         // 是否站在地面或平台上
     bool sprinting;        // 是否正在冲刺
     bool jumping;           //是否跳跃
@@ -1270,7 +1412,7 @@ private:
 
     //实体是否存活
     bool isAlive;
-    
+
     CollisionBox collisionBox;
     AnimationState currentAnimState;//记录当前的动画状态
     facingDirection currentFacingDirection;//记录当前操作的有效朝向
@@ -1294,7 +1436,7 @@ public:
         onGround = false;
         sprinting = false;
         InAir = false;
-		jumping = false;
+        jumping = false;
         blockedByEntity = false;
         blockedByWorld = false;
 
@@ -1302,13 +1444,13 @@ public:
 
         collisionBox.width = 0;
         collisionBox.height = 0;
-		collisionBox.offsetX = 0.0;
-		collisionBox.offsetY = 0.0;
-		collisionBox.scaleX = 1.0;
-		collisionBox.scaleY = 1.0;
+        collisionBox.offsetX = 0.0;
+        collisionBox.offsetY = 0.0;
+        collisionBox.scaleX = 1.0;
+        collisionBox.scaleY = 1.0;
         //默认构造定义entity的动画状态
-		currentAnimState = ANIM_COUNT;
-		currentFacingDirection = LEFT;
+        currentAnimState = ANIM_COUNT;
+        currentFacingDirection = LEFT;
 
         entityType = DEFAULT;
         isAlive = 1;
@@ -1322,9 +1464,9 @@ public:
         bool isCollidable,
         bool isBlocking,
         bool isGod,
-        EntityType Type=DEFAULT,
+        EntityType Type = DEFAULT,
         int frameCount = 1,
-        bool alive=1
+        bool alive = 1
     )
     {
         animation.load(imagePath, frameCount);
@@ -1364,13 +1506,13 @@ public:
         collisionBox.scaleX = 1.0;
         collisionBox.scaleY = 1.0;
 
-		//有参构造定义entity的动画状态
+        //有参构造定义entity的动画状态
 
-		currentAnimState = ANIM_COUNT;
-		currentFacingDirection = LEFT;
+        currentAnimState = ANIM_COUNT;
+        currentFacingDirection = LEFT;
 
-		entityType = Type;
-		isAlive = alive;
+        entityType = Type;
+        isAlive = alive;
     }
     EntityType getEntityType()
     {
@@ -1395,18 +1537,18 @@ public:
     {
         return onGround;
     }
-	bool isInAir()//获取是否在空中
-	{
-		return InAir;
-	}
+    bool isInAir()//获取是否在空中
+    {
+        return InAir;
+    }
     bool isSprinting()//获取是否在奔跑
     {
         return sprinting;
     }
-	bool isJumping()//获取是否在跳跃
-	{
-		return jumping;
-	}
+    bool isJumping()//获取是否在跳跃
+    {
+        return jumping;
+    }
     bool hasCollisionState()//获取碰撞状态
     {
         return collisionState;
@@ -1433,17 +1575,17 @@ public:
     void killEntity()
     {
         this->isAlive = 0;
-    
+
     }
-	double getX()//获取实体的世界坐标 X，注意这里返回的是实体中心点的坐标
+    double getX()//获取实体的世界坐标 X，注意这里返回的是实体中心点的坐标
     {
         return x;
-        
+
     }
-	double getY()//获取实体的世界坐标 Y，注意这里返回的是实体中心点的坐标
-	{
-		return y;
-	}
+    double getY()//获取实体的世界坐标 Y，注意这里返回的是实体中心点的坐标
+    {
+        return y;
+    }
     void setOverlapping(bool value)//设置重叠状态
     {
         overlapping = value;
@@ -1474,10 +1616,19 @@ public:
         // 它会在 update() 里的垂直运动阶段重新判断。
     }
 
-    
-	//将定义的碰撞盒转换为坐标系下的实际范围，用作碰撞检测
+
+    //将定义的碰撞盒转换为坐标系下的实际范围，用作碰撞检测
     RectBox getWorldCollisionBoxAt(double testX, double testY)
     {
+        // 根据某个测试坐标生成“世界坐标下的真实 AABB”。
+        // 公式：
+        //   colliderCenter = entityCenter + collisionOffset
+        //   colliderWidth  = baseWidth  * scaleX
+        //   colliderHeight = baseHeight * scaleY
+        //   left   = centerX - width / 2
+        //   right  = centerX + width / 2
+        //   bottom = centerY - height / 2
+        //   top    = centerY + height / 2
         RectBox box;
 
         double colliderCenterX = testX + collisionBox.offsetX;
@@ -1499,7 +1650,7 @@ public:
         return getWorldCollisionBoxAt(x, y);
     }
 
-    
+
     void setCollisionScale(double scaleX, double scaleY)
     {
         collisionBox.scaleX = scaleX;
@@ -1543,66 +1694,66 @@ public:
     }
     //更新动画状态by意图
     void updateAnimationByIntent(BehaviorIntent intent)
-{
-    if (!controlled)
     {
-        return;
-    }
-
-    double inputX = intent.moveX;
-
-    if (inputX < 0)
-    {
-        currentFacingDirection = LEFT;
-
-        if (sprinting)
+        if (!controlled)
         {
-            changeAnimation(ANIM_RUN_LEFT);
+            return;
+        }
+
+        double inputX = intent.moveX;
+
+        if (inputX < 0)
+        {
+            currentFacingDirection = LEFT;
+
+            if (sprinting)
+            {
+                changeAnimation(ANIM_RUN_LEFT);
+            }
+            else
+            {
+                changeAnimation(ANIM_WALK_LEFT);
+            }
+        }
+        else if (inputX > 0)
+        {
+            currentFacingDirection = RIGHT;
+
+            if (sprinting)
+            {
+                changeAnimation(ANIM_RUN_RIGHT);
+            }
+            else
+            {
+                changeAnimation(ANIM_WALK_RIGHT);
+            }
         }
         else
         {
-            changeAnimation(ANIM_WALK_LEFT);
+            if (currentFacingDirection == LEFT)
+            {
+                changeAnimation(ANIM_IDLE_L);
+            }
+
+            if (currentFacingDirection == RIGHT)
+            {
+                changeAnimation(ANIM_IDLE_R);
+            }
         }
     }
-    else if (inputX > 0)
-    {
-        currentFacingDirection = RIGHT;
+    // 更新逻辑
 
-        if (sprinting)
-        {
-            changeAnimation(ANIM_RUN_RIGHT);
-        }
-        else
-        {
-            changeAnimation(ANIM_WALK_RIGHT);
-        }
-    }
-    else
+    void update(
+        BehaviorIntent intent,
+        Entity entitys[],
+        int entityCount,
+        int selfIndex,
+        int worldWidth,
+        int worldHeight
+    )
     {
-        if (currentFacingDirection == LEFT)
-        {
-            changeAnimation(ANIM_IDLE_L);
-        }
-
-        if (currentFacingDirection == RIGHT)
-        {
-            changeAnimation(ANIM_IDLE_R);
-        }
-    }
-}
-	// 更新逻辑
-
-	void update(
-		BehaviorIntent intent,
-		Entity entitys[],
-		int entityCount,
-		int selfIndex,
-		int worldWidth,
-		int worldHeight
-	)
-    {
-		double inputX = intent.moveX;
-		double inputY = intent.moveY;
+        double inputX = intent.moveX;
+        double inputY = intent.moveY;
         double currentSpeed = speed;
 
         bool shiftDown = intent.wantSprint;
@@ -1613,12 +1764,12 @@ public:
         {
             hasMoveInput = true;
         }
-		bool wantSprint = false;
+        bool wantSprint = false;
 
-		if (shiftDown && hasMoveInput)
-		{
-			wantSprint = true;
-		}
+        if (shiftDown && hasMoveInput)
+        {
+            wantSprint = true;
+        }
 
         if (!wantSprint)
         {
@@ -1661,21 +1812,21 @@ public:
             return;
         }
 
-        
-        // 非 god 模式：启用重力、跳跃、碰撞
-        
 
-		if (intent.wantJump && onGround)
-		{
-			velocityY = JUMP_SPEED;
-			onGround = false;
-			InAir = true;
-			jumping = true;
-		}
+        // 非 god 模式：启用重力、跳跃、碰撞
+
+
+        if (intent.wantJump && onGround)
+        {
+            velocityY = JUMP_SPEED;
+            onGround = false;
+            InAir = true;
+            jumping = true;
+        }
 
 
         // x 轴暂时不使用加速度
-		double wantMoveX = inputX * currentSpeed;//输入决定了想要移动的距离,公式为：速度 = 输入 * 速度值，所以想要移动的距离 = 输入 * 速度值 * 时间，时间为1tick，所以简化为输入 * 速度值
+        double wantMoveX = inputX * currentSpeed;//输入决定了想要移动的距离,公式为：速度 = 输入 * 速度值，所以想要移动的距离 = 输入 * 速度值 * 时间，时间为1tick，所以简化为输入 * 速度值
 
         double allowedMoveX = getAllowedMoveX(wantMoveX, entitys, entityCount, selfIndex);
 
@@ -1699,9 +1850,9 @@ public:
         onGround = false;
         InAir = true;
 
-		double wantMoveY = velocityY;//速度决定了想要移动的距离，公式为：距离 = 速度 * 时间，所以想要移动的距离 = 速度 * 时间，时间为1tick，所以简化为速度值
+        double wantMoveY = velocityY;//速度决定了想要移动的距离，公式为：距离 = 速度 * 时间，所以想要移动的距离 = 速度 * 时间，时间为1tick，所以简化为速度值
 
-		double allowedMoveY = getAllowedMoveY(wantMoveY, entitys, entityCount, selfIndex);//获取实际允许的移动距离
+        double allowedMoveY = getAllowedMoveY(wantMoveY, entitys, entityCount, selfIndex);//获取实际允许的移动距离
 
         if (fabs(allowedMoveY - wantMoveY) > EPS)
         {
@@ -1710,7 +1861,7 @@ public:
             {
                 onGround = true;
                 InAir = false;
-				jumping = false;
+                jumping = false;
             }
             else if (wantMoveY > 0)
             {
@@ -1730,9 +1881,9 @@ public:
     {
         animation.update();
     }
-    
+
     // X 方向阻挡检测
-    
+
 
     double getAllowedMoveX(double moveX, Entity entitys[], int entityCount, int selfIndex)
     {
@@ -1802,9 +1953,9 @@ public:
         return allowedMove;
     }
 
-    
+
     // Y 方向阻挡检测
-    
+
 
     double getAllowedMoveY(double moveY, Entity entitys[], int entityCount, int selfIndex)
     {
@@ -1876,9 +2027,9 @@ public:
         return allowedMove;
     }
 
-    
-    
-	//修改了世界边界限制的逻辑
+
+
+    //修改了世界边界限制的逻辑
     void limitInWorld(int worldWidth, int worldHeight)
     {
         RectBox box = getWorldCollisionBox();
@@ -1926,15 +2077,15 @@ public:
         }
     }
 
-    
+
     // 渲染
-    
+
 
 
 
     void draw()
     {
-		animation.draw(x, y);
+        animation.draw(x, y);
 
         drawCollisionBox();
     }
@@ -1963,398 +2114,463 @@ public:
 
         rectangle(screenLeft, screenTop, screenRight, screenBottom);
     }
-	void setSpriteTransform(double scaleX, double scaleY, double offsetX, double offsetY)
-	{
-		animation.setTransform(scaleX, scaleY, offsetX, offsetY);
-        
-	}
+    void setSpriteTransform(double scaleX, double scaleY, double offsetX, double offsetY)
+    {
+        animation.setTransform(scaleX, scaleY, offsetX, offsetY);
+
+    }
     void setAnimationSpeed(int speed)
     {
         animation.setSpeed(speed);
     }
-    
+
 };
 
 //声音播放支持，声音当然也跟sprite等类似是一个单独的类，也具有多种状态
 
 void MovementHandle::update(
-	Entity& self,
-	BehaviorIntent intent,
-	Entity entitys[],
-	int entityCount,
-	int selfIndex,
-	int worldWidth,
-	int worldHeight,
-	CollisionHandle& collisionHandle
+    Entity& self,
+    BehaviorIntent intent,
+    Entity entitys[],
+    int entityCount,
+    int selfIndex,
+    int worldWidth,
+    int worldHeight,
+    CollisionHandle& collisionHandle
 )
 {
-	double inputX = intent.moveX;
-	double inputY = intent.moveY;
+    /*
+    MovementHandle 本帧数据流：
+        BehaviorIntent
+            -> inputX/inputY
+            -> sprinting/currentSpeed
+            -> jump/velocityY
+            -> wantMoveX/wantMoveY
+            -> CollisionHandle 计算 allowedMoveX/allowedMoveY
+            -> 写回 self.x/self.y/self.velocityY/self.onGround 等状态
 
-	double currentSpeed = self.speed;
+    注意：
+        MovementHandle 负责“想怎么动”和“把结果应用到实体”；
+        CollisionHandle 负责“这个移动是否会被阻挡、最多能走多少”。
+    */
+    double inputX = intent.moveX;
+    double inputY = intent.moveY;
 
-	bool hasMoveInput = false;
+    double currentSpeed = self.speed;
 
-	if (inputX != 0)
-	{
-		hasMoveInput = true;
-	}
+    bool hasMoveInput = false;
 
-	bool wantSprint = false;
+    if (inputX != 0)
+    {
+        hasMoveInput = true;
+    }
 
-	if (intent.wantSprint && hasMoveInput)
-	{
-		wantSprint = true;
-	}
+    bool wantSprint = false;
 
-	if (!wantSprint)
-	{
-		self.sprinting = false;
-	}
-	else
-	{
-		if (!self.sprinting && self.onGround)
-		{
-			self.sprinting = true;
-		}
+    if (intent.wantSprint && hasMoveInput)
+    {
+        wantSprint = true;
+    }
 
-		// 如果 sprinting 本来就是 true，就允许它在空中继续保持
-	}
+    if (!wantSprint)
+    {
+        self.sprinting = false;
+    }
+    else
+    {
+        if (!self.sprinting && self.onGround)
+        {
+            self.sprinting = true;
+        }
 
-	if (self.sprinting)
-	{
-		currentSpeed = self.speed * 2;
-	}
+        // 如果 sprinting 本来就是 true，就允许它在空中继续保持
+    }
 
-	// god 模式：不受重力、不受阻挡碰撞影响，可以自由移动
-	if (self.god)
-	{
-		double length = sqrt(inputX * inputX + inputY * inputY);
+    if (self.sprinting)
+    {
+        currentSpeed = self.speed * 2;
+    }
 
-		if (length != 0)
-		{
-			inputX = inputX / length;
-			inputY = inputY / length;
-		}
+    // god 模式：不受重力、不受阻挡碰撞影响，可以自由移动
+    if (self.god)
+    {
+        double length = sqrt(inputX * inputX + inputY * inputY);
 
-		self.x += inputX * currentSpeed;
-		self.y += inputY * currentSpeed;
+        if (length != 0)
+        {
+            inputX = inputX / length;
+            inputY = inputY / length;
+        }
+
+        self.x += inputX * currentSpeed;
+        self.y += inputY * currentSpeed;
 
         collisionHandle.limitInWorld(self, worldWidth, worldHeight);
-		return;
-	}
+        return;
+    }
 
-	// 非 god 模式：启用重力、跳跃、碰撞
-	if (intent.wantJump && self.onGround)
-	{
-		self.velocityY = JUMP_SPEED;
-		self.onGround = false;
-		self.InAir = true;
-		self.jumping = true;
-	}
+    // 非 god 模式：启用重力、跳跃、碰撞
+    if (intent.wantJump && self.onGround)
+    {
+        self.velocityY = JUMP_SPEED;
+        self.onGround = false;
+        self.InAir = true;
+        self.jumping = true;
+    }
 
-	// X 轴移动
-	double wantMoveX = inputX * currentSpeed;
+    // X 轴移动
+    double wantMoveX = inputX * currentSpeed;
 
-	double allowedMoveX = collisionHandle.getAllowedMoveX(
-		self,
-		wantMoveX,
-		entitys,
-		entityCount,
-		selfIndex
-	);
-	if (fabs(allowedMoveX - wantMoveX) > EPS)
-	{
-		self.blockedByEntity = true;
-		self.collisionState = true;
-	}
+    double allowedMoveX = collisionHandle.getAllowedMoveX(
+        self,
+        wantMoveX,
+        entitys,
+        entityCount,
+        selfIndex
+    );
+    if (fabs(allowedMoveX - wantMoveX) > EPS)
+    {
+        self.blockedByEntity = true;
+        self.collisionState = true;
+    }
 
-	self.x += allowedMoveX;
+    self.x += allowedMoveX;
 
-	// Y 轴重力
-	self.velocityY -= GRAVITY;
+    // Y 轴重力
+    self.velocityY -= GRAVITY;
 
-	if (self.velocityY < MAX_FALL_SPEED)
-	{
-		self.velocityY = MAX_FALL_SPEED;
-	}
+    if (self.velocityY < MAX_FALL_SPEED)
+    {
+        self.velocityY = MAX_FALL_SPEED;
+    }
 
-	self.onGround = false;
-	self.InAir = true;
+    self.onGround = false;
+    self.InAir = true;
 
-	double wantMoveY = self.velocityY;
+    double wantMoveY = self.velocityY;
 
-	double allowedMoveY = collisionHandle.getAllowedMoveY(
-		self,
-		wantMoveY,
-		entitys,
-		entityCount,
-		selfIndex
-	);
-	if (fabs(allowedMoveY - wantMoveY) > EPS)
-	{
-		if (wantMoveY < 0)
-		{
-			self.onGround = true;
-			self.InAir = false;
-			self.jumping = false;
-		}
-		else if (wantMoveY > 0)
-		{
-			self.blockedByEntity = true;
-			self.collisionState = true;
-		}
+    double allowedMoveY = collisionHandle.getAllowedMoveY(
+        self,
+        wantMoveY,
+        entitys,
+        entityCount,
+        selfIndex
+    );
+    if (fabs(allowedMoveY - wantMoveY) > EPS)
+    {
+        if (wantMoveY < 0)
+        {
+            self.onGround = true;
+            self.InAir = false;
+            self.jumping = false;
+        }
+        else if (wantMoveY > 0)
+        {
+            self.blockedByEntity = true;
+            self.collisionState = true;
+        }
 
-		self.velocityY = 0;
-	}
+        self.velocityY = 0;
+    }
 
-	self.y += allowedMoveY;
+    self.y += allowedMoveY;
 
-    collisionHandle.limitInWorld(self, worldWidth, worldHeight); 
+    collisionHandle.limitInWorld(self, worldWidth, worldHeight);
 }
 bool CollisionHandle::isRectOverlapping(RectBox a, RectBox b)
 {
-	if (a.right <= b.left + EPS)
-	{
-		return false;
-	}
+    if (a.right <= b.left + EPS)
+    {
+        return false;
+    }
 
-	if (a.left >= b.right - EPS)
-	{
-		return false;
-	}
+    if (a.left >= b.right - EPS)
+    {
+        return false;
+    }
 
-	if (a.top <= b.bottom + EPS)
-	{
-		return false;
-	}
+    if (a.top <= b.bottom + EPS)
+    {
+        return false;
+    }
 
-	if (a.bottom >= b.top - EPS)
-	{
-		return false;
-	}
+    if (a.bottom >= b.top - EPS)
+    {
+        return false;
+    }
 
-	return true;
+    return true;
 }
 
 bool CollisionHandle::isRangeOverlapping(
-	double aMin,
-	double aMax,
-	double bMin,
-	double bMax
+    double aMin,
+    double aMax,
+    double bMin,
+    double bMax
 )
 {
-	if (aMax <= bMin + EPS)
-	{
-		return false;
-	}
+    if (aMax <= bMin + EPS)
+    {
+        return false;
+    }
 
-	if (aMin >= bMax - EPS)
-	{
-		return false;
-	}
+    if (aMin >= bMax - EPS)
+    {
+        return false;
+    }
 
-	return true;
+    return true;
 }
 
 
-    double CollisionHandle::getAllowedMoveX(
+double CollisionHandle::getAllowedMoveX(
     Entity& self,
-	double moveX,
-	Entity entitys[],
-	int entityCount,
-	int selfIndex
+    double moveX,
+    Entity entitys[],
+    int entityCount,
+    int selfIndex
 )
 {
-	if (moveX == 0)
-	{
-		return 0;
-	}
+    /*
+    X 轴阻挡修正逻辑：
+        输入：moveX = 本帧期望水平位移
+        输出：allowedMove = 本帧真正允许移动的水平距离
 
-	RectBox myBox = self.getWorldCollisionBox();
-	double allowedMove = moveX;
+    核心思路：
+        1. 先取得当前实体的 AABB：myBox
+        2. 遍历所有 blocking 实体
+        3. 如果 Y 轴范围不重叠，说明上下错开，不可能水平撞到，跳过
+        4. 如果向右移动，只看位于右侧的障碍：
+              distance = other.left - myBox.right
+              allowedMove = min(allowedMove, distance)
+        5. 如果向左移动，只看位于左侧的障碍：
+              distance = other.right - myBox.left
+              allowedMove = max(allowedMove, distance)  // moveX 为负数，所以取更接近 0 的限制值
 
-	for (int i = 0; i < entityCount; i++)
-	{
-		if (i == selfIndex)
-		{
-			continue;
-		}
+    它和 overlap 有关，但不是简单地“先移动到下一帧再判断 overlap”。
+    它是在当前帧提前计算到障碍边缘的距离，防止下一帧真正重叠。
+    */
+    if (moveX == 0)
+    {
+        return 0;
+    }
 
-		if (!entitys[i].isBlocking())
-		{
-			continue;
-		}
+    RectBox myBox = self.getWorldCollisionBox();
+    double allowedMove = moveX;
 
-		RectBox otherBox = entitys[i].getWorldCollisionBox();
+    for (int i = 0; i < entityCount; i++)
+    {
+        if (i == selfIndex)
+        {
+            continue;
+        }
 
-		if (!this->isRangeOverlapping(myBox.bottom, myBox.top, otherBox.bottom, otherBox.top))
-		{
-			continue;
-		}
+        if (!entitys[i].isBlocking())
+        {
+            continue;
+        }
 
-		if (moveX > 0)
-		{
-			if (otherBox.left >= myBox.right - EPS)
-			{
-				double distance = otherBox.left - myBox.right;
+        RectBox otherBox = entitys[i].getWorldCollisionBox();
 
-				if (distance < 0)
-				{
-					distance = 0;
-				}
+        if (!this->isRangeOverlapping(myBox.bottom, myBox.top, otherBox.bottom, otherBox.top))
+        {
+            continue;
+        }
 
-				if (distance < allowedMove)
-				{
-					allowedMove = distance;
-				}
-			}
-		}
-		else if (moveX < 0)
-		{
-			if (otherBox.right <= myBox.left + EPS)
-			{
-				double distance = otherBox.right - myBox.left;
+        if (moveX > 0)
+        {
+            if (otherBox.left >= myBox.right - EPS)
+            {
+                double distance = otherBox.left - myBox.right;
 
-				if (distance > 0)
-				{
-					distance = 0;
-				}
+                if (distance < 0)
+                {
+                    distance = 0;
+                }
 
-				if (distance > allowedMove)
-				{
-					allowedMove = distance;
-				}
-			}
-		}
-	}
+                if (distance < allowedMove)
+                {
+                    allowedMove = distance;
+                }
+            }
+        }
+        else if (moveX < 0)
+        {
+            if (otherBox.right <= myBox.left + EPS)
+            {
+                double distance = otherBox.right - myBox.left;
 
-	return allowedMove;
+                if (distance > 0)
+                {
+                    distance = 0;
+                }
+
+                if (distance > allowedMove)
+                {
+                    allowedMove = distance;
+                }
+            }
+        }
+    }
+
+    return allowedMove;
 }
-    double CollisionHandle::getAllowedMoveY(
+double CollisionHandle::getAllowedMoveY(
     Entity& self,
-	double moveY,
-	Entity entitys[],
-	int entityCount,
-	int selfIndex
+    double moveY,
+    Entity entitys[],
+    int entityCount,
+    int selfIndex
 )
 {
-	if (moveY == 0)
-	{
-		return 0;
-	}
+    /*
+    Y 轴阻挡修正逻辑：
+        输入：moveY = 本帧期望垂直位移，通常来自 velocityY
+        输出：allowedMove = 本帧真正允许移动的垂直距离
 
-	RectBox myBox = self.getWorldCollisionBox();
-	double allowedMove = moveY;
+    核心思路：
+        1. 先取得当前实体的 AABB：myBox
+        2. 遍历所有 blocking 实体
+        3. 如果 X 轴范围不重叠，说明左右错开，不可能垂直撞到，跳过
+        4. 如果向上移动，只看位于上方的障碍：
+              distance = other.bottom - myBox.top
+              allowedMove = min(allowedMove, distance)
+        5. 如果向下移动，只看位于下方的障碍：
+              distance = other.top - myBox.bottom
+              allowedMove = max(allowedMove, distance)  // moveY 为负数
 
-	for (int i = 0; i < entityCount; i++)
-	{
-		if (i == selfIndex)
-		{
-			continue;
-		}
+    下落时 allowedMoveY 与 wantMoveY 不一致，通常意味着落地；
+    上升时不一致，通常意味着撞到上方阻挡物。
+    */
+    if (moveY == 0)
+    {
+        return 0;
+    }
 
-		if (!entitys[i].isBlocking())
-		{
-			continue;
-		}
+    RectBox myBox = self.getWorldCollisionBox();
+    double allowedMove = moveY;
 
-		RectBox otherBox = entitys[i].getWorldCollisionBox();
+    for (int i = 0; i < entityCount; i++)
+    {
+        if (i == selfIndex)
+        {
+            continue;
+        }
 
-		if (!this->isRangeOverlapping(myBox.left, myBox.right, otherBox.left, otherBox.right))
-		{
-			continue;
-		}
+        if (!entitys[i].isBlocking())
+        {
+            continue;
+        }
 
-		if (moveY > 0)
-		{
-			if (otherBox.bottom >= myBox.top - EPS)
-			{
-				double distance = otherBox.bottom - myBox.top;
+        RectBox otherBox = entitys[i].getWorldCollisionBox();
 
-				if (distance < 0)
-				{
-					distance = 0;
-				}
+        if (!this->isRangeOverlapping(myBox.left, myBox.right, otherBox.left, otherBox.right))
+        {
+            continue;
+        }
 
-				if (distance < allowedMove)
-				{
-					allowedMove = distance;
-				}
-			}
-		}
-		else if (moveY < 0)
-		{
-			if (otherBox.top <= myBox.bottom + EPS)
-			{
-				double distance = otherBox.top - myBox.bottom;
+        if (moveY > 0)
+        {
+            if (otherBox.bottom >= myBox.top - EPS)
+            {
+                double distance = otherBox.bottom - myBox.top;
 
-				if (distance > 0)
-				{
-					distance = 0;
-				}
+                if (distance < 0)
+                {
+                    distance = 0;
+                }
 
-				if (distance > allowedMove)
-				{
-					allowedMove = distance;
-				}
-			}
-		}
-	}
+                if (distance < allowedMove)
+                {
+                    allowedMove = distance;
+                }
+            }
+        }
+        else if (moveY < 0)
+        {
+            if (otherBox.top <= myBox.bottom + EPS)
+            {
+                double distance = otherBox.top - myBox.bottom;
 
-	return allowedMove;
+                if (distance > 0)
+                {
+                    distance = 0;
+                }
+
+                if (distance > allowedMove)
+                {
+                    allowedMove = distance;
+                }
+            }
+        }
+    }
+
+    return allowedMove;
 }
 
-    void CollisionHandle::limitInWorld(
+void CollisionHandle::limitInWorld(
     Entity& self,
-	int worldWidth,
-	int worldHeight
+    int worldWidth,
+    int worldHeight
 )
 {
-	RectBox box = self.getWorldCollisionBox();
+    /*
+    世界边界修正：
+        这个函数把实体限制在 [0, worldWidth] x [0, worldHeight] 内。
+        如果实体超出边界，就把它推回边界内。
 
-	if (box.left < 0)
-	{
-		self.x += 0 - box.left;
-		self.blockedByWorld = true;
-	}
+    重要状态反馈：
+        - 撞到世界边界时 blockedByWorld = true
+        - 撞到底部边界时，视为站在地面：
+              onGround = true
+              InAir = false
+              jumping = false
+              向下速度 velocityY 清零
+    */
+    RectBox box = self.getWorldCollisionBox();
 
-	box = self.getWorldCollisionBox();
+    if (box.left < 0)
+    {
+        self.x += 0 - box.left;
+        self.blockedByWorld = true;
+    }
 
-	if (box.right > worldWidth)
-	{
-		self.x -= box.right - worldWidth;
-		self.blockedByWorld = true;
-	}
+    box = self.getWorldCollisionBox();
 
-	box = self.getWorldCollisionBox();
+    if (box.right > worldWidth)
+    {
+        self.x -= box.right - worldWidth;
+        self.blockedByWorld = true;
+    }
 
-	if (box.bottom < 0)
-	{
-		self.y += 0 - box.bottom;
-		self.blockedByWorld = true;
-		self.onGround = true;
-		self.InAir = false;
-		self.jumping = false;
+    box = self.getWorldCollisionBox();
 
-		if (self.velocityY < 0)
-		{
-			self.velocityY = 0;
-		}
-	}
+    if (box.bottom < 0)
+    {
+        self.y += 0 - box.bottom;
+        self.blockedByWorld = true;
+        self.onGround = true;
+        self.InAir = false;
+        self.jumping = false;
 
-	box = self.getWorldCollisionBox();
+        if (self.velocityY < 0)
+        {
+            self.velocityY = 0;
+        }
+    }
 
-	if (box.top > worldHeight)
-	{
-		self.y -= box.top - worldHeight;
-		self.blockedByWorld = true;
+    box = self.getWorldCollisionBox();
 
-		if (self.velocityY > 0)
-		{
-			self.velocityY = 0;
-		}
-	}
+    if (box.top > worldHeight)
+    {
+        self.y -= box.top - worldHeight;
+        self.blockedByWorld = true;
+
+        if (self.velocityY > 0)
+        {
+            self.velocityY = 0;
+        }
+    }
 }
 
 
@@ -2457,468 +2673,518 @@ void updateCameraFollow(
 
 
 
+// Level：
+ // 当前关卡/场景管理器。
+ // 它持有当前关卡的地图、背景、实体数组、UI面板和各种 Handle。
+ // 它不应该亲自写复杂的移动/碰撞细节，而是负责“调度顺序”：
+ //   init()   加载关卡内容
+ //   update() 每帧按顺序调度输入、实体、相机、事件、UI
+ //   draw()   按层级绘制背景、地图、实体、UI
 class Level
 {
 private:
-	TileMap tileMap;
-	IMAGE background;
+    TileMap tileMap;
+    IMAGE background;
 
-	Entity entitys[ENTITY_COUNT];
+    Entity entitys[ENTITY_COUNT];
 
-	SmoothUIPanel listPanel;
+    SmoothUIPanel listPanel;
 
-	PlayerController playerController;
-	MovementHandle movementHandle;
-	CollisionHandle collisionHandle;
+    PlayerController playerController;
+    MovementHandle movementHandle;
+    CollisionHandle collisionHandle;
 
-	int worldWidth;
-	int worldHeight;
+    int worldWidth;
+    int worldHeight;
 
-	bool lastOverlap[ENTITY_COUNT][ENTITY_COUNT];
-	bool lastCollisionState[ENTITY_COUNT];
-	bool lastGroundState[ENTITY_COUNT];
-	bool lastSprintState[ENTITY_COUNT];
-	bool lastInAirState[ENTITY_COUNT];
-	bool lastJumpingState[ENTITY_COUNT];
-	bool lastAliveState[ENTITY_COUNT];
+    bool lastOverlap[ENTITY_COUNT][ENTITY_COUNT];
+    bool lastCollisionState[ENTITY_COUNT];
+    bool lastGroundState[ENTITY_COUNT];
+    bool lastSprintState[ENTITY_COUNT];
+    bool lastInAirState[ENTITY_COUNT];
+    bool lastJumpingState[ENTITY_COUNT];
+    bool lastAliveState[ENTITY_COUNT];
 
 public:
-	Level()
-		: entitys
-		{
-			Entity(_T("assets\\tex\\entities\\characters\\player1_Idle_L.png"), 200, 700, true, true, true, false, PLAYER, 8, 1),
+    Level()
+        : entitys
+        {
+            Entity(_T("assets\\tex\\entities\\characters\\player1_Idle_L.png"), 200, 700, true, true, true, false, PLAYER, 8, 1),
 
-			Entity(_T("assets\\tex\\entities\\characters\\player2.png"), 600, 900, false, true, false, false, ENTITY, 1),
+            Entity(_T("assets\\tex\\entities\\characters\\player2.png"), 600, 900, false, true, false, false, ENTITY, 1),
 
-			Entity(_T("assets\\tex\\entities\\characters\\player3.png"), 950, 850, false, true, true, false, ENTITY, 1),
+            Entity(_T("assets\\tex\\entities\\characters\\player3.png"), 950, 850, false, true, true, false, ENTITY, 1),
 
-			Entity(_T("assets\\tex\\entities\\characters\\player4.png"), 1300, 650, false, true, false, false, ENTITY, 1),
+            Entity(_T("assets\\tex\\entities\\characters\\player4.png"), 1300, 650, false, true, false, false, ENTITY, 1),
 
-			Entity(_T("assets\\tex\\entities\\items\\MonedaD.png"), 256, 256, false, true, false, true, COIN, 5, 1),
+            Entity(_T("assets\\tex\\entities\\items\\MonedaD.png"), 256, 256, false, true, false, true, COIN, 5, 1),
 
-			Entity(_T("assets\\tex\\entities\\items\\MonedaP.png"), 256 + 48 + 16, 256, false, true, false, true, COIN, 5, 1),
+            Entity(_T("assets\\tex\\entities\\items\\MonedaP.png"), 256 + 48 + 16, 256, false, true, false, true, COIN, 5, 1),
 
-			Entity(_T("assets\\tex\\entities\\items\\MonedaR.png"), 256 + (48 * 2) + (16 * 2), 256, false, true, false, true, COIN, 5, 1)
-		}
-	{
-		worldWidth = WINDOW_WIDTH;
-		worldHeight = WINDOW_HEIGHT;
-	}
+            Entity(_T("assets\\tex\\entities\\items\\MonedaR.png"), 256 + (48 * 2) + (16 * 2), 256, false, true, false, true, COIN, 5, 1)
+        }
+    {
+        worldWidth = WINDOW_WIDTH;
+        worldHeight = WINDOW_HEIGHT;
+    }
 
-	void init()
-	{
-		initMap();
-		initBackground();
-		initUI();
-		initEntitySettings();
-		initLastStates();
-	}
+    void init()
+    {
+        initMap();
+        initBackground();
+        initUI();
+        initEntitySettings();
+        initLastStates();
+    }
 
-	void update(InputManager& input)
-	{
-		if (input.isMouseLeftPressed())
-		{
-			cout << "Left mouse down: "
-				<< input.getMouseX()
-				<< " "
-				<< input.getMouseY()
-				<< endl;
-		}
+    void update(InputManager& input)
+    {
+        /*
+        Level 每帧更新顺序：
+            1. 处理输入反馈（临时鼠标调试）
+            2. clearEntityFrameState() 清理上一帧临时状态
+            3. updateEntities() 生成 intent，并调用 MovementHandle / CollisionHandle
+            4. handleCameraInput() 处理 F1-F4 跟随目标切换
+            5. handleUIInput() 处理 UI 锚点切换
+            6. updateCamera() 更新摄像机跟随
+            7. updateDebugStates() 输出状态变化
+            8. updateOverlapEvents() 处理重叠事件，如金币拾取
+            9. listPanel.update() 更新 UI 过渡
+        */
+        if (input.isMouseLeftPressed())
+        {
+            cout << "Left mouse down: "
+                << input.getMouseX()
+                << " "
+                << input.getMouseY()
+                << endl;
+        }
 
-		clearEntityFrameState();
+        clearEntityFrameState();
 
-		updateEntities(input);
+        updateEntities(input);
 
-		handleCameraInput(input);
-		handleUIInput(input);
+        handleCameraInput(input);
+        handleUIInput(input);
 
-		updateCamera(input);
+        updateCamera(input);
 
-		updateDebugStates();
+        updateDebugStates();
 
-		updateOverlapEvents();
+        updateOverlapEvents();
 
-		listPanel.update();
-	}
+        listPanel.update();
+    }
 
-	void draw()
-	{
-		putimage(0, 0, &background);
+    void draw()
+    {
+        putimage(0, 0, &background);
 
-		tileMap.draw();
+        tileMap.draw();
 
-		for (int i = 0; i < ENTITY_COUNT; i++)
-		{
-			if (!entitys[i].getIsAlive())
-			{
-				continue;
-			}
+        for (int i = 0; i < ENTITY_COUNT; i++)
+        {
+            if (!entitys[i].getIsAlive())
+            {
+                continue;
+            }
 
-			entitys[i].draw();
-		}
+            entitys[i].draw();
+        }
 
-		drawListPanel(listPanel.getBox());
-	}
+        drawListPanel(listPanel.getBox());
+    }
 
 private:
-	void initMap()
-	{
-		tileMap.setTileSize(16, 16, 48, 48);
-		tileMap.loadTileset(_T("assets\\tex\\maps\\tileset.png"));
-		tileMap.loadFromFile("assets\\tex\\maps\\map.txt");
+    void initMap()
+    {
+        tileMap.setTileSize(16, 16, 48, 48);
+        tileMap.loadTileset(_T("assets\\tex\\maps\\tileset.png"));
+        tileMap.loadFromFile("assets\\tex\\maps\\map.txt");
 
-		worldWidth = tileMap.getworldWidth();
-		worldHeight = tileMap.getWOrldHeight();
+        worldWidth = tileMap.getworldWidth();
+        worldHeight = tileMap.getWOrldHeight();
 
-		if (worldWidth < WINDOW_WIDTH)
-		{
-			worldWidth = WINDOW_WIDTH;
-		}
+        if (worldWidth < WINDOW_WIDTH)
+        {
+            worldWidth = WINDOW_WIDTH;
+        }
 
-		if (worldHeight < WINDOW_HEIGHT)
-		{
-			worldHeight = WINDOW_HEIGHT;
-		}
-	}
+        if (worldHeight < WINDOW_HEIGHT)
+        {
+            worldHeight = WINDOW_HEIGHT;
+        }
+    }
 
-	void initBackground()
-	{
-		loadimage(&background, _T("assets\\tex\\maps\\background.jpg"));
-	}
+    void initBackground()
+    {
+        loadimage(&background, _T("assets\\tex\\maps\\background.jpg"));
+    }
 
-	void initUI()
-	{
-		listPanel.init(480, 600, UI_TOP_LEFT, 32, 32);
-	}
+    void initUI()
+    {
+        listPanel.init(480, 600, UI_TOP_LEFT, 32, 32);
+    }
 
-	void initEntitySettings()
-	{
-		entitys[0].setSpriteTransform(4.0, 4.0, 0, 0);
+    void initEntitySettings()
+    {
+        entitys[0].setSpriteTransform(4.0, 4.0, 0, 0);
 
-		entitys[3].setSpriteTransform(2.0, 2.0, 0, 0);
+        entitys[3].setSpriteTransform(2.0, 2.0, 0, 0);
 
-		entitys[4].setSpriteTransform(4.0, 4.0, 0, 0);
-		entitys[5].setSpriteTransform(4.0, 4.0, 0, 0);
-		entitys[6].setSpriteTransform(4.0, 4.0, 0, 0);
+        entitys[4].setSpriteTransform(4.0, 4.0, 0, 0);
+        entitys[5].setSpriteTransform(4.0, 4.0, 0, 0);
+        entitys[6].setSpriteTransform(4.0, 4.0, 0, 0);
 
-		entitys[0].setAnimationSpeed(3);
-		entitys[4].setAnimationSpeed(3);
+        entitys[0].setAnimationSpeed(3);
+        entitys[4].setAnimationSpeed(3);
 
-		entitys[0].setCollisionScale(4, 4);
-	}
+        entitys[0].setCollisionScale(4, 4);
+    }
 
-	void initLastStates()
-	{
-		for (int i = 0; i < ENTITY_COUNT; i++)
-		{
-			lastCollisionState[i] = false;
-			lastGroundState[i] = false;
-			lastSprintState[i] = false;
-			lastInAirState[i] = false;
-			lastJumpingState[i] = false;
-			lastAliveState[i] = entitys[i].getIsAlive();
+    void initLastStates()
+    {
+        for (int i = 0; i < ENTITY_COUNT; i++)
+        {
+            lastCollisionState[i] = false;
+            lastGroundState[i] = false;
+            lastSprintState[i] = false;
+            lastInAirState[i] = false;
+            lastJumpingState[i] = false;
+            lastAliveState[i] = entitys[i].getIsAlive();
 
-			for (int j = 0; j < ENTITY_COUNT; j++)
-			{
-				lastOverlap[i][j] = false;
-			}
-		}
-	}
+            for (int j = 0; j < ENTITY_COUNT; j++)
+            {
+                lastOverlap[i][j] = false;
+            }
+        }
+    }
 
-	void clearEntityFrameState()
-	{
-		for (int i = 0; i < ENTITY_COUNT; i++)
-		{
-			if (!entitys[i].getIsAlive())
-			{
-				continue;
-			}
+    void clearEntityFrameState()
+    {
+        for (int i = 0; i < ENTITY_COUNT; i++)
+        {
+            if (!entitys[i].getIsAlive())
+            {
+                continue;
+            }
 
-			entitys[i].clearFrameState();
-		}
-	}
+            entitys[i].clearFrameState();
+        }
+    }
 
-	void updateEntities(InputManager& input)
-	{
-		for (int i = 0; i < ENTITY_COUNT; i++)
-		{
-			if (!entitys[i].getIsAlive())
-			{
-				continue;
-			}
+    void updateEntities(InputManager& input)
+    {
+        /*
+        实体更新数据流：
+            对每个存活实体：
+                1. 创建默认空 BehaviorIntent
+                2. 如果是玩家 i == 0，则由 PlayerController 根据输入生成 intent
+                3. MovementHandle 根据 intent 更新移动/物理
+                4. MovementHandle 内部调用 CollisionHandle 进行阻挡修正
+                5. Entity 根据 intent 和 sprinting 等状态切换动画
+                6. 推进动画帧
+        */
+        for (int i = 0; i < ENTITY_COUNT; i++)
+        {
+            if (!entitys[i].getIsAlive())
+            {
+                continue;
+            }
 
-			BehaviorIntent intent;
+            BehaviorIntent intent;
 
-			if (i == 0)
-			{
-				intent = playerController.makeIntent(input, entitys[i].isGod());
-			}
+            if (i == 0)
+            {
+                intent = playerController.makeIntent(input, entitys[i].isGod());
+            }
 
-			movementHandle.update(
-				entitys[i],
-				intent,
-				entitys,
-				ENTITY_COUNT,
-				i,
-				worldWidth,
-				worldHeight,
-				collisionHandle
-			);
+            movementHandle.update(
+                entitys[i],
+                intent,
+                entitys,
+                ENTITY_COUNT,
+                i,
+                worldWidth,
+                worldHeight,
+                collisionHandle
+            );
 
-			entitys[i].updateAnimationByIntent(intent);
-			entitys[i].updateAnimatedSprite();
-		}
-	}
+            entitys[i].updateAnimationByIntent(intent);
+            entitys[i].updateAnimatedSprite();
+        }
+    }
 
-	void handleCameraInput(InputManager& input)
-	{
-		if (input.isKeyPressed(VK_F1))
-		{
-			setCameraFollowTarget(0, entitys, ENTITY_COUNT);
-		}
+    void handleCameraInput(InputManager& input)
+    {
+        if (input.isKeyPressed(VK_F1))
+        {
+            setCameraFollowTarget(0, entitys, ENTITY_COUNT);
+        }
 
-		if (input.isKeyPressed(VK_F2))
-		{
-			setCameraFollowTarget(1, entitys, ENTITY_COUNT);
-		}
+        if (input.isKeyPressed(VK_F2))
+        {
+            setCameraFollowTarget(1, entitys, ENTITY_COUNT);
+        }
 
-		if (input.isKeyPressed(VK_F3))
-		{
-			setCameraFollowTarget(2, entitys, ENTITY_COUNT);
-		}
+        if (input.isKeyPressed(VK_F3))
+        {
+            setCameraFollowTarget(2, entitys, ENTITY_COUNT);
+        }
 
-		if (input.isKeyPressed(VK_F4))
-		{
-			setCameraFollowTarget(3, entitys, ENTITY_COUNT);
-		}
-	}
+        if (input.isKeyPressed(VK_F4))
+        {
+            setCameraFollowTarget(3, entitys, ENTITY_COUNT);
+        }
+    }
 
-	void handleUIInput(InputManager& input)
-	{
-		if (input.isKeyPressed('W'))
-		{
-			listPanel.setAnchor(UI_TOP_LEFT);
-		}
+    void handleUIInput(InputManager& input)
+    {
+        if (input.isKeyPressed('W'))
+        {
+            listPanel.setAnchor(UI_TOP_LEFT);
+        }
 
-		if (input.isKeyPressed('S'))
-		{
-			listPanel.setAnchor(UI_TOP_RIGHT);
-		}
+        if (input.isKeyPressed('S'))
+        {
+            listPanel.setAnchor(UI_TOP_RIGHT);
+        }
 
-		if (input.isKeyPressed('A'))
-		{
-			listPanel.setAnchor(UI_BOTTOM_LEFT);
-		}
+        if (input.isKeyPressed('A'))
+        {
+            listPanel.setAnchor(UI_BOTTOM_LEFT);
+        }
 
-		if (input.isKeyPressed('D'))
-		{
-			listPanel.setAnchor(UI_BOTTOM_RIGHT);
-		}
-	}
+        if (input.isKeyPressed('D'))
+        {
+            listPanel.setAnchor(UI_BOTTOM_RIGHT);
+        }
+    }
 
-	void updateCamera(InputManager& input)
-	{
-		updateCameraFollow(
-			entitys,
-			ENTITY_COUNT,
-			worldWidth,
-			worldHeight,
-			input.getMouseOffsetX(),
-			input.getMouseOffsetY()
-		);
-	}
+    void updateCamera(InputManager& input)
+    {
+        updateCameraFollow(
+            entitys,
+            ENTITY_COUNT,
+            worldWidth,
+            worldHeight,
+            input.getMouseOffsetX(),
+            input.getMouseOffsetY()
+        );
+    }
 
-	void updateDebugStates()
-	{
-		for (int i = 0; i < ENTITY_COUNT; i++)
-		{
-			if (entitys[i].hasCollisionState() && !lastCollisionState[i])
-			{
-				cout << "Entity " << i << " collision state started." << endl;
-			}
+    void updateDebugStates()
+    {
+        for (int i = 0; i < ENTITY_COUNT; i++)
+        {
+            if (entitys[i].hasCollisionState() && !lastCollisionState[i])
+            {
+                cout << "Entity " << i << " collision state started." << endl;
+            }
 
-			lastCollisionState[i] = entitys[i].hasCollisionState();
-		}
+            lastCollisionState[i] = entitys[i].hasCollisionState();
+        }
 
-		for (int i = 0; i < ENTITY_COUNT; i++)
-		{
-			bool nowAlive = entitys[i].getIsAlive();
+        for (int i = 0; i < ENTITY_COUNT; i++)
+        {
+            bool nowAlive = entitys[i].getIsAlive();
 
-			if (!nowAlive && lastAliveState[i])
-			{
-				cout << "Entity " << i << " died." << endl;
-			}
+            if (!nowAlive && lastAliveState[i])
+            {
+                cout << "Entity " << i << " died." << endl;
+            }
 
-			lastAliveState[i] = nowAlive;
-		}
+            lastAliveState[i] = nowAlive;
+        }
 
-		for (int i = 0; i < ENTITY_COUNT; i++)
-		{
-			if (entitys[i].isOnGround() && !lastGroundState[i])
-			{
-				cout << "Entity " << i << " is on ground." << endl;
-			}
+        for (int i = 0; i < ENTITY_COUNT; i++)
+        {
+            if (entitys[i].isOnGround() && !lastGroundState[i])
+            {
+                cout << "Entity " << i << " is on ground." << endl;
+            }
 
-			lastGroundState[i] = entitys[i].isOnGround();
-		}
+            lastGroundState[i] = entitys[i].isOnGround();
+        }
 
-		for (int i = 0; i < ENTITY_COUNT; i++)
-		{
-			if (entitys[i].isInAir() && !lastInAirState[i])
-			{
-				cout << "Entity " << i << " is in air." << endl;
-			}
+        for (int i = 0; i < ENTITY_COUNT; i++)
+        {
+            if (entitys[i].isInAir() && !lastInAirState[i])
+            {
+                cout << "Entity " << i << " is in air." << endl;
+            }
 
-			lastInAirState[i] = entitys[i].isInAir();
-		}
+            lastInAirState[i] = entitys[i].isInAir();
+        }
 
-		for (int i = 0; i < ENTITY_COUNT; i++)
-		{
-			bool nowJumping = entitys[i].isJumping();
+        for (int i = 0; i < ENTITY_COUNT; i++)
+        {
+            bool nowJumping = entitys[i].isJumping();
 
-			if (nowJumping && !lastJumpingState[i])
-			{
-				cout << "Entity " << i << " started jumping." << endl;
-			}
+            if (nowJumping && !lastJumpingState[i])
+            {
+                cout << "Entity " << i << " started jumping." << endl;
+            }
 
-			if (!nowJumping && lastJumpingState[i])
-			{
-				cout << "Entity " << i << " ended jumping." << endl;
-			}
+            if (!nowJumping && lastJumpingState[i])
+            {
+                cout << "Entity " << i << " ended jumping." << endl;
+            }
 
-			lastJumpingState[i] = nowJumping;
-		}
+            lastJumpingState[i] = nowJumping;
+        }
 
-		for (int i = 0; i < ENTITY_COUNT; i++)
-		{
-			bool nowSprinting = entitys[i].isSprinting();
+        for (int i = 0; i < ENTITY_COUNT; i++)
+        {
+            bool nowSprinting = entitys[i].isSprinting();
 
-			if (nowSprinting && !lastSprintState[i])
-			{
-				cout << "Entity " << i << " started sprinting." << endl;
-			}
+            if (nowSprinting && !lastSprintState[i])
+            {
+                cout << "Entity " << i << " started sprinting." << endl;
+            }
 
-			if (!nowSprinting && lastSprintState[i])
-			{
-				cout << "Entity " << i << " ended sprinting." << endl;
-			}
+            if (!nowSprinting && lastSprintState[i])
+            {
+                cout << "Entity " << i << " ended sprinting." << endl;
+            }
 
-			lastSprintState[i] = nowSprinting;
-		}
-	}
+            lastSprintState[i] = nowSprinting;
+        }
+    }
 
-	void updateOverlapEvents()
-	{
-		for (int i = 0; i < ENTITY_COUNT; i++)
-		{
-			for (int j = i + 1; j < ENTITY_COUNT; j++)
-			{
-				if (!entitys[i].getIsAlive() || !entitys[j].getIsAlive())
-				{
-					continue;
-				}
+    void updateOverlapEvents()
+    {
+        /*
+        重叠事件检测：
+            这里处理“已经发生重叠之后要做什么”。
+            例如：玩家碰到金币 -> 播放音效 -> 金币死亡。
 
-				if (!entitys[i].isCollidable() || !entitys[j].isCollidable())
-				{
-					continue;
-				}
+        它和阻挡碰撞不同：
+            - 阻挡碰撞：MovementHandle 想移动，CollisionHandle 计算 allowedMove，防止穿透
+            - 重叠事件：实体已经重叠，触发某种游戏事件
 
-				RectBox a = entitys[i].getWorldCollisionBox();
-				RectBox b = entitys[j].getWorldCollisionBox();
+        当前这里复用 CollisionHandle::isRectOverlapping() 作为底层 AABB 判断。
+        */
+        for (int i = 0; i < ENTITY_COUNT; i++)
+        {
+            for (int j = i + 1; j < ENTITY_COUNT; j++)
+            {
+                if (!entitys[i].getIsAlive() || !entitys[j].getIsAlive())
+                {
+                    continue;
+                }
+
+                if (!entitys[i].isCollidable() || !entitys[j].isCollidable())
+                {
+                    continue;
+                }
+
+                RectBox a = entitys[i].getWorldCollisionBox();
+                RectBox b = entitys[j].getWorldCollisionBox();
 
                 bool overlapping = collisionHandle.isRectOverlapping(a, b);
 
-				if (overlapping)
-				{
-					entitys[i].setOverlapping(true);
-					entitys[j].setOverlapping(true);
+                if (overlapping)
+                {
+                    entitys[i].setOverlapping(true);
+                    entitys[j].setOverlapping(true);
 
-					if (!lastOverlap[i][j])
-					{
-						cout << "Entity " << i << " overlaps with Entity " << j << endl;
+                    if (!lastOverlap[i][j])
+                    {
+                        cout << "Entity " << i << " overlaps with Entity " << j << endl;
 
-						EntityType typeA = entitys[i].getEntityType();
-						EntityType typeB = entitys[j].getEntityType();
+                        EntityType typeA = entitys[i].getEntityType();
+                        EntityType typeB = entitys[j].getEntityType();
 
-						if (typeA == PLAYER && typeB == COIN)
-						{
-							cout << "Player picked coin: " << j << endl;
+                        if (typeA == PLAYER && typeB == COIN)
+                        {
+                            cout << "Player picked coin: " << j << endl;
 
-							PlaySoundW(
-								_T("assets\\sound\\entities\\item\\coin_pickup.wav"),
-								NULL,
-								SND_ASYNC | SND_NOSTOP
-							);
+                            PlaySoundW(
+                                _T("assets\\sound\\entities\\item\\coin_pickup.wav"),
+                                NULL,
+                                SND_ASYNC | SND_NOSTOP
+                            );
 
-							entitys[j].killEntity();
-						}
-						else if (typeA == COIN && typeB == PLAYER)
-						{
-							cout << "Player picked coin: " << i << endl;
+                            entitys[j].killEntity();
+                        }
+                        else if (typeA == COIN && typeB == PLAYER)
+                        {
+                            cout << "Player picked coin: " << i << endl;
 
-							PlaySoundW(
-								_T("assets\\sound\\entities\\item\\coin_pickup.wav"),
-								NULL,
-								SND_ASYNC | SND_NOSTOP
-							);
+                            PlaySoundW(
+                                _T("assets\\sound\\entities\\item\\coin_pickup.wav"),
+                                NULL,
+                                SND_ASYNC | SND_NOSTOP
+                            );
 
-							entitys[i].killEntity();
-						}
-						else if (typeA == PLAYER && typeB == ENTITY)
-						{
-							cout << "Player touched normal entity: " << j << endl;
-						}
-						else if (typeA == ENTITY && typeB == PLAYER)
-						{
-							cout << "Player touched normal entity: " << i << endl;
-						}
-					}
-				}
+                            entitys[i].killEntity();
+                        }
+                        else if (typeA == PLAYER && typeB == ENTITY)
+                        {
+                            cout << "Player touched normal entity: " << j << endl;
+                        }
+                        else if (typeA == ENTITY && typeB == PLAYER)
+                        {
+                            cout << "Player touched normal entity: " << i << endl;
+                        }
+                    }
+                }
 
-				if (!entitys[i].getIsAlive() || !entitys[j].getIsAlive())
-				{
-					continue;
-				}
+                if (!entitys[i].getIsAlive() || !entitys[j].getIsAlive())
+                {
+                    continue;
+                }
 
-				lastOverlap[i][j] = overlapping;
-			}
-		}
-	}
+                lastOverlap[i][j] = overlapping;
+            }
+        }
+    }
 };
 int main()
 {
-	initgraph(WINDOW_WIDTH, WINDOW_HEIGHT);
-	setbkcolor(BLACK);
+    /*
+    main 现在只负责程序生命周期：
+        1. 初始化窗口
+        2. 创建全局输入管理器 InputManager
+        3. 创建当前关卡 Level
+        4. 主循环中调用 input.update()、level.update()、level.draw()
+        5. 退出时释放绘图窗口
 
-	InputManager input;
-	Level level;
+    具体关卡内容已经交给 Level 管理。
+    */
+    initgraph(WINDOW_WIDTH, WINDOW_HEIGHT);
+    setbkcolor(BLACK);
 
-	level.init();
+    InputManager input;
+    Level level;
 
-	BeginBatchDraw();
+    level.init();
 
-	while (true)
-	{
-		input.update();
+    BeginBatchDraw();
 
-		if (input.isKeyDown(VK_ESCAPE))
-		{
-			break;
-		}
+    while (true)
+    {
+        input.update();
 
-		level.update(input);
+        if (input.isKeyDown(VK_ESCAPE))
+        {
+            break;
+        }
 
-		cleardevice();
+        level.update(input);
 
-		level.draw();
+        cleardevice();
 
-		FlushBatchDraw();
+        level.draw();
 
-		Sleep(16);
-	}
+        FlushBatchDraw();
 
-	EndBatchDraw();
-	closegraph();
+        Sleep(16);
+    }
 
-	return 0;
+    EndBatchDraw();
+    closegraph();
+
+    return 0;
 }
