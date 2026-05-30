@@ -1178,25 +1178,22 @@ public:
 };
 
 //前置声明
+// 前置声明
 class Entity;
 
-
-
-//剥离出移动逻辑处理，吃里所有的移动，包括移动，跳跃，奔跑等
-class MovementHandle
+// 碰撞处理：负责阻挡检测、允许位移计算、世界边界修正
+class CollisionHandle
 {
 public:
-	void update(
-		Entity& self,
-		BehaviorIntent intent,
-		Entity entitys[],
-		int entityCount,
-		int selfIndex,
-		int worldWidth,
-		int worldHeight
+	bool isRectOverlapping(RectBox a, RectBox b);
+
+	bool isRangeOverlapping(
+		double aMin,
+		double aMax,
+		double bMin,
+		double bMax
 	);
 
-private:
 	double getAllowedMoveX(
 		Entity& self,
 		double moveX,
@@ -1218,16 +1215,31 @@ private:
 		int worldWidth,
 		int worldHeight
 	);
-
-
 };
-// 实体类
+
+
+//剥离出移动逻辑处理，吃里所有的移动，包括移动，跳跃，奔跑等
+class MovementHandle
+{
+public:
+	void update(
+		Entity& self,
+		BehaviorIntent intent,
+		Entity entitys[],
+		int entityCount,
+		int selfIndex,
+		int worldWidth,
+		int worldHeight,
+		CollisionHandle& collisionHandle
+	);
+};// 实体类
 
 //通用的entity类，目前包含了实体的所有基础逻辑处理包括碰撞输入速度处理碰撞检测等
 class Entity
 {
     //声明友元使MovementHandle可以访问entity的私有数据
     friend class MovementHandle;
+    friend class CollisionHandle;
 private:
     animatedSprite animation;
     // 世界坐标，左下角原点
@@ -1972,7 +1984,8 @@ void MovementHandle::update(
 	int entityCount,
 	int selfIndex,
 	int worldWidth,
-	int worldHeight
+	int worldHeight,
+	CollisionHandle& collisionHandle
 )
 {
 	double inputX = intent.moveX;
@@ -2027,8 +2040,7 @@ void MovementHandle::update(
 		self.x += inputX * currentSpeed;
 		self.y += inputY * currentSpeed;
 
-		limitInWorld(self, worldWidth, worldHeight);
-
+        collisionHandle.limitInWorld(self, worldWidth, worldHeight);
 		return;
 	}
 
@@ -2044,14 +2056,13 @@ void MovementHandle::update(
 	// X 轴移动
 	double wantMoveX = inputX * currentSpeed;
 
-	double allowedMoveX = getAllowedMoveX(
+	double allowedMoveX = collisionHandle.getAllowedMoveX(
 		self,
 		wantMoveX,
 		entitys,
 		entityCount,
 		selfIndex
 	);
-
 	if (fabs(allowedMoveX - wantMoveX) > EPS)
 	{
 		self.blockedByEntity = true;
@@ -2073,14 +2084,13 @@ void MovementHandle::update(
 
 	double wantMoveY = self.velocityY;
 
-	double allowedMoveY = getAllowedMoveY(
+	double allowedMoveY = collisionHandle.getAllowedMoveY(
 		self,
 		wantMoveY,
 		entitys,
 		entityCount,
 		selfIndex
 	);
-
 	if (fabs(allowedMoveY - wantMoveY) > EPS)
 	{
 		if (wantMoveY < 0)
@@ -2100,10 +2110,56 @@ void MovementHandle::update(
 
 	self.y += allowedMoveY;
 
-	limitInWorld(self, worldWidth, worldHeight);
+    collisionHandle.limitInWorld(self, worldWidth, worldHeight); 
 }
-double MovementHandle::getAllowedMoveX(
-	Entity& self,
+bool CollisionHandle::isRectOverlapping(RectBox a, RectBox b)
+{
+	if (a.right <= b.left + EPS)
+	{
+		return false;
+	}
+
+	if (a.left >= b.right - EPS)
+	{
+		return false;
+	}
+
+	if (a.top <= b.bottom + EPS)
+	{
+		return false;
+	}
+
+	if (a.bottom >= b.top - EPS)
+	{
+		return false;
+	}
+
+	return true;
+}
+
+bool CollisionHandle::isRangeOverlapping(
+	double aMin,
+	double aMax,
+	double bMin,
+	double bMax
+)
+{
+	if (aMax <= bMin + EPS)
+	{
+		return false;
+	}
+
+	if (aMin >= bMax - EPS)
+	{
+		return false;
+	}
+
+	return true;
+}
+
+
+    double CollisionHandle::getAllowedMoveX(
+    Entity& self,
 	double moveX,
 	Entity entitys[],
 	int entityCount,
@@ -2132,7 +2188,7 @@ double MovementHandle::getAllowedMoveX(
 
 		RectBox otherBox = entitys[i].getWorldCollisionBox();
 
-		if (!isRangeOverlapping(myBox.bottom, myBox.top, otherBox.bottom, otherBox.top))
+		if (!this->isRangeOverlapping(myBox.bottom, myBox.top, otherBox.bottom, otherBox.top))
 		{
 			continue;
 		}
@@ -2175,8 +2231,8 @@ double MovementHandle::getAllowedMoveX(
 
 	return allowedMove;
 }
-double MovementHandle::getAllowedMoveY(
-	Entity& self,
+    double CollisionHandle::getAllowedMoveY(
+    Entity& self,
 	double moveY,
 	Entity entitys[],
 	int entityCount,
@@ -2205,7 +2261,7 @@ double MovementHandle::getAllowedMoveY(
 
 		RectBox otherBox = entitys[i].getWorldCollisionBox();
 
-		if (!isRangeOverlapping(myBox.left, myBox.right, otherBox.left, otherBox.right))
+		if (!this->isRangeOverlapping(myBox.left, myBox.right, otherBox.left, otherBox.right))
 		{
 			continue;
 		}
@@ -2249,8 +2305,8 @@ double MovementHandle::getAllowedMoveY(
 	return allowedMove;
 }
 
-void MovementHandle::limitInWorld(
-	Entity& self,
+    void CollisionHandle::limitInWorld(
+    Entity& self,
 	int worldWidth,
 	int worldHeight
 )
@@ -2413,6 +2469,7 @@ private:
 
 	PlayerController playerController;
 	MovementHandle movementHandle;
+	CollisionHandle collisionHandle;
 
 	int worldWidth;
 	int worldHeight;
@@ -2604,7 +2661,8 @@ private:
 				ENTITY_COUNT,
 				i,
 				worldWidth,
-				worldHeight
+				worldHeight,
+				collisionHandle
 			);
 
 			entitys[i].updateAnimationByIntent(intent);
@@ -2768,7 +2826,7 @@ private:
 				RectBox a = entitys[i].getWorldCollisionBox();
 				RectBox b = entitys[j].getWorldCollisionBox();
 
-				bool overlapping = isRectOverlapping(a, b);
+                bool overlapping = collisionHandle.isRectOverlapping(a, b);
 
 				if (overlapping)
 				{
