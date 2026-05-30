@@ -1006,7 +1006,7 @@ void drawListPanel(UIBox panel)
 	drawUIBox(button2, RGB(90, 90, 90), WHITE);
 }
 
-//剥离出操作管理
+//剥离出操作管理，现在由inputManager统一创建各种按键接受输入操作
 class InputManager
 {
 private:
@@ -1117,17 +1117,65 @@ public:
 		return mouseY - WINDOW_HEIGHT / 2;
 	}
 };
-
-
-//剥离出所有的
-class behaviorHandle
+//抽象出玩家意图结构体负责处理移动/行为逻辑
+struct BehaviorIntent
 {
+	double moveX;
+	double moveY;
 
+	bool wantJump;
+	bool wantSprint;
+	bool wantInteract;
 
+	BehaviorIntent()
+	{
+		moveX = 0;
+		moveY = 0;
 
-
+		wantJump = false;
+		wantSprint = false;
+		wantInteract = false;
+	}
 };
 
+//抽象出玩家控制器负责直接接受inputManager传入的数据
+class PlayerController
+{
+public:
+	BehaviorIntent makeIntent(InputManager& input, bool god)
+	{
+		BehaviorIntent intent;
+
+		if (input.isKeyDown(VK_LEFT))
+		{
+			intent.moveX = -1;
+		}
+
+		if (input.isKeyDown(VK_RIGHT))
+		{
+			intent.moveX = 1;
+		}
+
+		if (god)
+		{
+			if (input.isKeyDown(VK_UP))
+			{
+				intent.moveY = 1;
+			}
+
+			if (input.isKeyDown(VK_DOWN))
+			{
+				intent.moveY = -1;
+			}
+		}
+
+		intent.wantSprint = input.isKeyDown(VK_SHIFT);
+		intent.wantJump = input.isKeyPressed(VK_SPACE);
+		intent.wantInteract = input.isKeyPressed('E');
+
+		return intent;
+	}
+};
 // 实体类
 
 //通用的entity类，目前包含了实体的所有基础逻辑处理包括碰撞输入速度处理碰撞检测等
@@ -1427,48 +1475,20 @@ public:
     }
     // 更新逻辑
 
-    void update(Entity entitys[], int entityCount, int selfIndex, int worldWidth, int worldHeight)
+	void update(
+		BehaviorIntent intent,
+		Entity entitys[],
+		int entityCount,
+		int selfIndex,
+		int worldWidth,
+		int worldHeight
+	)
     {
-        double inputX = 0;
-        double inputY = 0;
-        bool leftDown = 0;
-        bool rightDown = 0;
-        if (controlled)
-        {
-            if (GetAsyncKeyState(VK_LEFT) & 0x8000)
-            {
-                inputX = -1;
-                leftDown = 1;
-            }
-
-            if (GetAsyncKeyState(VK_RIGHT) & 0x8000)
-            {
-                inputX = 1;
-                rightDown = 1;
-            }
-
-
-            if (god)
-            {
-                if (GetAsyncKeyState(VK_UP) & 0x8000)
-                {
-                    inputY = 1;
-                }
-
-                if (GetAsyncKeyState(VK_DOWN) & 0x8000)
-                {
-                    inputY = -1;
-                }
-            }
-        }
-
+		double inputX = intent.moveX;
+		double inputY = intent.moveY;
         double currentSpeed = speed;
-        bool shiftDown = false;
 
-        if (controlled && (GetAsyncKeyState(VK_SHIFT) & 0x8000))
-        {
-            shiftDown = true;
-        }
+        bool shiftDown = intent.wantSprint;
 
         bool hasMoveInput = false;
 
@@ -1514,12 +1534,12 @@ public:
                 }
             }
         }
-		bool wantSprint = false;// 是否想要冲刺：
+		bool wantSprint = false;
 
-		if (controlled && shiftDown && hasMoveInput)// 冲刺条件：受控制、按下 Shift、有移动输入
-        {
-            wantSprint = true;
-        }
+		if (shiftDown && hasMoveInput)
+		{
+			wantSprint = true;
+		}
 
         if (!wantSprint)
         {
@@ -1566,22 +1586,14 @@ public:
         // 非 god 模式：启用重力、跳跃、碰撞
         
 
-        bool jumpKeyDown = false;
-
-        if (controlled && (GetAsyncKeyState(VK_SPACE) & 0x8000))
-        {
-            jumpKeyDown = true;
-        }
-
-        if (controlled && jumpKeyDown && !jumpKeyWasDown && onGround)
-        {
-            velocityY = JUMP_SPEED;
-            onGround = false;
-            InAir = true;
+		if (intent.wantJump && onGround)
+		{
+			velocityY = JUMP_SPEED;
+			onGround = false;
+			InAir = true;
 			jumping = true;
-        }
+		}
 
-        jumpKeyWasDown = jumpKeyDown;
 
         // x 轴暂时不使用加速度
 		double wantMoveX = inputX * currentSpeed;//输入决定了想要移动的距离,公式为：速度 = 输入 * 速度值，所以想要移动的距离 = 输入 * 速度值 * 时间，时间为1tick，所以简化为输入 * 速度值
@@ -2007,7 +2019,11 @@ int main()
         worldHeight = WINDOW_HEIGHT;
     }
 	SmoothUIPanel listPanel;
+    //创建输入管理
     InputManager input;
+    //创建玩家控制器
+    PlayerController playerController;
+
 	listPanel.init(480, 600, UI_TOP_LEFT, 32, 32);
     cleardevice();
 
@@ -2120,8 +2136,14 @@ int main()
                 continue;
             }
             
-            entitys[i].update(entitys, ENTITY_COUNT, i, worldWidth, worldHeight);
-            entitys[i].updateanimatedSprite();
+			BehaviorIntent intent;
+
+			if (i == 0)
+			{
+				intent = playerController.makeIntent(input, entitys[i].isGod());
+			}
+
+			entitys[i].update(intent, entitys, ENTITY_COUNT, i, worldWidth, worldHeight);            entitys[i].updateanimatedSprite();
         }
         if (input.isKeyPressed(VK_F1))
         {
