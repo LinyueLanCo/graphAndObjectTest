@@ -857,64 +857,276 @@ UIBox makeUIBoxByAnchor(
 
     return box;
 }
+struct SmoothUIPanel
+{
+	double x;
+	double y;
+
+	double targetX;
+	double targetY;
+
+	int w;
+	int h;
+
+	int marginX;
+	int marginY;
+
+	UIAnchor targetAnchor;
+
+	double moveSpeed;
+
+	SmoothUIPanel()
+	{
+		x = 0;
+		y = 0;
+
+		targetX = 0;
+		targetY = 0;
+
+		w = 0;
+		h = 0;
+
+		marginX = 0;
+		marginY = 0;
+
+		targetAnchor = UI_TOP_LEFT;
+
+		moveSpeed = 0.2;
+	}
+
+	void init(int newW, int newH, UIAnchor startAnchor, int newMarginX, int newMarginY)
+	{
+		w = newW;
+		h = newH;
+
+		marginX = newMarginX;
+		marginY = newMarginY;
+
+		targetAnchor = startAnchor;
+
+		UIBox startBox = makeUIBoxByAnchor(w, h, startAnchor, marginX, marginY);
+
+		x = startBox.x;
+		y = startBox.y;
+
+		targetX = startBox.x;
+		targetY = startBox.y;
+	}
+
+	void setAnchor(UIAnchor newAnchor)
+	{
+		targetAnchor = newAnchor;
+
+		UIBox targetBox = makeUIBoxByAnchor(w, h, targetAnchor, marginX, marginY);
+
+		targetX = targetBox.x;
+		targetY = targetBox.y;
+	}
+
+	void update()
+	{
+		x += (targetX - x) * moveSpeed;
+		y += (targetY - y) * moveSpeed;
+
+		// 防止最后因为小数无限接近但不到达
+		if (fabs(targetX - x) < 0.1)
+		{
+			x = targetX;
+		}
+
+		if (fabs(targetY - y) < 0.1)
+		{
+			y = targetY;
+		}
+	}
+
+	UIBox getBox()
+	{
+		UIBox box;
+
+		box.x = (int)x;
+		box.y = (int)y;
+		box.w = w;
+		box.h = h;
+
+		return box;
+	}
+};
+
 //绘制ui盒子
 void drawUIBox(UIBox box, COLORREF fillColor, COLORREF borderColor)
 {
     setfillcolor(fillColor);
     setlinecolor(borderColor);
 
-    fillrectangle(
+    fillroundrect(
         box.x,
         box.y,
         box.x + box.w,
-        box.y + box.h
+        box.y + box.h,
+        30,
+        30
     );
 }
 //绘制列表面板
-void drawListPanel()
+void drawListPanel(UIBox panel)
 {
-    UIBox panel = makeUIBoxByAnchor(
-        480,
-        600,
-        UI_TOP_RIGHT,
-        32,
-        32
-    );
+	drawUIBox(panel, RGB(255, 255, 255), WHITE);
 
-    drawUIBox(panel, RGB(30, 30, 30), WHITE);
+	int padding = 16;
+	int itemH = 36;
+	int gap = 8;
 
-    int padding = 16;
-    int itemH = 36;
-    int gap = 8;
+	for (int i = 0; i < 7; i++)
+	{
+		UIBox item;
 
-    for (int i = 0; i <7; i++)
-    {
-        UIBox item;
+		item.x = panel.x + padding;
+		item.y = panel.y + padding + i * (itemH + gap);
+		item.w = 4 * itemH;
+		item.h = itemH;
 
-        item.x = panel.x + padding;
-        item.y = panel.y + padding + i * (itemH + gap);
-        item.w = panel.w - padding * 2;
-        item.h = itemH;
+		drawUIBox(item, RGB(255, 0, 0), RGB(180, 180, 180));
+	}
 
-        drawUIBox(item, RGB(70, 70, 70), RGB(180, 180, 180));
-    }
+	UIBox button1;
+	button1.x = panel.x + padding;
+	button1.y = panel.y + panel.h - padding - 40;
+	button1.w = 120;
+	button1.h = 40;
 
-    UIBox button1;
-    button1.x = panel.x + padding;
-    button1.y = panel.y + panel.h - padding - 40;
-    button1.w = 120;
-    button1.h = 40;
+	drawUIBox(button1, RGB(90, 90, 90), WHITE);
 
-    drawUIBox(button1, RGB(90, 90, 90), WHITE);
+	UIBox button2;
+	button2.x = button1.x + button1.w + 12;
+	button2.y = button1.y;
+	button2.w = 120;
+	button2.h = 40;
 
-    UIBox button2;
-    button2.x = button1.x + button1.w + 12;
-    button2.y = button1.y;
-    button2.w = 120;
-    button2.h = 40;
-
-    drawUIBox(button2, RGB(90, 90, 90), WHITE);
+	drawUIBox(button2, RGB(90, 90, 90), WHITE);
 }
+
+//剥离出操作管理
+class InputManager
+{
+private:
+	bool keyNow[256];
+	bool keyLast[256];
+
+	bool mouseLeftNow;
+	bool mouseLeftLast;
+
+	int mouseX;
+	int mouseY;
+
+public:
+	InputManager()
+	{
+		for (int i = 0; i < 256; i++)
+		{
+			keyNow[i] = false;
+			keyLast[i] = false;
+		}
+
+		mouseLeftNow = false;
+		mouseLeftLast = false;
+
+		mouseX = WINDOW_WIDTH / 2;
+		mouseY = WINDOW_HEIGHT / 2;
+	}
+
+	void update()
+	{
+		for (int i = 0; i < 256; i++)
+		{
+			keyLast[i] = keyNow[i];
+			keyNow[i] = (GetAsyncKeyState(i) & 0x8000) != 0;
+		}
+
+		mouseLeftLast = mouseLeftNow;
+
+		ExMessage msg;
+
+		while (peekmessage(&msg, EX_MOUSE))
+		{
+			if (msg.message == WM_MOUSEMOVE)
+			{
+				mouseX = msg.x;
+				mouseY = msg.y;
+			}
+
+			if (msg.message == WM_LBUTTONDOWN)
+			{
+				mouseLeftNow = true;
+			}
+
+			if (msg.message == WM_LBUTTONUP)
+			{
+				mouseLeftNow = false;
+			}
+		}
+	}
+
+	bool isKeyDown(int key)
+	{
+		return keyNow[key];
+	}
+
+	bool isKeyPressed(int key)
+	{
+		return keyNow[key] && !keyLast[key];
+	}
+
+	bool isKeyReleased(int key)
+	{
+		return !keyNow[key] && keyLast[key];
+	}
+
+	bool isMouseLeftDown()
+	{
+		return mouseLeftNow;
+	}
+
+	bool isMouseLeftPressed()
+	{
+		return mouseLeftNow && !mouseLeftLast;
+	}
+
+	bool isMouseLeftReleased()
+	{
+		return !mouseLeftNow && mouseLeftLast;
+	}
+
+	int getMouseX()
+	{
+		return mouseX;
+	}
+
+	int getMouseY()
+	{
+		return mouseY;
+	}
+
+	int getMouseOffsetX()
+	{
+		return mouseX - WINDOW_WIDTH / 2;
+	}
+
+	int getMouseOffsetY()
+	{
+		return mouseY - WINDOW_HEIGHT / 2;
+	}
+};
+
+
+//剥离出所有的
+class behaviorHandle
+{
+
+
+
+
+};
 
 // 实体类
 
@@ -1794,6 +2006,9 @@ int main()
     {
         worldHeight = WINDOW_HEIGHT;
     }
+	SmoothUIPanel listPanel;
+    InputManager input;
+	listPanel.init(480, 600, UI_TOP_LEFT, 32, 32);
     cleardevice();
 
     IMAGE background;
@@ -1867,29 +2082,26 @@ int main()
     //游戏主循环
     while (true)
     {   
-        ExMessage msg;
-
-        while (peekmessage(&msg, EX_MOUSE))
-        {
-            if (msg.message == WM_MOUSEMOVE)
-            {
-                mouseX = msg.x;
-                mouseY = msg.y;
-            }
-
-            if (msg.message == WM_LBUTTONDOWN)
-            {
-                cout << "Left mouse down: " << msg.x << " " << msg.y << endl;
-            }
-        }
-
-        mouseOffsetX = mouseX - WINDOW_WIDTH / 2;
-        mouseOffsetY = mouseY - WINDOW_HEIGHT / 2;
-        if (GetAsyncKeyState(VK_ESCAPE) & 0x8000)
+        //输入更新
+        input.update();
+        
+        int mouseX = input.getMouseX();
+		int mouseY = input.getMouseY();
+	
+        int mouseOffsetX = input.getMouseOffsetX();
+		int mouseOffsetY = input.getMouseOffsetY();
+        if (input.isKeyDown(VK_ESCAPE))
         {
             break;
         }
-
+		if (input.isMouseLeftPressed())
+		{
+			cout << "Left mouse down: "
+				<< input.getMouseX()
+				<< " "
+				<< input.getMouseY()
+				<< endl;
+		}
         // 1. 清除上一帧状态
         for (int i = 0; i < ENTITY_COUNT; i++)
         {
@@ -1911,26 +2123,44 @@ int main()
             entitys[i].update(entitys, ENTITY_COUNT, i, worldWidth, worldHeight);
             entitys[i].updateanimatedSprite();
         }
-        if (GetAsyncKeyState(VK_F1) & 0x0001)
+        if (input.isKeyPressed(VK_F1))
         {
             setCameraFollowTarget(0, entitys, ENTITY_COUNT);
         }
 
-        if (GetAsyncKeyState(VK_F2) & 0x0001)
+        if (input.isKeyPressed(VK_F2))
         {
             setCameraFollowTarget(1, entitys, ENTITY_COUNT);
         }
 
-        if (GetAsyncKeyState(VK_F3) & 0x0001)
+        if (input.isKeyPressed(VK_F3))
         {
             setCameraFollowTarget(2, entitys, ENTITY_COUNT);
         }
 
-        if (GetAsyncKeyState(VK_F4) & 0x0001)
+        if (input.isKeyPressed(VK_F4))
         {
             setCameraFollowTarget(3, entitys, ENTITY_COUNT);
         }
+		if (input.isKeyPressed('W'))
+		{
+			listPanel.setAnchor(UI_TOP_LEFT);
+		}
 
+		if (input.isKeyPressed('S'))
+		{
+			listPanel.setAnchor(UI_TOP_RIGHT);
+		}
+
+		if (input.isKeyPressed('A'))
+		{
+			listPanel.setAnchor(UI_BOTTOM_LEFT);
+		}
+
+		if (input.isKeyPressed('D'))
+		{
+			listPanel.setAnchor(UI_BOTTOM_RIGHT);
+		}
         updateCameraFollow(
             entitys,
             ENTITY_COUNT,
@@ -2076,7 +2306,7 @@ int main()
                 lastOverlap[i][j] = overlapping;
             }
         }
-
+        listPanel.update();
         // 7. 绘制
         cleardevice();
         
@@ -2095,7 +2325,7 @@ int main()
 		//drawtext(_T("Use Arrow Keys to Move, Space to Jump, Shift to Sprint, Esc to Quit"), &rect, DT_CENTER | DT_TOP | DT_SINGLELINE);
 
 
-        //drawListPanel();
+        drawListPanel(listPanel.getBox());   
         FlushBatchDraw();
 
         Sleep(16);
