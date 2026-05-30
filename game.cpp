@@ -1176,11 +1176,58 @@ public:
 		return intent;
 	}
 };
+
+//前置声明
+class Entity;
+
+
+
+//剥离出移动逻辑处理，吃里所有的移动，包括移动，跳跃，奔跑等
+class MovementHandle
+{
+public:
+	void update(
+		Entity& self,
+		BehaviorIntent intent,
+		Entity entitys[],
+		int entityCount,
+		int selfIndex,
+		int worldWidth,
+		int worldHeight
+	);
+
+private:
+	double getAllowedMoveX(
+		Entity& self,
+		double moveX,
+		Entity entitys[],
+		int entityCount,
+		int selfIndex
+	);
+
+	double getAllowedMoveY(
+		Entity& self,
+		double moveY,
+		Entity entitys[],
+		int entityCount,
+		int selfIndex
+	);
+
+	void limitInWorld(
+		Entity& self,
+		int worldWidth,
+		int worldHeight
+	);
+
+
+};
 // 实体类
 
 //通用的entity类，目前包含了实体的所有基础逻辑处理包括碰撞输入速度处理碰撞检测等
 class Entity
 {
+    //声明友元使MovementHandle可以访问entity的私有数据
+    friend class MovementHandle;
 private:
     animatedSprite animation;
     // 世界坐标，左下角原点
@@ -1247,6 +1294,9 @@ public:
 		collisionBox.offsetY = 0.0;
 		collisionBox.scaleX = 1.0;
 		collisionBox.scaleY = 1.0;
+        //默认构造定义entity的动画状态
+		currentAnimState = ANIM_COUNT;
+		currentFacingDirection = LEFT;
 
         entityType = DEFAULT;
         isAlive = 1;
@@ -1301,6 +1351,11 @@ public:
         collisionBox.offsetY = 0.0;
         collisionBox.scaleX = 1.0;
         collisionBox.scaleY = 1.0;
+
+		//有参构造定义entity的动画状态
+
+		currentAnimState = ANIM_COUNT;
+		currentFacingDirection = LEFT;
 
         entityType = Type;
     }
@@ -1473,7 +1528,56 @@ public:
         animation.setSpeed(3);
         animation.setLoop(true);
     }
-    // 更新逻辑
+    //更新动画状态by意图
+    void updateAnimationByIntent(BehaviorIntent intent)
+{
+    if (!controlled)
+    {
+        return;
+    }
+
+    double inputX = intent.moveX;
+
+    if (inputX < 0)
+    {
+        currentFacingDirection = LEFT;
+
+        if (sprinting)
+        {
+            changeAnimation(ANIM_RUN_LEFT);
+        }
+        else
+        {
+            changeAnimation(ANIM_WALK_LEFT);
+        }
+    }
+    else if (inputX > 0)
+    {
+        currentFacingDirection = RIGHT;
+
+        if (sprinting)
+        {
+            changeAnimation(ANIM_RUN_RIGHT);
+        }
+        else
+        {
+            changeAnimation(ANIM_WALK_RIGHT);
+        }
+    }
+    else
+    {
+        if (currentFacingDirection == LEFT)
+        {
+            changeAnimation(ANIM_IDLE_L);
+        }
+
+        if (currentFacingDirection == RIGHT)
+        {
+            changeAnimation(ANIM_IDLE_R);
+        }
+    }
+}
+	// 更新逻辑
 
 	void update(
 		BehaviorIntent intent,
@@ -1495,44 +1599,6 @@ public:
         if (inputX != 0)
         {
             hasMoveInput = true;
-        }
-        if (controlled)
-        {
-            if (inputX < 0)
-            {
-                currentFacingDirection = LEFT;
-                if (sprinting)
-                {
-                    changeAnimation(ANIM_RUN_LEFT);
-                }
-                else
-                {
-                    changeAnimation(ANIM_WALK_LEFT);
-                }
-            }
-            else if (inputX > 0)
-            {
-                currentFacingDirection = RIGHT;
-                if (sprinting)
-                {
-                    changeAnimation(ANIM_RUN_RIGHT);
-                }
-                else
-                {
-                    changeAnimation(ANIM_WALK_RIGHT);
-                }
-            }
-            else
-            {
-                if(currentFacingDirection==LEFT)
-                {
-                    changeAnimation(ANIM_IDLE_L);
-                }
-                if (currentFacingDirection == RIGHT)
-                {
-                    changeAnimation(ANIM_IDLE_R);
-                }
-            }
         }
 		bool wantSprint = false;
 
@@ -1647,7 +1713,7 @@ public:
 
         limitInWorld(worldWidth, worldHeight);
     }
-    void updateanimatedSprite()
+    void updateAnimatedSprite()
     {
         animation.update();
     }
@@ -1898,7 +1964,341 @@ public:
 
 //声音播放支持，声音当然也跟sprite等类似是一个单独的类，也具有多种状态
 
+void MovementHandle::update(
+	Entity& self,
+	BehaviorIntent intent,
+	Entity entitys[],
+	int entityCount,
+	int selfIndex,
+	int worldWidth,
+	int worldHeight
+)
+{
+	double inputX = intent.moveX;
+	double inputY = intent.moveY;
 
+	double currentSpeed = self.speed;
+
+	bool hasMoveInput = false;
+
+	if (inputX != 0)
+	{
+		hasMoveInput = true;
+	}
+
+	bool wantSprint = false;
+
+	if (intent.wantSprint && hasMoveInput)
+	{
+		wantSprint = true;
+	}
+
+	if (!wantSprint)
+	{
+		self.sprinting = false;
+	}
+	else
+	{
+		if (!self.sprinting && self.onGround)
+		{
+			self.sprinting = true;
+		}
+
+		// 如果 sprinting 本来就是 true，就允许它在空中继续保持
+	}
+
+	if (self.sprinting)
+	{
+		currentSpeed = self.speed * 2;
+	}
+
+	// god 模式：不受重力、不受阻挡碰撞影响，可以自由移动
+	if (self.god)
+	{
+		double length = sqrt(inputX * inputX + inputY * inputY);
+
+		if (length != 0)
+		{
+			inputX = inputX / length;
+			inputY = inputY / length;
+		}
+
+		self.x += inputX * currentSpeed;
+		self.y += inputY * currentSpeed;
+
+		limitInWorld(self, worldWidth, worldHeight);
+
+		return;
+	}
+
+	// 非 god 模式：启用重力、跳跃、碰撞
+	if (intent.wantJump && self.onGround)
+	{
+		self.velocityY = JUMP_SPEED;
+		self.onGround = false;
+		self.InAir = true;
+		self.jumping = true;
+	}
+
+	// X 轴移动
+	double wantMoveX = inputX * currentSpeed;
+
+	double allowedMoveX = getAllowedMoveX(
+		self,
+		wantMoveX,
+		entitys,
+		entityCount,
+		selfIndex
+	);
+
+	if (fabs(allowedMoveX - wantMoveX) > EPS)
+	{
+		self.blockedByEntity = true;
+		self.collisionState = true;
+	}
+
+	self.x += allowedMoveX;
+
+	// Y 轴重力
+	self.velocityY -= GRAVITY;
+
+	if (self.velocityY < MAX_FALL_SPEED)
+	{
+		self.velocityY = MAX_FALL_SPEED;
+	}
+
+	self.onGround = false;
+	self.InAir = true;
+
+	double wantMoveY = self.velocityY;
+
+	double allowedMoveY = getAllowedMoveY(
+		self,
+		wantMoveY,
+		entitys,
+		entityCount,
+		selfIndex
+	);
+
+	if (fabs(allowedMoveY - wantMoveY) > EPS)
+	{
+		if (wantMoveY < 0)
+		{
+			self.onGround = true;
+			self.InAir = false;
+			self.jumping = false;
+		}
+		else if (wantMoveY > 0)
+		{
+			self.blockedByEntity = true;
+			self.collisionState = true;
+		}
+
+		self.velocityY = 0;
+	}
+
+	self.y += allowedMoveY;
+
+	limitInWorld(self, worldWidth, worldHeight);
+}
+double MovementHandle::getAllowedMoveX(
+	Entity& self,
+	double moveX,
+	Entity entitys[],
+	int entityCount,
+	int selfIndex
+)
+{
+	if (moveX == 0)
+	{
+		return 0;
+	}
+
+	RectBox myBox = self.getWorldCollisionBox();
+	double allowedMove = moveX;
+
+	for (int i = 0; i < entityCount; i++)
+	{
+		if (i == selfIndex)
+		{
+			continue;
+		}
+
+		if (!entitys[i].isBlocking())
+		{
+			continue;
+		}
+
+		RectBox otherBox = entitys[i].getWorldCollisionBox();
+
+		if (!isRangeOverlapping(myBox.bottom, myBox.top, otherBox.bottom, otherBox.top))
+		{
+			continue;
+		}
+
+		if (moveX > 0)
+		{
+			if (otherBox.left >= myBox.right - EPS)
+			{
+				double distance = otherBox.left - myBox.right;
+
+				if (distance < 0)
+				{
+					distance = 0;
+				}
+
+				if (distance < allowedMove)
+				{
+					allowedMove = distance;
+				}
+			}
+		}
+		else if (moveX < 0)
+		{
+			if (otherBox.right <= myBox.left + EPS)
+			{
+				double distance = otherBox.right - myBox.left;
+
+				if (distance > 0)
+				{
+					distance = 0;
+				}
+
+				if (distance > allowedMove)
+				{
+					allowedMove = distance;
+				}
+			}
+		}
+	}
+
+	return allowedMove;
+}
+double MovementHandle::getAllowedMoveY(
+	Entity& self,
+	double moveY,
+	Entity entitys[],
+	int entityCount,
+	int selfIndex
+)
+{
+	if (moveY == 0)
+	{
+		return 0;
+	}
+
+	RectBox myBox = self.getWorldCollisionBox();
+	double allowedMove = moveY;
+
+	for (int i = 0; i < entityCount; i++)
+	{
+		if (i == selfIndex)
+		{
+			continue;
+		}
+
+		if (!entitys[i].isBlocking())
+		{
+			continue;
+		}
+
+		RectBox otherBox = entitys[i].getWorldCollisionBox();
+
+		if (!isRangeOverlapping(myBox.left, myBox.right, otherBox.left, otherBox.right))
+		{
+			continue;
+		}
+
+		if (moveY > 0)
+		{
+			if (otherBox.bottom >= myBox.top - EPS)
+			{
+				double distance = otherBox.bottom - myBox.top;
+
+				if (distance < 0)
+				{
+					distance = 0;
+				}
+
+				if (distance < allowedMove)
+				{
+					allowedMove = distance;
+				}
+			}
+		}
+		else if (moveY < 0)
+		{
+			if (otherBox.top <= myBox.bottom + EPS)
+			{
+				double distance = otherBox.top - myBox.bottom;
+
+				if (distance > 0)
+				{
+					distance = 0;
+				}
+
+				if (distance > allowedMove)
+				{
+					allowedMove = distance;
+				}
+			}
+		}
+	}
+
+	return allowedMove;
+}
+
+void MovementHandle::limitInWorld(
+	Entity& self,
+	int worldWidth,
+	int worldHeight
+)
+{
+	RectBox box = self.getWorldCollisionBox();
+
+	if (box.left < 0)
+	{
+		self.x += 0 - box.left;
+		self.blockedByWorld = true;
+	}
+
+	box = self.getWorldCollisionBox();
+
+	if (box.right > worldWidth)
+	{
+		self.x -= box.right - worldWidth;
+		self.blockedByWorld = true;
+	}
+
+	box = self.getWorldCollisionBox();
+
+	if (box.bottom < 0)
+	{
+		self.y += 0 - box.bottom;
+		self.blockedByWorld = true;
+		self.onGround = true;
+		self.InAir = false;
+		self.jumping = false;
+
+		if (self.velocityY < 0)
+		{
+			self.velocityY = 0;
+		}
+	}
+
+	box = self.getWorldCollisionBox();
+
+	if (box.top > worldHeight)
+	{
+		self.y -= box.top - worldHeight;
+		self.blockedByWorld = true;
+
+		if (self.velocityY > 0)
+		{
+			self.velocityY = 0;
+		}
+	}
+}
 
 
 //测试镜头跟随
@@ -2024,6 +2424,9 @@ int main()
     //创建玩家控制器
     PlayerController playerController;
 
+    //创建移动处理
+    MovementHandle movementHandle;
+
 	listPanel.init(480, 600, UI_TOP_LEFT, 32, 32);
     cleardevice();
 
@@ -2142,8 +2545,19 @@ int main()
 			{
 				intent = playerController.makeIntent(input, entitys[i].isGod());
 			}
-
-			entitys[i].update(intent, entitys, ENTITY_COUNT, i, worldWidth, worldHeight);            entitys[i].updateanimatedSprite();
+            //计算 sprinting / jumping / onGround 等状态
+			movementHandle.update(
+				entitys[i],
+				intent,
+				entitys,
+				ENTITY_COUNT,
+				i,
+				worldWidth,
+				worldHeight
+			);            //根据 intent.moveX 和 sprinting 切动画
+			entitys[i].updateAnimationByIntent(intent);
+            //推进动画帧
+			entitys[i].updateAnimatedSprite();
         }
         if (input.isKeyPressed(VK_F1))
         {
