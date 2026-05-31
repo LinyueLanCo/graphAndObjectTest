@@ -595,12 +595,63 @@ struct RectBox
  // offsetX/offsetY 用于让碰撞盒中心相对实体中心产生偏移。
 struct CollisionBox
 {
-    double width;
-    double height;
-    double offsetX;
-    double offsetY;
-    double scaleX;
-    double scaleY;
+	double width;
+	double height;
+	double offsetX;
+	double offsetY;
+	double scaleX;
+	double scaleY;
+
+	// 功能：初始化碰撞盒的原始尺寸、偏移和缩放。
+	CollisionBox()
+	{
+		width = 0;
+		height = 0;
+		offsetX = 0.0;
+		offsetY = 0.0;
+		scaleX = 1.0;
+		scaleY = 1.0;
+	}
+
+	// 功能：设置碰撞盒的原始尺寸。
+	void setBaseSize(double newWidth, double newHeight)
+	{
+		width = newWidth;
+		height = newHeight;
+	}
+
+	// 功能：设置碰撞盒相对拥有者中心点的偏移。
+	void setOffset(double newOffsetX, double newOffsetY)
+	{
+		offsetX = newOffsetX;
+		offsetY = newOffsetY;
+	}
+
+	// 功能：设置碰撞盒的缩放比例。
+	void setScale(double newScaleX, double newScaleY)
+	{
+		scaleX = newScaleX;
+		scaleY = newScaleY;
+	}
+
+	// 功能：根据拥有者世界坐标生成最终用于检测的世界碰撞盒。
+	RectBox toWorldBox(double ownerX, double ownerY)
+	{
+		RectBox box;
+
+		double colliderCenterX = ownerX + offsetX;
+		double colliderCenterY = ownerY + offsetY;
+
+		double colliderWidth = width * scaleX;
+		double colliderHeight = height * scaleY;
+
+		box.left = colliderCenterX - colliderWidth / 2.0;
+		box.right = colliderCenterX + colliderWidth / 2.0;
+		box.bottom = colliderCenterY - colliderHeight / 2.0;
+		box.top = colliderCenterY + colliderHeight / 2.0;
+
+		return box;
+	}
 };
 
 // TileId：
@@ -1480,12 +1531,6 @@ public:
         blockedByEntity = false;
         blockedByWorld = false;
 
-        collisionBox.width = 0;
-        collisionBox.height = 0;
-        collisionBox.offsetX = 0.0;
-        collisionBox.offsetY = 0.0;
-        collisionBox.scaleX = 1.0;
-        collisionBox.scaleY = 1.0;
         //默认构造定义entity的动画状态
         currentAnimState = ANIM_COUNT;
         currentFacingDirection = LEFT;
@@ -1536,13 +1581,7 @@ public:
         int imgW = animation.getFrameWidth();
         int imgH = animation.getFrameHeight();
 
-        collisionBox.width = imgW;
-        collisionBox.height = imgH;
-        collisionBox.offsetX = 0.0;
-        collisionBox.offsetY = 0.0;
-        collisionBox.scaleX = 1.0;
-        collisionBox.scaleY = 1.0;
-
+        collisionBox.setBaseSize(imgW, imgH);
         //有参构造定义entity的动画状态
 
         currentAnimState = ANIM_COUNT;
@@ -1676,31 +1715,10 @@ public:
     //将定义的碰撞盒转换为坐标系下的实际范围，用作碰撞检测
     // 功能：根据指定中心点计算实体碰撞盒的世界坐标范围。
     RectBox getWorldCollisionBoxAt(double testX, double testY)
-    {
-        // 根据某个测试坐标生成“世界坐标下的真实 AABB”。
-        // 公式：
-        //   colliderCenter = entityCenter + collisionOffset
-        //   colliderWidth  = baseWidth  * scaleX
-        //   colliderHeight = baseHeight * scaleY
-        //   left   = centerX - width / 2
-        //   right  = centerX + width / 2
-        //   bottom = centerY - height / 2
-        //   top    = centerY + height / 2
-        RectBox box;
+	{
+		return collisionBox.toWorldBox(testX, testY);
 
-        double colliderCenterX = testX + collisionBox.offsetX;
-        double colliderCenterY = testY + collisionBox.offsetY;
-
-        double colliderWidth = collisionBox.width * collisionBox.scaleX;
-        double colliderHeight = collisionBox.height * collisionBox.scaleY;
-
-        box.left = colliderCenterX - colliderWidth / 2.0;
-        box.right = colliderCenterX + colliderWidth / 2.0;
-        box.bottom = colliderCenterY - colliderHeight / 2.0;
-        box.top = colliderCenterY + colliderHeight / 2.0;
-
-        return box;
-    }
+	}
 
     // 功能：获取实体当前位置下的世界碰撞盒。
     RectBox getWorldCollisionBox()
@@ -1708,13 +1726,23 @@ public:
         return getWorldCollisionBoxAt(x, y);
     }
 
+	// 功能：设置实体碰撞盒原始尺寸。
+	void setCollisionBoxSize(double width, double height)
+	{
+		collisionBox.setBaseSize(width, height);
+	}
+
+	// 功能：设置实体碰撞盒相对实体中心点的偏移。
+	void setCollisionBoxOffset(double offsetX, double offsetY)
+	{
+		collisionBox.setOffset(offsetX, offsetY);
+	}
 
     // 功能：设置实体碰撞盒缩放比例。
-    void setCollisionScale(double scaleX, double scaleY)
-    {
-        collisionBox.scaleX = scaleX;
-        collisionBox.scaleY = scaleY;
-    }
+	void setCollisionScale(double scaleX, double scaleY)
+	{
+		collisionBox.setScale(scaleX, scaleY);
+	}
     // 功能：切换玩家动画状态并加载对应序列帧资源。
     void changeAnimation(AnimationState newState)
     {
