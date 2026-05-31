@@ -279,6 +279,45 @@ enum AnimationState
     ANIM_RUN_RIGHT,
     ANIM_COUNT
 };
+
+enum AnimationId
+{
+	ANIM_ID_PLAYER_IDLE_L,
+	ANIM_ID_PLAYER_IDLE_R,
+	ANIM_ID_PLAYER_WALK_L,
+	ANIM_ID_PLAYER_WALK_R,
+	ANIM_ID_PLAYER_RUN_L,
+	ANIM_ID_PLAYER_RUN_R,
+
+	ANIM_ID_COUNT
+};
+
+struct AnimationClip
+{
+	IMAGE* image;
+	int frameCount;
+	int speed;
+	bool loop;
+
+	AnimationClip()
+	{
+		image = NULL;
+		frameCount = 1;
+		speed = 4;
+		loop = true;
+	}
+
+	AnimationClip(IMAGE* newImage, int newFrameCount, int newSpeed, bool newLoop)
+	{
+		image = newImage;
+		frameCount = newFrameCount;
+		speed = newSpeed;
+		loop = newLoop;
+	}
+};
+
+
+
 // facingDirection：
  // 记录实体最后一次有效朝向。
  // 没有移动输入时，待机动画会根据这个方向决定使用左待机还是右待机。
@@ -377,6 +416,65 @@ inline void putimage_alpha_tile(
         blend
     );
 }
+
+class ResourceManager
+{
+private:
+	IMAGE playerIdleL;
+	IMAGE playerIdleR;
+	IMAGE playerWalkL;
+	IMAGE playerWalkR;
+	IMAGE playerRunL;
+	IMAGE playerRunR;
+
+public:
+	// 功能：加载当前关卡需要的动画图片资源。
+	void loadLevelResources()
+	{
+		loadimage(&playerIdleL, _T("assets\\tex\\entities\\characters\\player1_idle_L.png"));
+		loadimage(&playerIdleR, _T("assets\\tex\\entities\\characters\\player1_idle_R.png"));
+		loadimage(&playerWalkL, _T("assets\\tex\\entities\\characters\\player1_walk_L.png"));
+		loadimage(&playerWalkR, _T("assets\\tex\\entities\\characters\\player1_walk_R.png"));
+		loadimage(&playerRunL, _T("assets\\tex\\entities\\characters\\player1_run_L.png"));
+		loadimage(&playerRunR, _T("assets\\tex\\entities\\characters\\player1_run_R.png"));
+	}
+
+	// 功能：根据动画 ID 获取对应动画资源描述。
+	AnimationClip getAnimationClip(AnimationId id)
+	{
+		if (id == ANIM_ID_PLAYER_IDLE_L)
+		{
+			return AnimationClip(&playerIdleL, 8, 3, true);
+		}
+
+		if (id == ANIM_ID_PLAYER_IDLE_R)
+		{
+			return AnimationClip(&playerIdleR, 8, 3, true);
+		}
+
+		if (id == ANIM_ID_PLAYER_WALK_L)
+		{
+			return AnimationClip(&playerWalkL, 8, 3, true);
+		}
+
+		if (id == ANIM_ID_PLAYER_WALK_R)
+		{
+			return AnimationClip(&playerWalkR, 8, 3, true);
+		}
+
+		if (id == ANIM_ID_PLAYER_RUN_L)
+		{
+			return AnimationClip(&playerRunL, 8, 3, true);
+		}
+
+		if (id == ANIM_ID_PLAYER_RUN_R)
+		{
+			return AnimationClip(&playerRunR, 8, 3, true);
+		}
+
+		return AnimationClip();
+	}
+};
 // animatedSprite：
  // 带帧动画支持的精灵类。
  // 它只关心“图片帧如何播放”和“如何根据 Entity 的世界坐标绘制到屏幕上”。
@@ -391,7 +489,8 @@ inline void putimage_alpha_tile(
 class animatedSprite
 {
 private:
-    IMAGE image;
+	IMAGE image;
+	IMAGE* imageSource;
     int frameCount;
     int currentFrame;
     int frameWidth;
@@ -424,11 +523,13 @@ public:
         scaleY = 1.0;
         offsetX = 0;
         offsetY = 0;
+        imageSource = &image;
     }
     // 功能：按显式帧尺寸加载序列帧图片。
     void load(const TCHAR* path, int frameWidth, int frameHeight, int frameCount)
     {
         loadimage(&image, path);
+        imageSource = &image;
         this->frameWidth = frameWidth;
         this->frameHeight = frameHeight;
         this->frameCount = frameCount;
@@ -442,6 +543,7 @@ public:
     void load(const TCHAR* path, int newFrameCount)
     {
         loadimage(&image, path);
+		imageSource = &image;
 
         frameCount = newFrameCount;
 
@@ -457,6 +559,35 @@ public:
         frameTimer = 0;
         isPlaying = true;
     }
+
+	// 功能：绑定已经由 ResourceManager 加载好的动画资源。
+	void setClip(AnimationClip clip)
+	{
+		if (clip.image == NULL)
+		{
+			return;
+		}
+
+		imageSource = clip.image;
+
+		frameCount = clip.frameCount;
+
+		if (frameCount < 1)
+		{
+			frameCount = 1;
+		}
+
+		frameWidth = imageSource->getwidth() / frameCount;
+		frameHeight = imageSource->getheight();
+
+		setSpeed(clip.speed);
+		setLoop(clip.loop);
+
+		currentFrame = 0;
+		frameTimer = 0;
+		isPlaying = true;
+	}
+
     // 功能：获取当前动画单帧宽度。
     int getFrameWidth()
     {
@@ -535,9 +666,17 @@ public:
         }
 
     }
+
+
+
     // 功能：根据拥有者世界坐标把当前动画帧绘制到屏幕。
     void draw(double ownerX, double ownerY)
     {
+		if (imageSource == NULL)
+		{
+			return;
+		}
+
         if (frameCount <= 0)
         {
             return;
@@ -561,17 +700,17 @@ public:
         int srcX = currentFrame * frameWidth;
         int srcY = 0;
 
-        putimage_alpha_tile(
-            drawX,
-            drawY,
-            screenDrawW,
-            screenDrawH,
-            &image,
-            srcX,
-            srcY,
-            frameWidth,
-            frameHeight
-        );
+		putimage_alpha_tile(
+			drawX,
+			drawY,
+			screenDrawW,
+			screenDrawH,
+			imageSource,
+			srcX,
+			srcY,
+			frameWidth,
+			frameHeight
+		);
     }
 };
 
