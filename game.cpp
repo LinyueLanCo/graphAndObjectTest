@@ -107,6 +107,7 @@ struct Camera
     double targetY;
     double targetZoom;
 
+    // 功能：初始化相机位置、目标位置和缩放参数。
     Camera()
     {
         x = 0;
@@ -119,16 +120,19 @@ struct Camera
         targetZoom = 1.0;
     }
 
+    // 功能：计算当前相机缩放下屏幕可见的世界宽度。
     double getVisibleWorldWidth()
     {
         return WINDOW_WIDTH / zoom;
     }
 
+    // 功能：计算当前相机缩放下屏幕可见的世界高度。
     double getVisibleWorldHeight()
     {
         return WINDOW_HEIGHT / zoom;
     }
 
+    // 功能：让相机立即居中跟随目标点，并限制在世界范围内。
     void followInstant(double targetWorldX, double targetWorldY, int worldWidth, int worldHeight)
     {
         double visibleW = getVisibleWorldWidth();
@@ -140,6 +144,7 @@ struct Camera
         limitInWorld(worldWidth, worldHeight);
     }
 
+    // 功能：让相机平滑跟随目标点，并叠加鼠标观察偏移。
     void followSmooth(
         double targetWorldX,
         double targetWorldY,
@@ -164,6 +169,7 @@ struct Camera
         limitInWorld(worldWidth, worldHeight);
     }
 
+    // 功能：设置相机目标缩放值，并限制缩放范围。
     void zoomTo(double newZoom)
     {
         if (newZoom < 0.2)
@@ -179,12 +185,17 @@ struct Camera
         targetZoom = newZoom;
     }
 
+    // 功能：平滑更新相机当前缩放，使其靠近目标缩放。
     void updateZoom()
     {
         double zoomSpeed = 0.08;
         zoom += (targetZoom - zoom) * zoomSpeed;
     }
 
+    // 将摄像机视口限制在世界范围内。
+    // 这里修正的是摄像机左下角 x/y，而不是实体坐标。
+    // 如果世界尺寸小于可见视口，就让摄像机居中显示这个世界。
+    // 功能：把相机可见范围限制在关卡世界边界内。
     void limitInWorld(int worldWidth, int worldHeight)
     {
         double visibleW = getVisibleWorldWidth();
@@ -224,30 +235,40 @@ struct Camera
             }
         }
     }
+
 };
 Camera gCamera;
 
+// 功能：把世界坐标 X 转换为屏幕坐标 X。
 int worldToScreenX(double worldX)
 {
     return (int)((worldX - gCamera.x) * gCamera.zoom);
 }
 
+// 功能：把世界坐标 Y 转换为 EasyX 屏幕坐标 Y。
 int worldToScreenY(double worldY)
 {
     return (int)(WINDOW_HEIGHT - (worldY - gCamera.y) * gCamera.zoom);
 }
 
+// 功能：把世界空间尺寸转换为当前缩放下的屏幕尺寸。
 int worldSizeToScreen(double worldSize)
 {
     return (int)(worldSize * gCamera.zoom);
 }
 
+// Sound：
+ // 音效系统占位类。当前项目暂时直接使用 PlaySoundW 播放音效，
+ // 后续可以把音效播放、循环、停止、isPlaying 等状态统一封装进这里。
 class Sound
 {
 
 
 
 };
+// AnimationState：
+ // 玩家动画状态枚举。当前主要用于 Entity::changeAnimation()
+ // 根据移动意图和 sprinting 状态切换待机、行走、奔跑动画。
 enum AnimationState
 {
     ANIM_IDLE_L,
@@ -258,7 +279,9 @@ enum AnimationState
     ANIM_RUN_RIGHT,
     ANIM_COUNT
 };
-// Alpha 透明图片绘制
+// facingDirection：
+ // 记录实体最后一次有效朝向。
+ // 没有移动输入时，待机动画会根据这个方向决定使用左待机还是右待机。
 enum facingDirection
 {
     LEFT,
@@ -269,6 +292,9 @@ enum facingDirection
 };
 
 
+// putimage_alpha：
+ // 使用 AlphaBlend 绘制带透明通道的 IMAGE，解决普通 putimage 透明通道不正确的问题。
+// 功能：按原图尺寸绘制带 Alpha 通道的图片。
 inline void putimage_alpha(int x, int y, IMAGE* img)
 {
     int w = img->getwidth();
@@ -288,7 +314,9 @@ inline void putimage_alpha(int x, int y, IMAGE* img)
         blend
     );
 }
-//重载一个版本，允许指定绘制尺寸，实现简单的缩放功能
+// putimage_alpha 重载：
+ // 支持指定绘制宽高，用于对整张透明图片进行简单缩放绘制。
+// 功能：按指定尺寸缩放绘制带 Alpha 通道的图片。
 inline void putimage_alpha(int x, int y, int drawW, int drawH, IMAGE* img)
 {
     int sourceW = img->getwidth();
@@ -318,7 +346,10 @@ inline void putimage_alpha(int x, int y, int drawW, int drawH, IMAGE* img)
         blend
     );
 }
-//重大结构调整准备：将所有的涉及逻辑更新的事件与判定统一剥离，并抽象出level类，由level类来统一管理事件与判定，玩家类只负责输入、物理、状态更新与渲染，事件与判定的结果通过状态反馈给玩家类，由玩家类来控制状态的切换与渲染表现
+// putimage_alpha_tile：
+ // 从 tileset 或 sprite sheet 中截取一块源矩形，并绘制到目标屏幕矩形。
+ // TileMap 和 animatedSprite 都依赖这个函数完成局部贴图绘制。
+// 功能：从图集中裁剪指定区域并以 Alpha 混合绘制到屏幕。
 inline void putimage_alpha_tile(
     int x,
     int y,
@@ -346,12 +377,6 @@ inline void putimage_alpha_tile(
         blend
     );
 }
-class level
-{
-    // 这里暂时不实现，后续会添加事件与判定的统一管理
-};
-
-
 // animatedSprite：
  // 带帧动画支持的精灵类。
  // 它只关心“图片帧如何播放”和“如何根据 Entity 的世界坐标绘制到屏幕上”。
@@ -381,6 +406,7 @@ private:
     double offsetX;
     double offsetY;
 public:
+    // 功能：初始化序列帧动画的默认播放参数。
     animatedSprite()//基础构造
     {
         frameWidth = 0;
@@ -399,6 +425,7 @@ public:
         offsetX = 0;
         offsetY = 0;
     }
+    // 功能：按显式帧尺寸加载序列帧图片。
     void load(const TCHAR* path, int frameWidth, int frameHeight, int frameCount)
     {
         loadimage(&image, path);
@@ -411,6 +438,7 @@ public:
         isPlaying = 1;
 
     }
+    // 功能：按帧数自动平均切分横向序列帧图片。
     void load(const TCHAR* path, int newFrameCount)
     {
         loadimage(&image, path);
@@ -429,15 +457,18 @@ public:
         frameTimer = 0;
         isPlaying = true;
     }
+    // 功能：获取当前动画单帧宽度。
     int getFrameWidth()
     {
         return frameWidth;
     }
 
+    // 功能：获取当前动画单帧高度。
     int getFrameHeight()
     {
         return frameHeight;
     }
+    // 功能：设置动画帧切换间隔。
     void setSpeed(int frameInterval)//设置帧间隔切换速度，也就是动画播放速度
     {
         if (frameInterval < 1)
@@ -447,14 +478,17 @@ public:
         this->frameInterval = frameInterval;
 
     }
+    // 功能：设置动画是否循环播放。
     void setLoop(bool value)//设置是否循环
     {
         isLoop = value;
     }
+    // 功能：停止当前动画播放。
     void stop()//停止播放设置
     {
         isPlaying = false;
     }
+    // 功能：设置动画绘制缩放和相对实体中心的偏移。
     void setTransform(double newScaleX, double newScaleY, double newOffsetX, double newOffsetY)
     {
         scaleX = newScaleX;
@@ -462,12 +496,14 @@ public:
         offsetX = newOffsetX;
         offsetY = newOffsetY;
     }
+    // 功能：重置动画到第一帧并清空计时器。
     void reset()
     {
         currentFrame = 0;
         frameTimer = 0;
 
     }
+    // 功能：推进动画帧计时并在需要时切换当前帧。
     void update()
     {
         if (!isPlaying)
@@ -499,6 +535,7 @@ public:
         }
 
     }
+    // 功能：根据拥有者世界坐标把当前动画帧绘制到屏幕。
     void draw(double ownerX, double ownerY)
     {
         if (frameCount <= 0)
@@ -566,48 +603,8 @@ struct CollisionBox
     double scaleY;
 };
 
-// 矩形重叠检测：贴边不算碰撞
-bool isRectOverlapping(RectBox a, RectBox b)
-{
-    if (a.right <= b.left + EPS)
-    {
-        return false;
-    }
-
-    if (a.left >= b.right - EPS)
-    {
-        return false;
-    }
-
-    if (a.top <= b.bottom + EPS)
-    {
-        return false;
-    }
-
-    if (a.bottom >= b.top - EPS)
-    {
-        return false;
-    }
-
-    return true;
-}
-
-// 一维范围重叠：贴边不算重叠
-bool isRangeOverlapping(double aMin, double aMax, double bMin, double bMax)
-{
-    if (aMax <= bMin + EPS)
-    {
-        return false;
-    }
-
-    if (aMin >= bMax - EPS)
-    {
-        return false;
-    }
-
-    return true;
-}
-
+// TileId：
+ // 地图 tile 编号。当前 TILE_EMPTY=0 表示空格，不绘制也不视为 solid tile。
 enum TileId
 {
     TILE_EMPTY = 0
@@ -641,6 +638,7 @@ private:
     double offsetY;
 
 public:
+    // 功能：初始化 tile map 的尺寸、偏移和地图数据指针。
     TileMap()
     {
         rows = 0;
@@ -658,11 +656,13 @@ public:
         offsetY = 0;
     }
 
+    // 功能：释放 tile map 动态分配的地图数据。
     ~TileMap()
     {
         release();
     }
 
+    // 功能：释放并清空当前地图二维数组。
     void release()
     {
         if (tiles != NULL)
@@ -680,6 +680,7 @@ public:
         cols = 0;
     }
 
+    // 功能：设置 tileset 原始 tile 尺寸和世界绘制 tile 尺寸。
     void setTileSize(
         int newSourceTileWidth,
         int newSourceTileHeight,
@@ -694,17 +695,20 @@ public:
         drawTileHeight = newDrawTileHeight;
     }
 
+    // 功能：设置整张 tile map 在世界坐标中的偏移。
     void setOffset(double newOffsetX, double newOffsetY)
     {
         offsetX = newOffsetX;
         offsetY = newOffsetY;
     }
 
+    // 功能：加载 tile map 使用的 tileset 图片。
     void loadTileset(const TCHAR* imagePath)
     {
         loadimage(&tileset, imagePath);
     }
 
+    // 功能：从文本文件读取地图行列数和 tile id 数据。
     bool loadFromFile(const char* mapPath)
     {
         ifstream inFile(mapPath);
@@ -742,6 +746,7 @@ public:
         return true;
     }
 
+    // 功能：遍历并绘制整张 tile map。
     void draw()
     {
         for (int row = 0; row < rows; row++)
@@ -753,6 +758,7 @@ public:
         }
     }
 
+    // 功能：绘制指定行列的单个 tile。
     void drawTile(int row, int col)
     {
         int tileId = tiles[row][col];
@@ -805,6 +811,7 @@ public:
         );
     }
 
+    // 功能：判断指定 tile 是否作为 solid tile 参与调试碰撞显示。
     bool isSolidTile(int row, int col)
     {
         if (row < 0 || row >= rows || col < 0 || col >= cols)
@@ -824,6 +831,7 @@ public:
         return false;
     }
 
+    // 功能：获取指定 tile 在世界坐标中的矩形范围。
     RectBox getTileWorldBox(int row, int col)
     {
         RectBox box;
@@ -839,6 +847,7 @@ public:
         return box;
     }
 
+    // 功能：绘制所有 solid tile 的调试碰撞框。
     void drawDebugCollisionBoxes()
     {
         setlinecolor(YELLOW);
@@ -863,16 +872,19 @@ public:
             }
         }
     }
+    // 功能：获取当前 tile map 对应的世界宽度。
     int getworldWidth()//根据列数和每个 tile 的显示宽度计算整个地图在世界坐标系中的宽度
     {
         return cols * drawTileWidth * 3;
     }
+    // 功能：获取当前 tile map 对应的世界高度。
     int getWOrldHeight()//根据行数和每个 tile 的显示高度计算整个地图在世界坐标系中的高度
     {
         return rows * drawTileHeight * 3;
     }
 };
-//ui层
+// UIAnchor：
+ // UI 锚点枚举。用于把 UIBox 放置到窗口四角或中心。
 enum UIAnchor
 {
     UI_TOP_LEFT,
@@ -881,7 +893,8 @@ enum UIAnchor
     UI_BOTTOM_RIGHT,
     UI_CENTER
 };
-//ui盒子结构体，定义原点坐标，高度和宽度
+// UIBox：
+ // 屏幕空间下的 UI 矩形框，x/y 是左上角，w/h 是宽高。
 struct UIBox
 {
     int x;
@@ -890,6 +903,7 @@ struct UIBox
     int h;
 };
 //基于锚点的放置ui盒子，锚点为视口的边
+// 功能：根据锚点和边距计算 UI 矩形在屏幕上的位置。
 UIBox makeUIBoxByAnchor(
     int w,
     int h,
@@ -960,6 +974,7 @@ struct SmoothUIPanel
 
     double moveSpeed;
 
+    // 功能：初始化平滑 UI 面板的默认状态。
     SmoothUIPanel()
     {
         x = 0;
@@ -979,6 +994,7 @@ struct SmoothUIPanel
         moveSpeed = 0.2;
     }
 
+    // 功能：设置 UI 面板尺寸、锚点和初始位置。
     void init(int newW, int newH, UIAnchor startAnchor, int newMarginX, int newMarginY)
     {
         w = newW;
@@ -998,6 +1014,7 @@ struct SmoothUIPanel
         targetY = startBox.y;
     }
 
+    // 功能：切换 UI 面板目标锚点。
     void setAnchor(UIAnchor newAnchor)
     {
         targetAnchor = newAnchor;
@@ -1008,6 +1025,7 @@ struct SmoothUIPanel
         targetY = targetBox.y;
     }
 
+    // 功能：平滑推进 UI 面板当前位置，使其靠近目标位置。
     void update()
     {
         x += (targetX - x) * moveSpeed;
@@ -1025,6 +1043,7 @@ struct SmoothUIPanel
         }
     }
 
+    // 功能：获取当前 UI 面板的屏幕矩形。
     UIBox getBox()
     {
         UIBox box;
@@ -1038,7 +1057,9 @@ struct SmoothUIPanel
     }
 };
 
-//绘制ui盒子
+// drawUIBox：
+ // 绘制一个圆角 UI 矩形。当前用于调试面板和面板内的临时条目。
+// 功能：绘制一个指定颜色的圆角 UI 矩形。
 void drawUIBox(UIBox box, COLORREF fillColor, COLORREF borderColor)
 {
     setfillcolor(fillColor);
@@ -1053,7 +1074,9 @@ void drawUIBox(UIBox box, COLORREF fillColor, COLORREF borderColor)
         30
     );
 }
-//绘制列表面板
+// drawListPanel：
+ // 临时绘制一个列表面板，用于测试 UI 锚点、平滑移动和简单层级绘制。
+// 功能：绘制当前用于测试的列表面板 UI。
 void drawListPanel(UIBox panel)
 {
     drawUIBox(panel, RGB(255, 255, 255), WHITE);
@@ -1112,6 +1135,7 @@ private:
     int mouseY;
 
 public:
+    // 功能：初始化键盘和鼠标输入缓存。
     InputManager()
     {
         for (int i = 0; i < 256; i++)
@@ -1127,6 +1151,7 @@ public:
         mouseY = WINDOW_HEIGHT / 2;
     }
 
+    // 功能：刷新键盘、鼠标当前帧和上一帧输入状态。
     void update()
     {
         for (int i = 0; i < 256; i++)
@@ -1159,51 +1184,61 @@ public:
         }
     }
 
+    // 功能：判断指定按键当前是否处于按下状态。
     bool isKeyDown(int key)
     {
         return keyNow[key];
     }
 
+    // 功能：判断指定按键是否在当前帧刚刚按下。
     bool isKeyPressed(int key)
     {
         return keyNow[key] && !keyLast[key];
     }
 
+    // 功能：判断指定按键是否在当前帧刚刚松开。
     bool isKeyReleased(int key)
     {
         return !keyNow[key] && keyLast[key];
     }
 
+    // 功能：判断鼠标左键当前是否处于按下状态。
     bool isMouseLeftDown()
     {
         return mouseLeftNow;
     }
 
+    // 功能：判断鼠标左键是否在当前帧刚刚按下。
     bool isMouseLeftPressed()
     {
         return mouseLeftNow && !mouseLeftLast;
     }
 
+    // 功能：判断鼠标左键是否在当前帧刚刚松开。
     bool isMouseLeftReleased()
     {
         return !mouseLeftNow && mouseLeftLast;
     }
 
+    // 功能：获取鼠标当前屏幕 X 坐标。
     int getMouseX()
     {
         return mouseX;
     }
 
+    // 功能：获取鼠标当前屏幕 Y 坐标。
     int getMouseY()
     {
         return mouseY;
     }
 
+    // 功能：获取鼠标相对窗口中心的 X 偏移。
     int getMouseOffsetX()
     {
         return mouseX - WINDOW_WIDTH / 2;
     }
 
+    // 功能：获取鼠标相对窗口中心的 Y 偏移。
     int getMouseOffsetY()
     {
         return mouseY - WINDOW_HEIGHT / 2;
@@ -1225,6 +1260,7 @@ struct BehaviorIntent
     bool wantSprint;
     bool wantInteract;
 
+    // 功能：初始化一帧空的行为意图。
     BehaviorIntent()
     {
         moveX = 0;
@@ -1245,6 +1281,7 @@ struct BehaviorIntent
 class PlayerController
 {
 public:
+    // 功能：把玩家输入转换为本帧行为意图。
     BehaviorIntent makeIntent(InputManager& input, bool god)
     {
         BehaviorIntent intent;
@@ -1303,8 +1340,10 @@ class Entity;
 class CollisionHandle
 {
 public:
+    // 功能：声明两个 AABB 矩形重叠检测接口。
     bool isRectOverlapping(RectBox a, RectBox b);
 
+    // 功能：声明两个一维区间重叠检测接口。
     bool isRangeOverlapping(
         double aMin,
         double aMax,
@@ -1312,6 +1351,7 @@ public:
         double bMax
     );
 
+    // 功能：声明 X 轴允许位移计算接口。
     double getAllowedMoveX(
         Entity& self,
         double moveX,
@@ -1320,6 +1360,7 @@ public:
         int selfIndex
     );
 
+    // 功能：声明 Y 轴允许位移计算接口。
     double getAllowedMoveY(
         Entity& self,
         double moveY,
@@ -1328,6 +1369,7 @@ public:
         int selfIndex
     );
 
+    // 功能：声明实体世界边界限制接口。
     void limitInWorld(
         Entity& self,
         int worldWidth,
@@ -1351,6 +1393,7 @@ public:
 class MovementHandle
 {
 public:
+    // 功能：声明实体移动与物理更新接口。
     void update(
         Entity& self,
         BehaviorIntent intent,
@@ -1365,10 +1408,8 @@ public:
 
 // Entity：
  // 实体数据容器 + 少量表现接口。
- // 当前 Entity 仍然保留了一些历史 update/getAllowedMove/limitInWorld 旧逻辑，
- // 但主流程已经通过 Level -> MovementHandle -> CollisionHandle 进行更新。
- // 后续可以逐步删除 Entity::update()、Entity::getAllowedMoveX/Y()、Entity::limitInWorld()
- // 让 Entity 更接近纯数据容器。
+ // 旧的移动/阻挡/边界修正逻辑已经迁移到 MovementHandle 和 CollisionHandle。
+ // 因此 Entity 不再自己执行移动物理，只保存状态并提供碰撞盒、动画、绘制等接口。
  //
  // Entity 当前主要保存：
  //   - 世界坐标 x/y
@@ -1405,8 +1446,6 @@ private:
     bool jumping;           //是否跳跃
     bool blockedByEntity;  // 本帧是否被实体阻挡
     bool blockedByWorld;   // 本帧是否被世界边界阻挡
-
-    bool jumpKeyWasDown;
     //做临时用，添加实体类型标签
     EntityType entityType;
 
@@ -1417,6 +1456,7 @@ private:
     AnimationState currentAnimState;//记录当前的动画状态
     facingDirection currentFacingDirection;//记录当前操作的有效朝向
 public:
+    // 功能：初始化一个默认实体及其基础状态。
     Entity()
     {
         x = 0;
@@ -1440,8 +1480,6 @@ public:
         blockedByEntity = false;
         blockedByWorld = false;
 
-        jumpKeyWasDown = false;
-
         collisionBox.width = 0;
         collisionBox.height = 0;
         collisionBox.offsetX = 0.0;
@@ -1456,6 +1494,7 @@ public:
         isAlive = 1;
     }
 
+    // 功能：按资源路径和初始属性创建一个可用实体。
     Entity(
         const TCHAR* imagePath,
         double startX,
@@ -1494,8 +1533,6 @@ public:
         blockedByEntity = false;
         blockedByWorld = false;
 
-        jumpKeyWasDown = false;
-
         int imgW = animation.getFrameWidth();
         int imgH = animation.getFrameHeight();
 
@@ -1514,78 +1551,95 @@ public:
         entityType = Type;
         isAlive = alive;
     }
+    // 功能：获取实体类型标签。
     EntityType getEntityType()
     {
         return entityType;
     }
+    // 功能：判断实体是否参与重叠事件检测。
     bool isCollidable()//获取是否可碰撞检测
     {
         return collidable;
     }
 
+    // 功能：判断实体是否作为阻挡物参与移动修正。
     bool isBlocking()//获取是否可被阻挡
     {
         return blocking;
     }
 
+    // 功能：判断实体是否处于 god 模式。
     bool isGod()//获取是否为god
     {
         return god;
     }
 
+    // 功能：判断实体当前是否站在地面或平台上。
     bool isOnGround()//获取是否在地上
     {
         return onGround;
     }
+    // 功能：判断实体当前是否处于空中。
     bool isInAir()//获取是否在空中
     {
         return InAir;
     }
+    // 功能：判断实体当前是否正在冲刺。
     bool isSprinting()//获取是否在奔跑
     {
         return sprinting;
     }
+    // 功能：判断实体当前是否处于跳跃状态。
     bool isJumping()//获取是否在跳跃
     {
         return jumping;
     }
+    // 功能：判断实体本帧是否处于碰撞或重叠反馈状态。
     bool hasCollisionState()//获取碰撞状态
     {
         return collisionState;
     }
 
+    // 功能：判断实体本帧是否被其它实体阻挡。
     bool isBlockedByEntity()//获取是否被阻挡
     {
         return blockedByEntity;
     }
 
+    // 功能：判断实体本帧是否被世界边界阻挡。
     bool isBlockedByWorld()//获取是否被世界边界阻挡
     {
         return blockedByWorld;
     }
+    // 功能：获取实体当前是否存活。
     bool getIsAlive()
     {
         return isAlive;
     }
 
+    // 功能：设置实体存活状态。
     void setIsAlive(bool value)
     {
         isAlive = value;
     }
+    // 功能：将实体标记为死亡。
     void killEntity()
     {
         this->isAlive = 0;
 
     }
+    // 功能：获取实体中心点的世界 X 坐标。
     double getX()//获取实体的世界坐标 X，注意这里返回的是实体中心点的坐标
     {
         return x;
 
     }
+    // 功能：获取实体中心点的世界 Y 坐标。
     double getY()//获取实体的世界坐标 Y，注意这里返回的是实体中心点的坐标
     {
         return y;
     }
+    // 功能：设置实体本帧重叠状态并触发碰撞反馈显示。
     void setOverlapping(bool value)//设置重叠状态
     {
         overlapping = value;
@@ -1596,11 +1650,13 @@ public:
         }
     }
 
+    // 功能：直接设置实体碰撞反馈状态。
     void setCollisionState(bool value)//设置碰撞状态
     {
         collisionState = value;
     }
 
+    // 功能：清理实体每帧临时状态。
     void clearFrameState()//每帧需要清除/重新更新的状态
     {
         overlapping = false;
@@ -1618,6 +1674,7 @@ public:
 
 
     //将定义的碰撞盒转换为坐标系下的实际范围，用作碰撞检测
+    // 功能：根据指定中心点计算实体碰撞盒的世界坐标范围。
     RectBox getWorldCollisionBoxAt(double testX, double testY)
     {
         // 根据某个测试坐标生成“世界坐标下的真实 AABB”。
@@ -1645,17 +1702,20 @@ public:
         return box;
     }
 
+    // 功能：获取实体当前位置下的世界碰撞盒。
     RectBox getWorldCollisionBox()
     {
         return getWorldCollisionBoxAt(x, y);
     }
 
 
+    // 功能：设置实体碰撞盒缩放比例。
     void setCollisionScale(double scaleX, double scaleY)
     {
         collisionBox.scaleX = scaleX;
         collisionBox.scaleY = scaleY;
     }
+    // 功能：切换玩家动画状态并加载对应序列帧资源。
     void changeAnimation(AnimationState newState)
     {
         if (currentAnimState == newState)
@@ -1693,6 +1753,7 @@ public:
         animation.setLoop(true);
     }
     //更新动画状态by意图
+    // 功能：根据行为意图和冲刺状态更新实体动画。
     void updateAnimationByIntent(BehaviorIntent intent)
     {
         if (!controlled)
@@ -1741,341 +1802,12 @@ public:
             }
         }
     }
-    // 更新逻辑
-
-    void update(
-        BehaviorIntent intent,
-        Entity entitys[],
-        int entityCount,
-        int selfIndex,
-        int worldWidth,
-        int worldHeight
-    )
-    {
-        double inputX = intent.moveX;
-        double inputY = intent.moveY;
-        double currentSpeed = speed;
-
-        bool shiftDown = intent.wantSprint;
-
-        bool hasMoveInput = false;
-
-        if (inputX != 0)
-        {
-            hasMoveInput = true;
-        }
-        bool wantSprint = false;
-
-        if (shiftDown && hasMoveInput)
-        {
-            wantSprint = true;
-        }
-
-        if (!wantSprint)
-        {
-            sprinting = false;
-        }
-        else
-        {
-            if (!sprinting && onGround)
-            {
-                sprinting = true;
-            }
-
-            // 如果 sprinting 本来就是 true，就允许它在空中继续保持
-        }
-
-        if (sprinting)
-        {
-            currentSpeed = speed * 2;
-        }
-        // 是否正在冲刺：
-        // 必须是受控制实体，按下 Shift，并且有移动输入。
-
-
-        // god 模式：不受重力、不受阻挡碰撞影响，可以自由移动
-        if (god)
-        {
-            double length = sqrt(inputX * inputX + inputY * inputY);
-
-            if (length != 0)
-            {
-                inputX = inputX / length;
-                inputY = inputY / length;
-            }
-
-            x += inputX * currentSpeed;
-            y += inputY * currentSpeed;
-
-            limitInWorld(worldWidth, worldHeight);
-
-            return;
-        }
-
-
-        // 非 god 模式：启用重力、跳跃、碰撞
-
-
-        if (intent.wantJump && onGround)
-        {
-            velocityY = JUMP_SPEED;
-            onGround = false;
-            InAir = true;
-            jumping = true;
-        }
-
-
-        // x 轴暂时不使用加速度
-        double wantMoveX = inputX * currentSpeed;//输入决定了想要移动的距离,公式为：速度 = 输入 * 速度值，所以想要移动的距离 = 输入 * 速度值 * 时间，时间为1tick，所以简化为输入 * 速度值
-
-        double allowedMoveX = getAllowedMoveX(wantMoveX, entitys, entityCount, selfIndex);
-
-        if (fabs(allowedMoveX - wantMoveX) > EPS)
-        {
-            blockedByEntity = true;
-            collisionState = true;
-        }
-
-        x += allowedMoveX;
-
-        // y 轴使用重力
-        velocityY -= GRAVITY;
-
-        if (velocityY < MAX_FALL_SPEED)
-        {
-            velocityY = MAX_FALL_SPEED;
-        }
-
-        // 每次执行垂直运动之前，先假设当前不在地面
-        onGround = false;
-        InAir = true;
-
-        double wantMoveY = velocityY;//速度决定了想要移动的距离，公式为：距离 = 速度 * 时间，所以想要移动的距离 = 速度 * 时间，时间为1tick，所以简化为速度值
-
-        double allowedMoveY = getAllowedMoveY(wantMoveY, entitys, entityCount, selfIndex);//获取实际允许的移动距离
-
-        if (fabs(allowedMoveY - wantMoveY) > EPS)
-        {
-            // 向下时被阻挡，视为落地，不把它当作红色碰撞状态
-            if (wantMoveY < 0)
-            {
-                onGround = true;
-                InAir = false;
-                jumping = false;
-            }
-            else if (wantMoveY > 0)
-            {
-                // 向上撞到实体天花板，才算碰撞状态
-                blockedByEntity = true;
-                collisionState = true;
-            }
-
-            velocityY = 0;
-        }
-
-        y += allowedMoveY;
-
-        limitInWorld(worldWidth, worldHeight);
-    }
+    // 功能：推进实体当前动画帧。
     void updateAnimatedSprite()
     {
         animation.update();
     }
 
-    // X 方向阻挡检测
-
-
-    double getAllowedMoveX(double moveX, Entity entitys[], int entityCount, int selfIndex)
-    {
-        if (moveX == 0)
-        {
-            return 0;
-        }
-
-        RectBox myBox = getWorldCollisionBox();
-        double allowedMove = moveX;
-
-        for (int i = 0; i < entityCount; i++)
-        {
-            if (i == selfIndex)
-            {
-                continue;
-            }
-
-            if (!entitys[i].isBlocking())
-            {
-                continue;
-            }
-
-            RectBox otherBox = entitys[i].getWorldCollisionBox();
-
-            if (!isRangeOverlapping(myBox.bottom, myBox.top, otherBox.bottom, otherBox.top))
-            {
-                continue;
-            }
-
-            if (moveX > 0)
-            {
-                if (otherBox.left >= myBox.right - EPS)
-                {
-                    double distance = otherBox.left - myBox.right;
-
-                    if (distance < 0)
-                    {
-                        distance = 0;
-                    }
-
-                    if (distance < allowedMove)
-                    {
-                        allowedMove = distance;
-                    }
-                }
-            }
-            else if (moveX < 0)
-            {
-                if (otherBox.right <= myBox.left + EPS)
-                {
-                    double distance = otherBox.right - myBox.left;
-
-                    if (distance > 0)
-                    {
-                        distance = 0;
-                    }
-
-                    if (distance > allowedMove)
-                    {
-                        allowedMove = distance;
-                    }
-                }
-            }
-        }
-
-        return allowedMove;
-    }
-
-
-    // Y 方向阻挡检测
-
-
-    double getAllowedMoveY(double moveY, Entity entitys[], int entityCount, int selfIndex)
-    {
-        if (moveY == 0)
-        {
-            return 0;
-        }
-
-        RectBox myBox = getWorldCollisionBox();
-        double allowedMove = moveY;
-
-        for (int i = 0; i < entityCount; i++)
-        {
-            if (i == selfIndex)
-            {
-                continue;
-            }
-
-            if (!entitys[i].isBlocking())
-            {
-                continue;
-            }
-
-            RectBox otherBox = entitys[i].getWorldCollisionBox();
-
-            if (!isRangeOverlapping(myBox.left, myBox.right, otherBox.left, otherBox.right))
-            {
-                continue;
-            }
-
-            if (moveY > 0)
-            {
-                // 障碍物在上方
-                if (otherBox.bottom >= myBox.top - EPS)
-                {
-                    double distance = otherBox.bottom - myBox.top;
-
-                    if (distance < 0)
-                    {
-                        distance = 0;
-                    }
-
-                    if (distance < allowedMove)
-                    {
-                        allowedMove = distance;
-                    }
-                }
-            }
-            else if (moveY < 0)
-            {
-                // 障碍物在下方
-                if (otherBox.top <= myBox.bottom + EPS)
-                {
-                    double distance = otherBox.top - myBox.bottom;
-
-                    if (distance > 0)
-                    {
-                        distance = 0;
-                    }
-
-                    if (distance > allowedMove)
-                    {
-                        allowedMove = distance;
-                    }
-                }
-            }
-        }
-
-        return allowedMove;
-    }
-
-
-
-    //修改了世界边界限制的逻辑
-    void limitInWorld(int worldWidth, int worldHeight)
-    {
-        RectBox box = getWorldCollisionBox();
-
-        if (box.left < 0)
-        {
-            x += 0 - box.left;
-            blockedByWorld = true;
-        }
-
-        box = getWorldCollisionBox();
-
-        if (box.right > worldWidth)
-        {
-            x -= box.right - worldWidth;
-            blockedByWorld = true;
-        }
-
-        box = getWorldCollisionBox();
-
-        if (box.bottom < 0)
-        {
-            y += 0 - box.bottom;
-            blockedByWorld = true;
-            onGround = true;
-            InAir = false;
-            jumping = false;
-            if (velocityY < 0)
-            {
-                velocityY = 0;
-            }
-        }
-
-        box = getWorldCollisionBox();
-
-        if (box.top > worldHeight)
-        {
-            y -= box.top - worldHeight;
-            blockedByWorld = true;
-
-            if (velocityY > 0)
-            {
-                velocityY = 0;
-            }
-        }
-    }
 
 
     // 渲染
@@ -2083,13 +1815,25 @@ public:
 
 
 
-    void draw()
-    {
-        animation.draw(x, y);
+	// 功能：绘制实体当前动画画面。
+	void drawSprite()
+	{
+		animation.draw(x, y);
+	}
 
-        drawCollisionBox();
-    }
+	// 功能：绘制实体调试碰撞框。
+	void drawDebugCollisionBox()
+	{
+		drawCollisionBox();
+	}
 
+	// 功能：按旧接口绘制实体画面和调试碰撞框。
+	void draw()
+	{
+		drawSprite();
+		drawDebugCollisionBox();
+	}
+    // 功能：根据实体碰撞状态绘制红色或绿色碰撞盒。
     void drawCollisionBox()
     {
         RectBox box = getWorldCollisionBox();
@@ -2114,11 +1858,13 @@ public:
 
         rectangle(screenLeft, screenTop, screenRight, screenBottom);
     }
+    // 功能：设置实体 sprite 绘制缩放和偏移。
     void setSpriteTransform(double scaleX, double scaleY, double offsetX, double offsetY)
     {
         animation.setTransform(scaleX, scaleY, offsetX, offsetY);
 
     }
+    // 功能：设置实体动画播放速度。
     void setAnimationSpeed(int speed)
     {
         animation.setSpeed(speed);
@@ -2128,6 +1874,7 @@ public:
 
 //声音播放支持，声音当然也跟sprite等类似是一个单独的类，也具有多种状态
 
+// 功能：根据行为意图、物理规则和碰撞结果更新实体移动状态。
 void MovementHandle::update(
     Entity& self,
     BehaviorIntent intent,
@@ -2218,7 +1965,11 @@ void MovementHandle::update(
         self.jumping = true;
     }
 
-    // X 轴移动
+    // X 轴期望位移：
+    //   inputX 只表示方向：-1 左，0 不动，1 右
+    //   currentSpeed 是本帧速度
+    //   因为当前项目把 1 tick 当作单位时间，所以：
+    //   wantMoveX = inputX * currentSpeed * 1
     double wantMoveX = inputX * currentSpeed;
 
     double allowedMoveX = collisionHandle.getAllowedMoveX(
@@ -2236,7 +1987,11 @@ void MovementHandle::update(
 
     self.x += allowedMoveX;
 
-    // Y 轴重力
+    // Y 轴速度更新：
+    //   速度 velocityY 每 tick 受重力影响减小
+    //   velocityY -= GRAVITY
+    //   wantMoveY = velocityY * 1
+    // 当前项目把每帧时间简化为 1 tick，因此位移直接使用 velocityY。
     self.velocityY -= GRAVITY;
 
     if (self.velocityY < MAX_FALL_SPEED)
@@ -2277,6 +2032,7 @@ void MovementHandle::update(
 
     collisionHandle.limitInWorld(self, worldWidth, worldHeight);
 }
+// 功能：判断两个 AABB 矩形是否真正重叠。
 bool CollisionHandle::isRectOverlapping(RectBox a, RectBox b)
 {
     if (a.right <= b.left + EPS)
@@ -2302,6 +2058,7 @@ bool CollisionHandle::isRectOverlapping(RectBox a, RectBox b)
     return true;
 }
 
+// 功能：判断两个一维区间是否真正重叠。
 bool CollisionHandle::isRangeOverlapping(
     double aMin,
     double aMax,
@@ -2323,6 +2080,7 @@ bool CollisionHandle::isRangeOverlapping(
 }
 
 
+// 功能：计算实体在 X 轴上不会穿透阻挡物的最大允许位移。
 double CollisionHandle::getAllowedMoveX(
     Entity& self,
     double moveX,
@@ -2361,6 +2119,13 @@ double CollisionHandle::getAllowedMoveX(
     for (int i = 0; i < entityCount; i++)
     {
         if (i == selfIndex)
+        {
+            continue;
+        }
+
+        // 死亡实体不再参与阻挡计算。
+        // 否则被 killEntity() 的阻挡物仍可能继续挡住玩家。
+        if (!entitys[i].getIsAlive())
         {
             continue;
         }
@@ -2415,6 +2180,7 @@ double CollisionHandle::getAllowedMoveX(
 
     return allowedMove;
 }
+// 功能：计算实体在 Y 轴上不会穿透阻挡物的最大允许位移。
 double CollisionHandle::getAllowedMoveY(
     Entity& self,
     double moveY,
@@ -2453,6 +2219,13 @@ double CollisionHandle::getAllowedMoveY(
     for (int i = 0; i < entityCount; i++)
     {
         if (i == selfIndex)
+        {
+            continue;
+        }
+
+        // 死亡实体不再参与阻挡计算。
+        // 否则被 killEntity() 的阻挡物仍可能继续挡住玩家。
+        if (!entitys[i].getIsAlive())
         {
             continue;
         }
@@ -2508,6 +2281,7 @@ double CollisionHandle::getAllowedMoveY(
     return allowedMove;
 }
 
+// 功能：把实体限制在世界边界内并修正相关物理状态。
 void CollisionHandle::limitInWorld(
     Entity& self,
     int worldWidth,
@@ -2574,12 +2348,15 @@ void CollisionHandle::limitInWorld(
 }
 
 
-//测试镜头跟随
+// 当前相机跟随目标下标。
+ // 这是一个临时全局变量，后续可以继续迁移到 CameraHandle 或 Level 内部。
 int gCameraFollowTargetIndex = 0;
 
 
 
-//设置镜头跟随目标
+// setCameraFollowTarget：
+ // 根据实体下标切换相机跟随对象。无效下标或死亡实体不会被设置为目标。
+// 功能：切换相机当前跟随的实体下标。
 void setCameraFollowTarget(int newTargetIndex, Entity entitys[], int entityCount)
 {
     if (newTargetIndex < 0 || newTargetIndex >= entityCount)
@@ -2599,7 +2376,10 @@ void setCameraFollowTarget(int newTargetIndex, Entity entitys[], int entityCount
 }
 
 
-//更新镜头跟随目标
+// updateCameraFollow：
+ // 每帧根据当前跟随实体位置、鼠标偏移和缩放输入更新全局 Camera。
+ // 数据流：Level::updateCamera -> updateCameraFollow -> gCamera.followSmooth
+// 功能：根据跟随目标、鼠标偏移和缩放输入更新相机。
 void updateCameraFollow(
     Entity entitys[],
     int entityCount,
@@ -2670,8 +2450,87 @@ void updateCameraFollow(
         offsetWorldY
     );
 }
+//抽象出render类统一管理各类renderable object
+class Renderer
+{
+private:
+	bool showCollisionBox;
+	bool showTileCollisionBox;
 
+public:
+	// 功能：初始化渲染器的调试绘制开关。
+	Renderer()
+	{
+		showCollisionBox = true;
+		showTileCollisionBox = false;
+	}
 
+	// 功能：设置是否绘制实体碰撞框。
+	void setShowCollisionBox(bool value)
+	{
+		showCollisionBox = value;
+	}
+
+	// 功能：设置是否绘制 tile 碰撞框。
+	void setShowTileCollisionBox(bool value)
+	{
+		showTileCollisionBox = value;
+	}
+
+	// 功能：切换实体碰撞框显示状态。
+	void toggleCollisionBox()
+	{
+		showCollisionBox = !showCollisionBox;
+	}
+
+	// 功能：切换 tile 碰撞框显示状态。
+	void toggleTileCollisionBox()
+	{
+		showTileCollisionBox = !showTileCollisionBox;
+	}
+
+	// 功能：绘制当前关卡背景图。
+	void drawBackground(IMAGE& background)
+	{
+		putimage(0, 0, &background);
+	}
+
+	// 功能：绘制 tile map，并根据开关绘制 tile 调试碰撞框。
+	void drawTileMap(TileMap& tileMap)
+	{
+		tileMap.draw();
+
+		if (showTileCollisionBox)
+		{
+			tileMap.drawDebugCollisionBoxes();
+		}
+	}
+
+	// 功能：绘制所有存活实体，并根据开关绘制实体调试碰撞框。
+	void drawEntities(Entity entitys[], int entityCount)
+	{
+		for (int i = 0; i < entityCount; i++)
+		{
+			if (!entitys[i].getIsAlive())
+			{
+				continue;
+			}
+
+			entitys[i].drawSprite();
+
+			if (showCollisionBox)
+			{
+				entitys[i].drawDebugCollisionBox();
+			}
+		}
+	}
+
+	// 功能：绘制当前测试 UI 面板。
+	void drawUI(SmoothUIPanel& listPanel)
+	{
+		drawListPanel(listPanel.getBox());
+	}
+};
 
 // Level：
  // 当前关卡/场景管理器。
@@ -2689,6 +2548,7 @@ private:
     Entity entitys[ENTITY_COUNT];
 
     SmoothUIPanel listPanel;
+    Renderer renderer;
 
     PlayerController playerController;
     MovementHandle movementHandle;
@@ -2706,6 +2566,7 @@ private:
     bool lastAliveState[ENTITY_COUNT];
 
 public:
+    // 功能：初始化关卡实体列表和默认世界尺寸。
     Level()
         : entitys
         {
@@ -2728,6 +2589,7 @@ public:
         worldHeight = WINDOW_HEIGHT;
     }
 
+    // 功能：初始化关卡地图、背景、UI、实体设置和历史状态缓存。
     void init()
     {
         initMap();
@@ -2737,6 +2599,7 @@ public:
         initLastStates();
     }
 
+    // 功能：按固定顺序更新关卡中的输入、实体、相机、事件和 UI。
     void update(InputManager& input)
     {
         /*
@@ -2764,10 +2627,11 @@ public:
 
         updateEntities(input);
 
-        handleCameraInput(input);
-        handleUIInput(input);
+		handleCameraInput(input);
+		handleUIInput(input);
+		handleRendererInput(input);
 
-        updateCamera(input);
+		updateCamera(input);
 
         updateDebugStates();
 
@@ -2776,26 +2640,17 @@ public:
         listPanel.update();
     }
 
-    void draw()
-    {
-        putimage(0, 0, &background);
-
-        tileMap.draw();
-
-        for (int i = 0; i < ENTITY_COUNT; i++)
-        {
-            if (!entitys[i].getIsAlive())
-            {
-                continue;
-            }
-
-            entitys[i].draw();
-        }
-
-        drawListPanel(listPanel.getBox());
-    }
+	// 功能：委托 Renderer 绘制当前关卡画面。
+	void draw()
+	{
+		renderer.drawBackground(background);
+		renderer.drawTileMap(tileMap);
+		renderer.drawEntities(entitys, ENTITY_COUNT);
+		renderer.drawUI(listPanel);
+	}
 
 private:
+    // 功能：加载地图资源并根据地图尺寸设置世界范围。
     void initMap()
     {
         tileMap.setTileSize(16, 16, 48, 48);
@@ -2816,16 +2671,19 @@ private:
         }
     }
 
+    // 功能：加载关卡背景图片。
     void initBackground()
     {
         loadimage(&background, _T("assets\\tex\\maps\\background.jpg"));
     }
 
+    // 功能：初始化测试 UI 面板。
     void initUI()
     {
         listPanel.init(480, 600, UI_TOP_LEFT, 32, 32);
     }
 
+    // 功能：设置实体 sprite 缩放、动画速度和碰撞盒缩放。
     void initEntitySettings()
     {
         entitys[0].setSpriteTransform(4.0, 4.0, 0, 0);
@@ -2842,6 +2700,7 @@ private:
         entitys[0].setCollisionScale(4, 4);
     }
 
+    // 功能：初始化用于检测状态变化的历史缓存。
     void initLastStates()
     {
         for (int i = 0; i < ENTITY_COUNT; i++)
@@ -2860,6 +2719,7 @@ private:
         }
     }
 
+    // 功能：清理所有存活实体的本帧临时状态。
     void clearEntityFrameState()
     {
         for (int i = 0; i < ENTITY_COUNT; i++)
@@ -2873,6 +2733,7 @@ private:
         }
     }
 
+    // 功能：为实体生成行为意图并执行移动、碰撞和动画更新。
     void updateEntities(InputManager& input)
     {
         /*
@@ -2915,6 +2776,7 @@ private:
         }
     }
 
+    // 功能：处理相机跟随目标切换输入。
     void handleCameraInput(InputManager& input)
     {
         if (input.isKeyPressed(VK_F1))
@@ -2938,6 +2800,7 @@ private:
         }
     }
 
+    // 功能：处理 UI 面板锚点切换输入。
     void handleUIInput(InputManager& input)
     {
         if (input.isKeyPressed('W'))
@@ -2961,6 +2824,22 @@ private:
         }
     }
 
+	// 功能：处理渲染器调试显示开关输入。
+	void handleRendererInput(InputManager& input)
+	{
+		if (input.isKeyPressed(VK_F5))
+		{
+			renderer.toggleCollisionBox();
+            cout << "Toggle entity collision box." << endl;
+		}
+
+		if (input.isKeyPressed(VK_F6))
+		{
+			renderer.toggleTileCollisionBox();
+		}
+	}
+
+    // 功能：根据输入状态更新相机跟随。
     void updateCamera(InputManager& input)
     {
         updateCameraFollow(
@@ -2973,6 +2852,7 @@ private:
         );
     }
 
+    // 功能：检测实体状态变化并输出调试信息。
     void updateDebugStates()
     {
         for (int i = 0; i < ENTITY_COUNT; i++)
@@ -3052,6 +2932,7 @@ private:
         }
     }
 
+    // 功能：检测实体重叠事件并触发金币拾取等反馈。
     void updateOverlapEvents()
     {
         /*
@@ -3141,6 +3022,7 @@ private:
         }
     }
 };
+// 功能：程序入口，初始化窗口并运行主游戏循环。
 int main()
 {
     /*
