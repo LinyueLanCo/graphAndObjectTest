@@ -417,6 +417,42 @@ inline void putimage_alpha_tile(
     );
 }
 
+AnimationId getPlayerAnimationId(AnimationState state)
+{
+	if (state == ANIM_IDLE_L)
+	{
+		return ANIM_ID_PLAYER_IDLE_L;
+	}
+
+	if (state == ANIM_IDLE_R)
+	{
+		return ANIM_ID_PLAYER_IDLE_R;
+	}
+
+	if (state == ANIM_WALK_LEFT)
+	{
+		return ANIM_ID_PLAYER_WALK_L;
+	}
+
+	if (state == ANIM_WALK_RIGHT)
+	{
+		return ANIM_ID_PLAYER_WALK_R;
+	}
+
+	if (state == ANIM_RUN_LEFT)
+	{
+		return ANIM_ID_PLAYER_RUN_L;
+	}
+
+	if (state == ANIM_RUN_RIGHT)
+	{
+		return ANIM_ID_PLAYER_RUN_R;
+	}
+
+	return ANIM_ID_PLAYER_IDLE_L;
+}
+
+
 class ResourceManager
 {
 private:
@@ -1883,45 +1919,22 @@ public:
 		collisionBox.setScale(scaleX, scaleY);
 	}
     // 功能：切换玩家动画状态并加载对应序列帧资源。
-    void changeAnimation(AnimationState newState)
-    {
-        if (currentAnimState == newState)
-        {
-            return;
-        }
+	void changeAnimation(AnimationState newState, ResourceManager& resources)
+	{
+		if (currentAnimState == newState)
+		{
+			return;
+		}
 
-        currentAnimState = newState;
+		currentAnimState = newState;
 
-        if (newState == ANIM_IDLE_L)
-        {
-            animation.load(_T("assets\\tex\\entities\\characters\\player1_idle_L.png"), 8);
-        }
-        else if (newState == ANIM_IDLE_R)
-        {
-            animation.load(_T("assets\\tex\\entities\\characters\\player1_idle_R.png"), 8);
-        }
-        else if (newState == ANIM_WALK_LEFT)
-        {
-            animation.load(_T("assets\\tex\\entities\\characters\\player1_walk_L.png"), 8);
-        }
-        else if (newState == ANIM_WALK_RIGHT)
-        {
-            animation.load(_T("assets\\tex\\entities\\characters\\player1_walk_R.png"), 8);
-        }
-        else if (newState == ANIM_RUN_LEFT)
-        {
-            animation.load(_T("assets\\tex\\entities\\characters\\player1_run_L.png"), 8);
-        }
-        else if (newState == ANIM_RUN_RIGHT)
-        {
-            animation.load(_T("assets\\tex\\entities\\characters\\player1_run_R.png"), 8);
-        }
-        animation.setSpeed(3);
-        animation.setLoop(true);
-    }
-    //更新动画状态by意图
+		AnimationId animationId = getPlayerAnimationId(newState);
+		AnimationClip clip = resources.getAnimationClip(animationId);
+
+		animation.setClip(clip);
+	}    //更新动画状态by意图
     // 功能：根据行为意图和冲刺状态更新实体动画。
-    void updateAnimationByIntent(BehaviorIntent intent)
+	void updateAnimationByIntent(BehaviorIntent intent, ResourceManager& resources)
     {
         if (!controlled)
         {
@@ -1936,11 +1949,11 @@ public:
 
             if (sprinting)
             {
-                changeAnimation(ANIM_RUN_LEFT);
+                changeAnimation(ANIM_RUN_LEFT,resources);
             }
             else
             {
-                changeAnimation(ANIM_WALK_LEFT);
+                changeAnimation(ANIM_WALK_LEFT,resources);
             }
         }
         else if (inputX > 0)
@@ -1949,23 +1962,23 @@ public:
 
             if (sprinting)
             {
-                changeAnimation(ANIM_RUN_RIGHT);
+                changeAnimation(ANIM_RUN_RIGHT,resources);
             }
             else
             {
-                changeAnimation(ANIM_WALK_RIGHT);
+                changeAnimation(ANIM_WALK_RIGHT,resources);
             }
         }
         else
         {
             if (currentFacingDirection == LEFT)
             {
-                changeAnimation(ANIM_IDLE_L);
+                changeAnimation(ANIM_IDLE_L,resources);
             }
 
             if (currentFacingDirection == RIGHT)
             {
-                changeAnimation(ANIM_IDLE_R);
+                changeAnimation(ANIM_IDLE_R,resources);
             }
         }
     }
@@ -2709,6 +2722,9 @@ public:
 class Level
 {
 private:
+
+    ResourceManager resources;
+
     TileMap tileMap;
     IMAGE background;
 
@@ -2759,6 +2775,7 @@ public:
     // 功能：初始化关卡地图、背景、UI、实体设置和历史状态缓存。
     void init()
     {
+        initResources();
         initMap();
         initBackground();
         initUI();
@@ -2792,7 +2809,7 @@ public:
 
         clearEntityFrameState();
 
-        updateEntities(input);
+		updateEntities(input);
 
 		handleCameraInput(input);
 		handleUIInput(input);
@@ -2817,6 +2834,14 @@ public:
 	}
 
 private:
+
+	// 功能：加载当前关卡需要的资源。
+	void initResources()
+	{
+		resources.loadLevelResources();
+	}
+
+
     // 功能：加载地图资源并根据地图尺寸设置世界范围。
     void initMap()
     {
@@ -2901,7 +2926,7 @@ private:
     }
 
     // 功能：为实体生成行为意图并执行移动、碰撞和动画更新。
-    void updateEntities(InputManager& input)
+	void updateEntities(InputManager& input)
     {
         /*
         实体更新数据流：
@@ -2938,7 +2963,7 @@ private:
                 collisionHandle
             );
 
-            entitys[i].updateAnimationByIntent(intent);
+            entitys[i].updateAnimationByIntent(intent,resources);
             entitys[i].updateAnimatedSprite();
         }
     }
