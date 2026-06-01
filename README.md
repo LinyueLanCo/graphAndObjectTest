@@ -1,498 +1,745 @@
 # 基础 C++ 2D 游戏方向练习测试
 
-这是一个简单的个人学习向 C++ 2D 项目。
+这是一个个人学习向的 C++ 2D 游戏原型项目。
 
-项目目前主要基于 **EasyX** 进行图形绘制，算是我从控制台小游戏逐渐过渡到窗口图形程序时的练习项目。
+项目目前主要基于 **EasyX** 进行图形绘制，目标不是马上做成完整游戏，而是通过一个能运行的小项目，逐步理解 2D 游戏里常见的底层模块应该如何组织，例如主循环、输入、实体、动画、碰撞、地图、镜头、资源管理、渲染调度和 UI。
 
-目前它还不是一个完整游戏，更像是一个用来练习各种“游戏底层概念”的小框架。  
-现在项目里已经不只是单纯地把图片画出来了，而是开始慢慢加入了实体、动画、碰撞、地图、镜头、事件检测这些更接近 2D 游戏框架的内容。
-
-目前进度：**40% 左右（大概）**
+目前它更像是一个 **2D 游戏框架雏形 / 功能实验场**，而不是完整玩法项目。
 
 ---
 
-## 目前能做到的内容
+## 当前状态概览
 
-目前已经实现或者正在测试的东西包括：
+项目已经能运行一个基础 2D 场景：
 
-### 图形绘制相关
+- EasyX 窗口与主循环
+- 背景图绘制
+- tile map 读取和绘制
+- 玩家动画 idle / walk / run 切换
+- 基础重力、跳跃、冲刺
+- 实体之间的 AABB 阻挡和重叠检测
+- 金币拾取事件和音效播放
+- 摄像机跟随、缩放和鼠标偏移
+- 简单 UI 面板测试
+- 实体碰撞框和 tile 碰撞框调试显示开关
 
-- 基于 EasyX 创建 1600x900 的图形窗口
-- 使用 `BeginBatchDraw` / `FlushBatchDraw` 减少画面闪烁
-- 支持背景图绘制
-- 支持 PNG 透明图片绘制
-- 使用 `AlphaBlend` 实现带 Alpha 通道的图片绘制
-- 支持指定绘制尺寸的图片缩放
-- 支持从 sprite sheet 中裁切指定帧进行绘制
-- 支持图片缩放、偏移和以实体中心点为基准绘制
-
-### 动画相关
-
-- 抽象出了一个简单的 `animatedSprite` 类
-- 支持按帧数读取横向排列的序列帧图片
-- 支持设置动画播放速度
-- 支持循环播放和非循环播放
-- 支持动画重置、暂停和更新
-- 目前已经能根据角色移动状态切换动画，例如：
-  - 左右待机
-  - 左右走路
-  - 左右奔跑
-
-### 坐标和镜头相关
-
-- 建立了基础的世界坐标系和屏幕坐标系转换
-- 当前世界坐标采用左下角作为逻辑原点
-- 渲染时会转换成 EasyX 使用的左上角屏幕坐标
-- 抽象出了一个简单的 `Camera` 结构
-- 支持镜头平滑跟随实体
-- 支持镜头缩放
-- 支持根据鼠标位置产生轻微的镜头偏移
-- 支持切换镜头跟随目标
-- 支持根据地图大小限制镜头范围，避免镜头直接跑出世界边界
-
-### 地图相关
-
-- 抽象出了一个简单的 `TileMap` 类
-- 支持加载 tileset 图片
-- 支持从 `map.txt` 读取地图数据
-- 使用动态二维数组保存地图 tile 数据
-- 支持根据 tile id 从 tileset 中裁切对应图块
-- 支持把 tile map 绘制到世界坐标中
-- 支持 tile 的原始尺寸和实际绘制尺寸分离
-- 目前也写了 tile 碰撞盒和 solid tile 的基础接口
-
-不过要注意：  
-**tile map 目前主要完成的是读取和绘制。**  
-虽然已经有了 `isSolidTile` 和 tile 碰撞盒相关函数，但是角色物理移动目前还没有真正接入地图碰撞层，角色现在主要还是和其它实体、世界边界进行碰撞处理。
-
-### 实体相关
-
-- 抽象出了基础的 `Entity` 类
-- 目前玩家、普通实体、金币都先统一用 `Entity` 表示
-- 通过 `EntityType` 区分不同实体类型，例如：
-  - `PLAYER`
-  - `ENTITY`
-  - `COIN`
-  - `DEFAULT`
-- 支持实体是否受控制
-- 支持实体是否参与重叠检测
-- 支持实体是否阻挡其它实体移动
-- 支持实体是否为 god 模式
-- 支持实体存活状态 `isAlive`
-- 当前实体数组仍然是固定长度数组，实体死亡后不会真正删除，而是通过 `isAlive = false` 跳过更新和渲染
-
-### 输入和移动相关
-
-- 使用 `GetAsyncKeyState` 持续检测输入
-- 支持方向键控制角色左右移动
-- 支持 Shift 冲刺
-- 支持 Space 跳跃
-- 支持 Esc 退出程序
-- 支持鼠标移动影响镜头偏移
-- 支持鼠标左键输出简单测试信息
-- 支持 F1 ~ F4 切换镜头跟随目标
-
-### 物理和状态相关
-
-- 支持基础的速度移动
-- 支持重力
-- 支持跳跃
-- 支持最大下落速度限制
-- 支持落地检测
-- 支持在空中状态检测
-- 支持跳跃状态检测
-- 支持冲刺状态检测
-- 冲刺目前有一个简单规则：
-  - 只有在地面上才能开始冲刺
-  - 如果已经冲刺后跳到空中，可以保留冲刺状态
-  - 但不能在空中重新启动冲刺
-
-### 碰撞和事件相关
-
-- 支持碰撞箱
-- 支持碰撞箱缩放
-- 支持把实体中心点转换成实际碰撞范围
-- 支持矩形重叠检测
-- 支持“贴边不算碰撞”的判断
-- 支持 X 轴和 Y 轴分开处理阻挡
-- 支持根据下一帧移动距离计算实际允许移动距离
-- 支持世界边界限制
-- 支持碰撞箱调试显示
-- 碰撞箱颜色目前用于显示当前碰撞状态：
-  - 绿色：正常
-  - 红色：本帧发生碰撞状态
-- 支持实体之间的重叠事件检测
-- 支持玩家拾取金币
-- 金币被拾取后会播放音效，并设置为死亡状态
-- 支持普通实体被玩家触碰时输出测试信息
-
-### 调试输出相关
-
-目前控制台会输出一些状态变化，方便观察逻辑有没有正常工作，例如：
-
-- 碰撞状态开始
-- 实体死亡
-- 落地状态
-- 在空中状态
-- 跳跃开始 / 结束
-- 冲刺开始 / 结束
-- 实体之间发生重叠
-- 玩家拾取金币
-- 镜头跟随目标切换
+最近一段时间主要不是添加新玩法，而是在整理结构。虽然画面变化不大，但内部已经开始从“所有逻辑堆在 Entity 里”逐步拆成多个职责更清晰的模块。
 
 ---
 
-## 当前项目的大概思路
-
-这个项目目前还是学习和实验阶段，所以很多东西还写在一个文件里。
-
-现在并没有真正拆出一个单独的 `Player` 类。  
-目前玩家更像是一个特殊的 `Entity`：
-
-- `EntityType` 是 `PLAYER`
-- `controlled` 为 `true`
-- 可以接收键盘输入
-- 使用玩家的动画资源
-- 参与碰撞、跳跃、冲刺和事件检测
-
-这个做法现阶段能跑起来，也方便我快速测试。  
-但是随着功能变多，`Entity` 类已经开始承担太多职责了。
-
-目前 `Entity` 里大概混在一起的内容有：
-
-- 输入处理
-- 物理移动
-- 重力和跳跃
-- 冲刺状态
-- 碰撞检测
-- 状态切换
-- 动画切换
-- Sprite 绘制
-- 碰撞箱绘制
-- 存活状态
-- 简单事件反馈
-
-所以之后肯定还是需要继续拆分。  
-现在这份代码更像是先把功能跑通，再慢慢整理结构的阶段。
-
----
-
-## 已经开始成型的模块
-
-目前代码里已经开始有一些模块雏形：
-
-### `animatedSprite`
-
-主要负责序列帧动画的加载、播放、缩放、偏移和绘制。
-
-它现在更像是一个“带动画能力的 Sprite”。  
-没有动画的图片也可以理解成只有一帧的动画。
-
-### `Camera`
-
-主要负责镜头在世界坐标和屏幕坐标之间的转换。
-
-目前已经支持：
-
-- 平滑跟随
-- 缩放
-- 鼠标偏移
-- 切换跟随目标
-- 限制在地图范围内
-
-### `TileMap`
-
-主要负责 tile 地图的读取和绘制。
-
-目前已经能从文件读取地图数据，并根据 tileset 绘制地图。  
-但是地图碰撞层还没有真正接入角色移动逻辑。
-
-### `Entity`
-
-目前是最核心也最臃肿的类。
-
-它现在既负责数据，又负责输入、物理、碰撞、动画、渲染和部分状态逻辑。  
-这也是后面最需要重构的地方。
+## 当前主要模块
 
 ### `Level`
 
-目前只是一个空壳。
+`Level` 现在是当前关卡的调度者。
 
-我已经比较明确地想把事件检测、实体管理、tick 更新和碰撞结果处理逐渐移到 `Level` 中。  
-也就是说，之后不希望所有事情都堆在玩家或者实体类里。
+它负责：
+
+- 初始化关卡资源
+- 初始化地图、背景、UI、实体设置
+- 每帧调度输入、实体更新、相机更新、事件检测、UI 更新
+- 持有当前关卡中的核心对象，例如 `TileMap`、`Entity` 数组、`Renderer`、`ResourceManager`
+
+目前 `Level` 仍然还保留一些旧结构，例如实体数组初始化时仍然直接写了部分资源路径。后续希望进一步把实体创建和资源绑定分开。
+
+### `Renderer`
+
+已经抽象出了 `Renderer`，用于统一调度绘制。
+
+目前它负责：
+
+- 绘制背景
+- 绘制 tile map
+- 绘制实体 sprite
+- 根据开关绘制实体碰撞框
+- 根据开关绘制 tile 调试碰撞框
+- 绘制当前测试 UI
+
+现在 `Level::draw()` 已经不再亲自遍历和绘制所有对象，而是委托给 `Renderer`。
+
+调试开关：
+
+- `F5`：开关实体碰撞框
+- `F6`：开关 tile 碰撞框
+
+### `Entity`
+
+`Entity` 目前仍然是项目中最核心的对象，但它已经比早期精简了一些。
+
+现在 `Entity` 主要保有：
+
+- 世界坐标 `x / y`
+- 速度和垂直速度
+- 是否受控制
+- 是否参与重叠检测
+- 是否作为阻挡物
+- 是否 god 模式
+- 存活状态
+- 物理状态，例如 `onGround`、`InAir`、`jumping`、`sprinting`
+- 碰撞盒组件 `CollisionBox`
+- 动画播放对象 `animatedSprite`
+- 当前动画状态和朝向
+
+已经从 `Entity` 中逐步剥离出去的内容：
+
+- 输入采集交给 `InputManager`
+- 玩家输入到行为意图的转换交给 `PlayerController`
+- 移动、重力、跳跃、冲刺处理交给 `MovementHandle`
+- 碰撞重叠、阻挡位移修正和世界边界限制交给 `CollisionHandle`
+- 绘制调度交给 `Renderer`
+- 碰撞盒世界坐标计算交给 `CollisionBox`
+- 动画图片资源开始交给 `ResourceManager` 管理
+
+目前 `Entity` 仍然需要继续拆分的内容：
+
+- 动画状态切换逻辑仍然在 `Entity::updateAnimationByIntent`
+- `changeAnimation` 仍然属于实体内部逻辑，后续希望迁移到 `Animator`
+- 实体构造函数仍然保留部分旧的图片路径加载逻辑
+- 不同类型对象目前仍然用同一个 `Entity` 表示
+
+后续目标是让 `Entity` 更接近一个基础游戏对象容器，而不是所有系统逻辑的集中点。
+
+### `CollisionBox`
+
+`CollisionBox` 已经从单纯的数据结构，变成一个更像碰撞盒组件的小结构。
+
+它负责保存：
+
+- 原始宽高
+- 偏移
+- 缩放
+
+它也负责把局部碰撞盒转换成世界坐标中的 `RectBox`：
+
+- `toWorldBox(ownerX, ownerY)`
+
+这样 `Entity` 不再亲自计算碰撞盒的 left / right / bottom / top，而是把这部分逻辑委托给自己的 `CollisionBox`。
+
+当前设计理解：
+
+- `Entity` 拥有 `CollisionBox`
+- 外部系统如果想修改实体碰撞盒，应该通过 `Entity` 提供的接口修改
+- `CollisionBox` 只负责管理自己的数据和局部到世界的转换
+- 真正的碰撞检测和移动修正仍然由 `CollisionHandle` 负责
+
+### `CollisionHandle`
+
+`CollisionHandle` 负责底层碰撞检测和阻挡修正。
+
+目前支持：
+
+- AABB 矩形重叠检测
+- 一维区间重叠检测
+- X 轴允许位移计算
+- Y 轴允许位移计算
+- 世界边界限制
+
+目前碰撞仍然主要发生在实体之间，以及实体和世界边界之间。  
+tile 碰撞接口已经有基础，但尚未接入角色移动。
+
+### `MovementHandle`
+
+`MovementHandle` 负责实体移动和物理更新。
+
+它读取 `BehaviorIntent`，然后处理：
+
+- 左右移动
+- 冲刺速度
+- 重力
+- 跳跃
+- 下落速度限制
+- 调用 `CollisionHandle` 修正位移
+- 更新 `onGround`、`InAir`、`jumping`、`sprinting` 等真实游戏状态
+
+也就是说，`Entity` 保存状态，但移动逻辑本身已经交给 `MovementHandle`。
+
+### `InputManager` 和 `PlayerController`
+
+`InputManager` 负责统一采集输入状态。
+
+它记录：
+
+- 当前帧按键状态
+- 上一帧按键状态
+- 鼠标位置
+- 鼠标左键状态
+
+因此可以判断：
+
+- 按住
+- 刚按下
+- 刚松开
+
+`PlayerController` 负责把输入转换成 `BehaviorIntent`。
+
+目前玩家行为意图包括：
+
+- `moveX`
+- `moveY`
+- `wantJump`
+- `wantSprint`
+- `wantInteract`
+
+这个设计让输入采集和移动执行分离，后续 AI 也可以生成类似的行为意图。
+
+### `ResourceManager`
+
+项目已经开始引入 `ResourceManager`。
+
+当前它负责：
+
+- 在 `Level::init()` 阶段统一加载玩家动画图片资源
+- 持有这些 `IMAGE`
+- 根据 `AnimationId` 返回对应的 `AnimationClip`
+
+这一步的目的，是避免运行时切换动画时反复 `loadimage`。
+
+目前资源管理仍处于过渡阶段：
+
+- 玩家动画资源已经进入 `ResourceManager`
+- 其它实体、金币和部分初始图片路径仍然使用旧方式
+- 后续希望把所有实体初始动画资源也迁移到 `ResourceManager`
+
+### `AnimationClip`
+
+`AnimationClip` 目前用于描述一段动画资源。
+
+当前包含：
+
+- `IMAGE* image`
+- `frameCount`
+- `speed`
+- `loop`
+
+它的定位是 **动画资源描述数据**，而不是动画播放器，也不是状态机。
+
+后续可能继续扩展：
+
+- 单帧宽度
+- 单帧高度
+- 起始帧
+- 每行帧数
+- 是否倒序
+- 多行 sprite sheet 读取规则
+
+但这些仍然应该只是“数据描述”。  
+真正的每帧播放逻辑应该由 `animatedSprite` 或未来的 `Animator` 处理。
+
+### `animatedSprite`
+
+`animatedSprite` 是当前的底层序列帧播放器。
+
+它负责：
+
+- 当前帧
+- 帧计时
+- 播放速度
+- 循环控制
+- sprite 缩放和偏移
+- 根据当前帧绘制 sprite sheet 中的对应区域
+
+现在它既兼容旧的 `load(path, frameCount)`，也支持新的：
+
+- `setClip(AnimationClip clip)`
+
+这让它可以绑定已经由 `ResourceManager` 加载好的图片资源。
+
+### 未来的 `Animator`
+
+目前项目还没有真正抽出 `Animator`。
+
+现在动画状态切换逻辑仍然在 `Entity` 里，例如：
+
+- 根据 `intent.moveX` 判断左右
+- 根据 `sprinting` 判断 walk / run
+- 根据最后朝向判断 idle_L / idle_R
+- 根据 `AnimationState` 切换到对应 `AnimationClip`
+
+后续希望抽象出 `Animator`，让它负责：
+
+- 当前动画状态
+- 当前朝向
+- 根据实体真实状态决定播放哪个动画
+- 调用 `ResourceManager` 获取 `AnimationClip`
+- 调用 `animatedSprite::setClip`
+- 推进动画帧
+- 绘制 sprite
+
+设计理解：
+
+- `Entity` 保存真实游戏状态，例如是否在地面、是否冲刺、是否存活
+- `Animator` 读取这些状态，决定如何表现
+- `AnimationClip` 只保存动画资源描述
+- `animatedSprite` 只负责播放当前 clip
 
 ---
 
-## 目前还没完成 / 需要继续完善的内容
+## 当前动画数据流
 
-这一部分主要记录接下来比较明确想继续做的内容。  
-目前项目已经能跑起来一些基础功能，但很多系统还只是“雏形”，还没有真正整理成比较干净的框架。
+目前玩家动画切换的大致流程：
 
-### 结构拆分相关
+```text
+InputManager
+  -> PlayerController
+  -> BehaviorIntent
+  -> MovementHandle
+  -> 更新 Entity 的真实状态，例如 sprinting
+  -> Entity::updateAnimationByIntent(intent, resources)
+  -> Entity::changeAnimation(newState, resources)
+  -> getPlayerAnimationId(newState)
+  -> ResourceManager::getAnimationClip(animationId)
+  -> animatedSprite::setClip(clip)
+  -> animatedSprite::update()
+  -> Renderer::drawEntities()
+  -> Entity::drawSprite()
+  -> animatedSprite::draw(x, y)
+```
 
-- `Level` 类还没有真正实现
-- `Render` 或渲染管理类还没有抽象出来
-- `InputManager` 输入管理类还没有单独封装
-- `UIManager` / UI 管理系统还没有真正实现
-- 资源管理还没有单独封装
-- 声音系统还没有正式封装
-- 代码还没有拆成 `.h` 和 `.cpp`
-- 目前大部分内容仍然集中在一个主文件中
+也就是说，资源加载已经从运行时切换中逐步剥离出来，但动画状态机本身还没有完全从 `Entity` 中剥离。
 
-现在最大的问题还是：  
-`Entity` 类承担了太多职责。
+---
 
-目前 `Entity` 里同时处理了：
+## 一帧 Tick 中发生了什么
 
-- 输入
-- 物理
-- 碰撞
-- 动画切换
-- 状态记录
-- 渲染
-- 部分事件反馈
+当前项目还没有独立的时间系统，主循环里基本把“一帧”当作一个逻辑 tick 使用。
 
-短期内希望先不要继续无脑往 `Entity` 里塞功能，而是慢慢把输入、渲染、事件检测、UI、声音这些内容拆出去。
+主循环大致是：
 
-### 渲染管理和视口剔除相关
+```text
+main loop
+  -> input.update()
+  -> level.update(input)
+  -> cleardevice()
+  -> level.draw()
+  -> FlushBatchDraw()
+  -> Sleep(16)
+```
 
-目前实体和 tile map 基本还是直接调用自己的 `draw()`，也就是说绘制逻辑还比较分散。
+### Level 更新流程
 
-之后希望抽象出一个统一的 `Render` 或渲染管理模块，由它统一决定：
+每一帧进入 `Level::update(input)` 后，大致按这个顺序执行：
 
-- 当前这一帧应该画哪些对象
-- 哪些对象在镜头外，可以跳过绘制
-- 背景、地图、实体、调试信息、UI 的绘制顺序
-- 哪些内容属于世界空间，哪些内容属于屏幕空间
+```text
+Level::update(input)
+  -> 处理鼠标左键测试输出
+  -> clearEntityFrameState()
+  -> updateEntities(input)
+  -> handleCameraInput(input)
+  -> handleUIInput(input)
+  -> handleRendererInput(input)
+  -> updateCamera(input)
+  -> updateDebugStates()
+  -> updateOverlapEvents()
+  -> listPanel.update()
+```
 
-后面准备加入基于 `Camera` 的视口剔除。  
-大致思路是根据当前镜头位置得到一个可见范围：
+其中：
 
-- `cameraVisibleBox`
-- 或者带缓冲区的 `renderCullBox`
+- `clearEntityFrameState()` 清理上一帧的临时状态，例如碰撞反馈、重叠状态、阻挡状态
+- `updateEntities()` 负责实体移动、物理、碰撞修正和动画推进
+- `handleCameraInput()` 处理 F1 ~ F4 镜头目标切换
+- `handleUIInput()` 处理 UI 面板锚点切换
+- `handleRendererInput()` 处理 F5 / F6 调试绘制开关
+- `updateCamera()` 更新镜头位置、缩放和鼠标偏移
+- `updateDebugStates()` 输出状态变化调试信息
+- `updateOverlapEvents()` 处理实体之间的重叠事件，例如玩家拾取金币
+- `listPanel.update()` 更新 UI 面板平滑移动
 
-这个范围应该基于 `Camera`，而不是直接基于玩家。  
-因为以后镜头不一定永远跟随玩家，也可能切换跟随目标，或者带有鼠标偏移、缩放等效果。
+### 实体更新流程
 
-剔除范围会比真实视口稍微大一点，比如额外扩展一到两个 tile 的距离。  
-这样可以避免物体刚进入屏幕边缘时才突然开始绘制，看起来会更自然。
+`updateEntities(input)` 会遍历当前关卡中的实体。
 
-后面也需要区分几个盒子的概念：
+对每一个存活实体，大致流程是：
 
-- `collisionBox`：用于物理碰撞
-- `renderBox`：用于表示 sprite 实际可能占用的绘制范围
-- `cullBox`：用于判断是否需要绘制
-- `cameraVisibleBox`：当前镜头实际能看到的世界范围
+```text
+for each alive entity
+  -> 创建默认 BehaviorIntent
+  -> 如果是玩家，由 PlayerController 根据输入生成 intent
+  -> MovementHandle::update(...)
+       -> 读取 intent
+       -> 处理水平移动
+       -> 处理冲刺
+       -> 处理跳跃
+       -> 施加重力
+       -> 调用 CollisionHandle 计算允许位移
+       -> 写回 Entity 的位置和状态
+  -> Entity::updateAnimationByIntent(intent, resources)
+       -> 根据 intent 和 sprinting 判断动画状态
+       -> 通过 ResourceManager 获取 AnimationClip
+       -> animatedSprite::setClip(...)
+  -> Entity::updateAnimatedSprite()
+       -> 推进当前动画帧
+```
 
-目前不打算把这些都混成一个碰撞盒，避免后面逻辑变乱。
+目前只有 0 号实体会由 `PlayerController` 生成玩家输入意图。其它实体暂时使用默认空意图，因此它们不会主动移动。
 
-### TileMap 渲染优化相关
+### 绘制流程
 
-tile map 目前已经能读取和绘制，但绘制方式还比较直接。
+`Level::draw()` 目前已经委托给 `Renderer`：
 
-现在的思路基本是遍历整张地图，然后逐个 tile 绘制。  
-地图小的时候没什么问题，但如果地图变大，就会有很多屏幕外 tile 也进入绘制流程。
+```text
+Level::draw()
+  -> renderer.drawBackground(background)
+  -> renderer.drawTileMap(tileMap)
+  -> renderer.drawEntities(entitys, ENTITY_COUNT)
+  -> renderer.drawUI(listPanel)
+```
 
-后面希望根据 `Camera` 的可见范围，直接计算当前需要绘制的 tile 行列范围，例如：
+`Renderer` 负责统一控制绘制顺序和调试绘制开关。
 
-- 起始列
-- 结束列
-- 起始行
-- 结束行
+---
 
-这样就不用每帧遍历整张地图，而是只绘制当前镜头附近的 tile。
+## Tick 情景示例
 
-### 地图碰撞相关
+下面记录一些具体情况下，一帧或连续几帧中大概会发生什么。
 
-- tile map 已经能读取和绘制
-- 但 tile 碰撞还没有真正接入角色移动
-- 还没有区分地图渲染层和碰撞层
-- 还没有更完整的地图数据格式
-- 还没有接入 Tiled 或其它地图编辑器导出的数据
+### 简单情景：玩家向左走
 
-之后希望让 tile 的 solid 信息真正参与角色的 `getAllowedMoveX()` / `getAllowedMoveY()` 这类移动修正逻辑。  
-也就是角色移动时不只检测其它实体，还要检测地图里的固体 tile。
+当玩家按住左方向键时：
 
-### 输入系统相关
+```text
+InputManager
+  -> 记录 VK_LEFT 当前按下
 
-目前键盘输入还是直接在 `Entity::update()` 里使用 `GetAsyncKeyState` 判断。  
-这种写法能跑，但是不够清晰，也不方便做更细的输入状态。
+PlayerController
+  -> intent.moveX = -1
 
-之后希望抽象出 `InputManager`，统一管理键盘和鼠标输入。
+MovementHandle
+  -> 判断有水平输入
+  -> 当前没有 sprint 时使用普通速度
+  -> 计算 wantMoveX = -speed
+  -> 调用 CollisionHandle::getAllowedMoveX
+  -> 如果左侧没有阻挡，写回 Entity.x
 
-键盘按键希望不只是判断“当前是否按下”，而是能拆成更完整的状态：
+Entity 动画逻辑
+  -> inputX < 0
+  -> currentFacingDirection = LEFT
+  -> sprinting == false
+  -> changeAnimation(ANIM_WALK_LEFT, resources)
 
-- `pressStart`：刚按下这一帧
-- `pressing` / `onPress`：正在按住
-- `pressEnd`：刚松开这一帧
-- `holdTicks` 或 `holdTime`：已经按住了多久
-- `releasedTicks` 或 `releasedTime`：松开时本次一共按了多久
+animatedSprite
+  -> 推进 walk left 当前帧
 
-这样后面就可以做一些更细的操作，例如：
+Renderer
+  -> 在新的位置绘制玩家
+```
 
-- 短按空格小跳
-- 长按空格跳到更高
-- 按住蓄力
-- 松开释放技能
-- 双击方向键冲刺
-- 长按打开某个面板
+这个情景里，输入、移动、动画和绘制都会参与，但不会触发跳跃、金币拾取或调试开关。
 
-目前 `GetAsyncKeyState` 里的 `0x8000` 主要用于判断当前是否按住。  
-之前使用的 `0x0001` 更像是简单判断“自上次调用以来是否按过一次”，后面更希望用自己记录上一帧和当前帧状态的方式来判断按键事件。
+### 简单情景：玩家按 F5 关闭碰撞框
 
-### 跳跃和角色手感相关
+当玩家按下 F5 时：
 
-目前跳跃逻辑已经能完成基本起跳、下落和落地检测。  
-但跳跃手感还比较简单。
+```text
+InputManager
+  -> 检测到 VK_F5 当前帧刚按下
 
-之后希望把跳跃改成更细的输入控制：
+Level::handleRendererInput
+  -> renderer.toggleCollisionBox()
 
-- 按下空格时起跳
-- 如果很快松开空格，就削弱向上速度，形成小跳
-- 如果持续按住空格，就在一定时间内继续给向上的力
-- 达到最大按住时间后，不再继续增加跳跃高度
-- 松开空格后，如果还在上升，可以提前进入较低高度的跳跃轨迹
+Renderer::drawEntities
+  -> showCollisionBox 为 false
+  -> 只绘制实体 sprite
+  -> 不绘制实体碰撞框
+```
 
-这样角色跳跃会比现在“按一下就固定高度”更接近平台跳跃游戏的手感。
+这个情景不会影响实体真实状态，只改变调试绘制表现。
 
-### 鼠标事件和 UI 交互相关
+### 简单情景：玩家站着不动
 
-目前鼠标只用于：
+当玩家没有水平输入时：
 
-- 获取鼠标位置
-- 影响镜头偏移
-- 左键点击时输出测试坐标
+```text
+PlayerController
+  -> intent.moveX = 0
+  -> intent.wantSprint = false
 
-之后希望把鼠标事件整理成 UI 可用的事件系统。
+MovementHandle
+  -> 水平位移为 0
+  -> 继续处理重力和垂直碰撞
+  -> 如果已经在地面，会维持落地状态
 
-鼠标事件可以拆成：
+Entity 动画逻辑
+  -> inputX == 0
+  -> 根据 currentFacingDirection 选择 idle_L 或 idle_R
 
-- `hoverIn`：鼠标刚进入某个 UI
-- `hover`：鼠标停留在某个 UI 上
-- `hoverOut`：鼠标刚离开某个 UI
-- `pressStart`：鼠标刚在某个 UI 上按下
-- `pressing`：鼠标正在按住
-- `pressEnd`：鼠标刚松开
-- `click`：在同一个 UI 上按下并松开，形成一次完整点击
+Renderer
+  -> 绘制待机动画
+```
 
-点击检测的本质是：  
-拿鼠标坐标和 UI 的矩形范围做命中判断。
+这里 `currentFacingDirection` 很重要。它决定没有输入时角色应该朝左待机还是朝右待机。
 
-后面可能需要支持几种命中结果：
+### 稍复杂情景：玩家向左走，然后按 Shift 冲刺
 
-- 只拿最上层命中的 UI
-- 拿到所有被鼠标命中的 UI
-- 拿到从子元素到父元素的命中路径
+当玩家已经按住左方向键，又按住 Shift：
 
-例如鼠标点在一个 item 上时，它其实同时也在后面的 panel 内。  
-有些时候我只需要 item，有些时候我也需要知道它属于哪个 panel。  
-所以 UI 命中检测不能只写死成一种返回方式。
+```text
+InputManager
+  -> VK_LEFT 按下
+  -> VK_SHIFT 按下
 
-### UI 系统相关
+PlayerController
+  -> intent.moveX = -1
+  -> intent.wantSprint = true
 
-目前写了简单的 `UIBox` 和列表面板测试，但还没有真正作为游戏 UI 系统使用。
+MovementHandle
+  -> 检测到有水平输入
+  -> wantSprint = true
+  -> 如果实体在地面，允许开始 sprinting
+  -> self.sprinting = true
+  -> currentSpeed = speed * 2
+  -> 计算更大的 wantMoveX
+  -> 调用 CollisionHandle 修正水平位移
+  -> 写回 Entity.x
 
-现在的 `UIBox` 只表示一个矩形区域：
+Entity 动画逻辑
+  -> inputX < 0
+  -> currentFacingDirection = LEFT
+  -> sprinting == true
+  -> changeAnimation(ANIM_RUN_LEFT, resources)
 
-- x
-- y
-- w
-- h
+ResourceManager
+  -> 返回玩家 run left 的 AnimationClip
 
-后面希望不要让 `UIBox` 本身承担太多职责，而是抽象出类似 `UIElement` 的结构。  
-`UIElement` 内部可以包含 `UIBox`，再额外保存：
+animatedSprite
+  -> setClip(run left)
+  -> 推进奔跑动画帧
+```
 
-- UI 类型，例如 panel、button、label、item
-- 父元素下标 `parentIndex`
-- 本地盒子 `localBox`
-- 世界 / 屏幕盒子 `worldBox`
-- 是否可见
-- 是否参与鼠标事件
-- 文字内容
-- 颜色
-- hover / pressed 等交互状态
+这里要注意：冲刺状态是实体真实游戏状态，影响移动速度；run left 只是动画表现状态。
 
-父子关系方面，暂时更倾向于使用 `parentIndex`，而不是直接保存父对象指针。  
-因为项目现在整体还是以数组管理为主，用下标更直观，也更方便调试。
+### 稍复杂情景：玩家从向左冲刺突然改为向右冲刺
 
-UI 的布局思路大概是：
+当玩家先处于向左冲刺，然后改按右方向键，并继续按住 Shift：
 
-- 父元素决定一个大区域
-- 子元素保存相对父元素的位置
-- 每帧根据父元素的 `worldBox` 计算子元素的最终 `worldBox`
-- 绘制和命中检测都使用最终的 `worldBox`
+```text
+PlayerController
+  -> intent.moveX 从 -1 变为 1
+  -> intent.wantSprint = true
 
-这样 panel 移动时，里面的 button、label、item 也可以跟着移动。
+MovementHandle
+  -> sprinting 仍然为 true
+  -> currentSpeed = speed * 2
+  -> wantMoveX 变为正数
+  -> CollisionHandle 检测右侧阻挡
+  -> 写回新的 Entity.x
 
-### 角色状态相关
+Entity 动画逻辑
+  -> inputX > 0
+  -> currentFacingDirection = RIGHT
+  -> sprinting == true
+  -> changeAnimation(ANIM_RUN_RIGHT, resources)
 
-目前只是用多个 bool 记录状态，例如：
+changeAnimation
+  -> 如果当前动画不是 ANIM_RUN_RIGHT
+  -> 切换 currentAnimState
+  -> 通过 ResourceManager 获取 run right 的 clip
+  -> animatedSprite::setClip(run right)
+```
 
+如果已经处于 `ANIM_RUN_RIGHT`，`changeAnimation` 会直接返回，避免每帧重复切换动画。
+
+### 稍复杂情景：玩家拾取金币
+
+当玩家碰到金币时：
+
+```text
+MovementHandle / CollisionHandle
+  -> 正常更新玩家位置
+
+Level::updateOverlapEvents
+  -> 遍历实体对
+  -> 获取两个实体的 RectBox
+  -> CollisionHandle::isRectOverlapping(a, b)
+  -> 判断 PLAYER + COIN
+  -> 播放 coin_pickup.wav
+  -> coin.killEntity()
+
+后续帧
+  -> 死亡金币不再 update
+  -> Renderer 跳过死亡金币绘制
+```
+
+这个流程和阻挡碰撞不同。金币拾取属于“重叠事件”，不会阻止玩家移动，而是在重叠发生后触发游戏事件。
+
+### 稍复杂情景：玩家跳起后落地
+
+当玩家按下 Space：
+
+```text
+InputManager
+  -> 检测到 VK_SPACE 当前帧刚按下
+
+PlayerController
+  -> intent.wantJump = true
+
+MovementHandle
+  -> 如果 self.onGround == true
+       velocityY = JUMP_SPEED
+       onGround = false
+       InAir = true
+       jumping = true
+  -> 每帧 velocityY -= GRAVITY
+  -> wantMoveY = velocityY
+  -> CollisionHandle::getAllowedMoveY
+  -> 写回 Entity.y
+
+落地时
+  -> allowedMoveY 和 wantMoveY 不一致
+  -> wantMoveY < 0
+  -> onGround = true
+  -> InAir = false
+  -> jumping = false
+  -> velocityY = 0
+```
+
+目前跳跃动画还没有单独接入，后续如果加入 `Animator`，这里的 `onGround / InAir / jumping / velocityY` 就会成为动画状态判断的重要输入。
+
+### 复杂情景：同一帧里同时发生移动、相机更新、动画切换和调试绘制
+
+例如玩家按住右方向键和 Shift，并按下 F5，同时鼠标偏向屏幕右侧：
+
+```text
+input.update()
+  -> 记录 VK_RIGHT 按下
+  -> 记录 VK_SHIFT 按下
+  -> 记录 VK_F5 刚按下
+  -> 记录鼠标位置
+
+level.update(input)
+  -> clearEntityFrameState()
+  -> updateEntities(input)
+       -> PlayerController 生成 moveX = 1, wantSprint = true
+       -> MovementHandle 更新冲刺移动和碰撞
+       -> Entity 动画切换到 run right
+       -> animatedSprite 推进当前帧
+  -> handleRendererInput(input)
+       -> F5 切换实体碰撞框显示
+  -> updateCamera(input)
+       -> 根据玩家位置和鼠标偏移更新相机
+  -> updateDebugStates()
+       -> 如果冲刺状态刚开始，输出调试信息
+  -> updateOverlapEvents()
+       -> 检查是否和金币或普通实体重叠
+  -> listPanel.update()
+
+level.draw()
+  -> Renderer 绘制背景
+  -> Renderer 绘制 tile map
+  -> Renderer 绘制实体 sprite
+  -> 根据 F5 后的开关决定是否绘制实体碰撞框
+  -> Renderer 绘制 UI
+```
+
+这个情景能体现当前框架的一个核心特点：  
+同一帧里，输入只采集一次，但会分别影响移动、动画、相机、调试绘制和事件检测。
+
+---
+
+## 当前仍未完成的重点
+
+### tile 碰撞
+
+tile map 已经能读取和绘制，也能绘制 solid tile 的调试碰撞框。
+
+但是角色移动仍然没有真正接入 tile 碰撞。
+
+后续希望让 tile 的 solid 信息参与：
+
+- `getAllowedMoveX`
+- `getAllowedMoveY`
+
+也就是角色移动时不只检测其它实体，还要检测地图中的固体 tile。
+
+### Entity 类型拆分
+
+目前所有对象仍然统一用 `Entity` 表示。
+
+当前更倾向的方向不是“每一种具体物品都派生成一个类”，而是：
+
+```text
+轻继承 + 组件化
+```
+
+可能的未来结构：
+
+```text
+GameObject
+  -> CharacterEntity
+  -> InteractiveEntity
+  -> TriggerEntity
+  -> StaticEntity
+```
+
+例如金币不一定需要单独成为 `Coin` 类，它更像是一种 `InteractiveEntity` 的配置。
+
+不同对象可以拥有不同的状态列表和不同的 Animator 配置，而不是所有状态都塞进一个巨大的 `EntityState`。
+
+### Animator
+
+`Animator` 是接下来比较明确的重构方向。
+
+它应该接管：
+
+- `currentAnimState`
+- `currentFacingDirection`
+- `changeAnimation`
+- `updateAnimationByIntent`
+- `animatedSprite`
+- sprite 更新和绘制转发
+
+但它不应该接管实体的真实游戏状态。
+
+例如：
+
+- `sprinting`
 - `onGround`
 - `InAir`
 - `jumping`
-- `sprinting`
-- `collisionState`
+- `isAlive`
 
-之后还是希望整理成更完整的状态机，例如：
+这些仍然属于 `Entity` 或移动/碰撞系统。  
+`Animator` 只读取这些状态，并决定动画表现。
 
-- idle
-- walk
-- run
-- jump start
-- jump loop / fall
-- land
-- hurt
-- dead
+### ResourceManager 继续完善
 
-这样动画切换和逻辑状态会更清晰。
+当前 `ResourceManager` 只接管了玩家动画资源。
 
-目前动画切换和状态判断还写得比较直接，后面需要进一步整理。  
-特别是像冲刺、跳跃、下落、落地这些状态，之后最好有更明确的状态转换规则。
+后续需要继续迁移：
 
-### 碰撞相关
+- `player2`
+- `player3`
+- `player4`
+- 金币动画
+- 地图资源
+- 背景资源
+- 音效资源
 
-- 目前主要支持实体之间的阻挡和重叠检测
-- 世界边界碰撞已经有了
-- tile 碰撞还没有接入
-- 还没有做斜坡、单向平台、复杂地形
-- 碰撞逻辑目前仍然写在 `Entity` 内部，之后应该逐渐交给 `Level` 或碰撞系统处理
+最终希望 `Level` 不再到处写资源路径，而是在初始化时统一从资源管理器中获取资源。
 
-另外，后面也需要继续区分：
+### 代码文件拆分
 
-- 阻挡碰撞
-- 重叠事件
-- 触发器
-- 物理碰撞箱
-- 渲染范围
-- 剔除范围
+目前大部分内容仍然集中在 `game.cpp` 中。
 
-这些东西现在有些还混在一起，之后需要慢慢拆清楚。
+后续可能拆成：
 
-### 声音相关
-
-- 目前金币拾取已经能直接用 `PlaySoundW` 播放音效
-- 但是 `Sound` 类还没有正式实现
-- 还没有封装播放状态
-- 还没有处理循环播放、打断、冷却、防止重复触发等问题
-
-之后希望把声音也做成类似 Sprite 一样的独立模块，而不是在事件里直接调用 `PlaySoundW`。
-
-### 时间和帧率相关
-
-- 当前主循环中使用 `Sleep(16)` 简单控制刷新
-- 还没有真正实现固定逻辑 tick
-- 还没有根据真实 delta time 修正移动和物理
-- 后面可能会单独抽象一个 tick / time 管理类
-
-现在很多逻辑都是默认“一帧就是一个 tick”。  
-比如按键持续时间可以先用 `holdTicks` 来记录，但之后如果要更稳定，还是应该引入真实时间，例如 `deltaTime` 或固定逻辑帧。
+```text
+Camera.h / Camera.cpp
+InputManager.h / InputManager.cpp
+Entity.h / Entity.cpp
+CollisionBox.h
+CollisionHandle.h / CollisionHandle.cpp
+MovementHandle.h / MovementHandle.cpp
+TileMap.h / TileMap.cpp
+Renderer.h / Renderer.cpp
+ResourceManager.h / ResourceManager.cpp
+Animator.h / Animator.cpp
+Level.h / Level.cpp
+```
 
 ---
 
 ## 操作方式
-
-目前测试用操作方式如下：
 
 | 按键 / 操作 | 功能 |
 | --- | --- |
@@ -508,42 +755,15 @@ UI 的布局思路大概是：
 | F2 | 镜头跟随 1 号实体 |
 | F3 | 镜头跟随 2 号实体 |
 | F4 | 镜头跟随 3 号实体 |
+| F5 | 开关实体碰撞框 |
+| F6 | 开关 tile 调试碰撞框 |
 | Esc | 退出程序 |
-
----
-
-## 运行环境
-
-目前项目主要在以下环境下测试：
-
-- Windows
-- Visual Studio
-- C++14
-- EasyX
-- Win32 API 部分函数
-
-项目里使用到了：
-
-- `graphics.h`
-- `windows.h`
-- `conio.h`
-- `fstream`
-- `Msimg32.lib`
-- `winmm.lib`
-
-其中：
-
-- 透明图片绘制使用了 `AlphaBlend`
-- 音效播放目前使用了 `PlaySoundW`
-- 输入检测主要使用了 `GetAsyncKeyState`
 
 ---
 
 ## 资源文件说明
 
-当前代码中会读取一些本地资源文件。
-
-大概路径结构目前类似这样：
+当前资源目录大致如下：
 
 ```text
 assets/
@@ -573,56 +793,63 @@ assets/
         coin_pickup.wav
 ```
 
-目前还没有做资源路径管理，所以资源路径需要和代码里写的一致。  
-如果图片或音效没有正确加载，程序可能会出现不显示图片、动画缺失或者音效不播放的问题。
+目前资源管理正在从“代码里直接写路径”迁移到 `ResourceManager`。
 
 ---
 
-## 当前项目状态
+## 运行环境
 
-这个项目目前还处在学习和实验阶段。
+- Windows
+- Visual Studio
+- EasyX
+- C++20 项目配置
+- Win32 API 部分函数
 
-代码里会保留比较多的注释，因为我主要是用它来记录自己的理解过程。
+项目使用到：
 
-很多地方目前并不是最优写法，也不是正式游戏项目的结构，只是先把我正在学的东西跑通。
+- `graphics.h`
+- `windows.h`
+- `conio.h`
+- `fstream`
+- `Msimg32.lib`
+- `winmm.lib`
 
-目前代码里已经能看到一些框架化的方向，比如：
+其中：
 
-- 实体系统
-- 动画系统
-- tile map
-- 摄像机
-- 碰撞检测
-- 状态检测
-- 简单事件触发
-
-但是它离一个比较干净的游戏框架还有距离。  
-之后等整体逻辑更稳定，再逐步做重构。
+- 透明图片绘制使用 `AlphaBlend`
+- 音效播放目前使用 `PlaySoundW`
+- 输入检测主要使用 `GetAsyncKeyState`
 
 ---
 
-## 为什么做这个项目
+## 当前学习重点
 
-之前我主要写的是控制台小游戏，比如：
+当前项目的重点已经从“让功能跑起来”，逐渐转向“理解游戏框架的职责划分”。
 
-- 简单 RPG
-- 俄罗斯方块
-- 贪吃蛇
-- 炸弹人思路测试
+最近主要在整理：
 
-这些项目让我理解了很多基础逻辑，比如：
+- `Entity` 不应该承担所有逻辑
+- `Level` 应该负责关卡调度
+- `Renderer` 应该负责绘制调度
+- `ResourceManager` 应该负责资源生命周期
+- `AnimationClip` 应该只描述动画资源
+- `animatedSprite` 应该负责播放当前 clip
+- `Animator` 后续应该负责动画状态切换
+- `CollisionBox` 应该负责碰撞盒数据和局部到世界转换
+- `CollisionHandle` 应该负责真正碰撞检测和移动修正
 
-- 主循环
-- 输入
-- 渲染
-- 碰撞
-- 状态变化
-- 地图数组
-- 简单 AI / 寻路思路
+这类结构调整短期内不会让画面变化很多，但会让后续添加功能时更容易维护。
 
-这个 EasyX 项目算是我从控制台输出过渡到真正图形窗口的一步。
+当前比较合理的节奏是：
 
-现在的目标不是马上做出完整游戏，而是慢慢把这些游戏开发里的基础模块拆出来，逐渐理解一个简单 2D 游戏框架应该怎么组织。
+```text
+完成一项结构拆分
+然后用一个实际功能验证它
+```
+
+接下来比较适合验证当前结构的功能是：
+
+- 接入 tile 碰撞
 
 ---
 
@@ -630,29 +857,21 @@ assets/
 
 短期目标：
 
-- 把 `Entity` 中过多的职责继续拆开
-- 真正实现 `Level` 类
-- 把事件检测、实体管理和 tick 更新逐渐交给 `Level` 管理
-- 抽象 `Render` 类，统一管理背景、tile map、实体、调试信息和 UI 的绘制顺序
-- 基于 `Camera` 实现简单视口剔除，屏幕外的实体和 tile 不再无意义进入绘制流程
-- 让 tile map 的碰撞层真正参与角色移动
-- 抽象 `InputManager`，把键盘和鼠标输入从 `Entity` 里拆出去
-- 让键盘支持 `pressStart`、`pressing`、`pressEnd`、`holdTicks` 等状态
-- 尝试做短按小跳、长按高跳这类更细的角色操作
-- 抽象 `UIElement` / `UIManager`，用统一数组管理 panel、button、label、item 等 UI 元素
-- 给 UI 加入父子关系、hover、click、press 等基础事件
-- 把声音播放封装成独立的 `Sound` 类
-- 完善角色状态机
-- 整理资源路径和资源加载逻辑
+- 继续完善 `ResourceManager`
+- 抽出 `Animator`
+- 让 `Entity` 构造函数逐步摆脱资源路径
+- 接入 tile 碰撞
+- 继续清理 `Entity` 中的表现逻辑
+- 保持 `Renderer` 对调试绘制的统一控制
+- 开始考虑对象分类，例如 `CharacterEntity`、`InteractiveEntity`、`TriggerEntity`
 - 逐步把代码拆成多个文件
 
 长期目标：
 
-- 用这个思路重构之前的控制台 RPG
-- 尝试做一个简单的 2D 魔塔 / RPG 原型
-- 继续理解 2D 游戏里坐标、镜头、动画、碰撞、事件、UI、输入这些基础系统
-- 慢慢把这个项目从“功能测试集合”整理成一个小型 2D 游戏框架雏形
-- 之后可能继续学习 SDL、DirectX 或其它更完整的图形 / 渲染库
+- 把这个项目整理成一个小型 2D 游戏框架雏形
+- 用类似思路重构之前的控制台 RPG
+- 尝试制作一个简单的 2D RPG / 魔塔 / 平台跳跃原型
+- 继续学习更完整的图形或游戏开发库，例如 SDL、DirectX 等
 
 ---
 

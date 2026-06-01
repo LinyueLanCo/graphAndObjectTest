@@ -271,13 +271,21 @@ class Sound
  // 根据移动意图和 sprinting 状态切换待机、行走、奔跑动画。
 enum AnimationState
 {
-    ANIM_IDLE_L,
-    ANIM_IDLE_R,
-    ANIM_WALK_LEFT,
-    ANIM_WALK_RIGHT,
-    ANIM_RUN_LEFT,
-    ANIM_RUN_RIGHT,
-    ANIM_COUNT
+	ANIM_IDLE_L,
+	ANIM_IDLE_R,
+	ANIM_WALK_LEFT,
+	ANIM_WALK_RIGHT,
+	ANIM_RUN_LEFT,
+	ANIM_RUN_RIGHT,
+
+	ANIM_JUMP_START_L,
+	ANIM_JUMP_START_R,
+	ANIM_JUMP_LOOP_L,
+	ANIM_JUMP_LOOP_R,
+	ANIM_JUMP_END_L,
+	ANIM_JUMP_END_R,
+
+	ANIM_COUNT
 };
 
 enum AnimationId
@@ -288,7 +296,12 @@ enum AnimationId
 	ANIM_ID_PLAYER_WALK_R,
 	ANIM_ID_PLAYER_RUN_L,
 	ANIM_ID_PLAYER_RUN_R,
-
+	ANIM_ID_PLAYER_JUMP_START_L,
+	ANIM_ID_PLAYER_JUMP_START_R,
+	ANIM_ID_PLAYER_JUMP_LOOP_L,
+	ANIM_ID_PLAYER_JUMP_LOOP_R,
+	ANIM_ID_PLAYER_JUMP_END_L,
+	ANIM_ID_PLAYER_JUMP_END_R,
 	ANIM_ID_COUNT
 };
 
@@ -448,7 +461,35 @@ AnimationId getPlayerAnimationId(AnimationState state)
 	{
 		return ANIM_ID_PLAYER_RUN_R;
 	}
+	if (state == ANIM_JUMP_START_L)
+	{
+		return ANIM_ID_PLAYER_JUMP_START_L;
+	}
 
+	if (state == ANIM_JUMP_START_R)
+	{
+		return ANIM_ID_PLAYER_JUMP_START_R;
+	}
+
+	if (state == ANIM_JUMP_LOOP_L)
+	{
+		return ANIM_ID_PLAYER_JUMP_LOOP_L;
+	}
+
+	if (state == ANIM_JUMP_LOOP_R)
+	{
+		return ANIM_ID_PLAYER_JUMP_LOOP_R;
+	}
+
+	if (state == ANIM_JUMP_END_L)
+	{
+		return ANIM_ID_PLAYER_JUMP_END_L;
+	}
+
+	if (state == ANIM_JUMP_END_R)
+	{
+		return ANIM_ID_PLAYER_JUMP_END_R;
+	}
 	return ANIM_ID_PLAYER_IDLE_L;
 }
 
@@ -462,6 +503,12 @@ private:
 	IMAGE playerWalkR;
 	IMAGE playerRunL;
 	IMAGE playerRunR;
+	IMAGE playerJumpStartL;
+	IMAGE playerJumpStartR;
+	IMAGE playerJumpLoopL;
+	IMAGE playerJumpLoopR;
+	IMAGE playerJumpEndL;
+	IMAGE playerJumpEndR;
 
 public:
 	// 功能：加载当前关卡需要的动画图片资源。
@@ -473,6 +520,12 @@ public:
 		loadimage(&playerWalkR, _T("assets\\tex\\entities\\characters\\player1_walk_R.png"));
 		loadimage(&playerRunL, _T("assets\\tex\\entities\\characters\\player1_run_L.png"));
 		loadimage(&playerRunR, _T("assets\\tex\\entities\\characters\\player1_run_R.png"));
+		loadimage(&playerJumpStartL, _T("assets\\tex\\entities\\characters\\j_test_sprite_L.png"));
+		loadimage(&playerJumpStartR, _T("assets\\tex\\entities\\characters\\j_test_sprite_R.png"));
+		loadimage(&playerJumpLoopL, _T("assets\\tex\\entities\\characters\\player1_jumpLoop_L.png"));
+		loadimage(&playerJumpLoopR, _T("assets\\tex\\entities\\characters\\player1_jumpLoop_R.png"));
+		loadimage(&playerJumpEndL, _T("assets\\tex\\entities\\characters\\player1_jumpEnd_L.png"));
+		loadimage(&playerJumpEndR, _T("assets\\tex\\entities\\characters\\player1_jumpEnd_R.png"));
 	}
 
 	// 功能：根据动画 ID 获取对应动画资源描述。
@@ -507,7 +560,35 @@ public:
 		{
 			return AnimationClip(&playerRunR, 8, 3, true);
 		}
+		if (id == ANIM_ID_PLAYER_JUMP_START_L)
+		{
+			return AnimationClip(&playerJumpStartL, 7, 2, false);
+		}
 
+		if (id == ANIM_ID_PLAYER_JUMP_START_R)
+		{
+			return AnimationClip(&playerJumpStartR, 7, 2, false);
+		}
+
+		if (id == ANIM_ID_PLAYER_JUMP_LOOP_L)
+		{
+			return AnimationClip(&playerJumpLoopL, 8, 3, true);
+		}
+
+		if (id == ANIM_ID_PLAYER_JUMP_LOOP_R)
+		{
+			return AnimationClip(&playerJumpLoopR, 8, 3, true);
+		}
+
+		if (id == ANIM_ID_PLAYER_JUMP_END_L)
+		{
+			return AnimationClip(&playerJumpEndL, 8, 2, false);
+		}
+
+		if (id == ANIM_ID_PLAYER_JUMP_END_R)
+		{
+			return AnimationClip(&playerJumpEndR, 8, 2, false);
+		}
 		return AnimationClip();
 	}
 };
@@ -561,6 +642,12 @@ public:
         offsetY = 0;
         imageSource = &image;
     }
+
+    //接口，判定是否播放结束
+	bool isFinished()
+	{
+		return !isLoop && !isPlaying;
+	}
     // 功能：按显式帧尺寸加载序列帧图片。
     void load(const TCHAR* path, int frameWidth, int frameHeight, int frameCount)
     {
@@ -1672,6 +1759,7 @@ private:
     bool jumping;           //是否跳跃
     bool blockedByEntity;  // 本帧是否被实体阻挡
     bool blockedByWorld;   // 本帧是否被世界边界阻挡
+    bool wasInAir;         // 上一帧是否在空中
     //做临时用，添加实体类型标签
     EntityType entityType;
 
@@ -1702,6 +1790,7 @@ public:
         onGround = false;
         sprinting = false;
         InAir = false;
+        wasInAir = false;
         jumping = false;
         blockedByEntity = false;
         blockedByWorld = false;
@@ -1749,6 +1838,7 @@ public:
         onGround = false;
         sprinting = false;
         InAir = false;
+        wasInAir = false;
         jumping = false;
         blockedByEntity = false;
         blockedByWorld = false;
@@ -1935,54 +2025,106 @@ public:
 	}    //更新动画状态by意图
     // 功能：根据行为意图和冲刺状态更新实体动画。
 	void updateAnimationByIntent(BehaviorIntent intent, ResourceManager& resources)
-    {
-        if (!controlled)
-        {
-            return;
-        }
+	{
+		if (!controlled)
+		{
+			return;
+		}
 
-        double inputX = intent.moveX;
+		double inputX = intent.moveX;
 
-        if (inputX < 0)
-        {
-            currentFacingDirection = LEFT;
+		bool hasMoveInput = fabs(inputX) > EPS;
+		bool justLanded = wasInAir && onGround;
 
-            if (sprinting)
-            {
-                changeAnimation(ANIM_RUN_LEFT,resources);
-            }
-            else
-            {
-                changeAnimation(ANIM_WALK_LEFT,resources);
-            }
-        }
-        else if (inputX > 0)
-        {
-            currentFacingDirection = RIGHT;
+		if (inputX < -EPS)
+		{
+			currentFacingDirection = LEFT;
+		}
+		else if (inputX > EPS)
+		{
+			currentFacingDirection = RIGHT;
+		}
 
-            if (sprinting)
-            {
-                changeAnimation(ANIM_RUN_RIGHT,resources);
-            }
-            else
-            {
-                changeAnimation(ANIM_WALK_RIGHT,resources);
-            }
-        }
-        else
-        {
-            if (currentFacingDirection == LEFT)
-            {
-                changeAnimation(ANIM_IDLE_L,resources);
-            }
+		AnimationState idleState = ANIM_IDLE_L;
+		AnimationState walkState = ANIM_WALK_LEFT;
+		AnimationState runState = ANIM_RUN_LEFT;
+		AnimationState jumpStartState = ANIM_JUMP_START_L;
+		AnimationState jumpLoopState = ANIM_JUMP_LOOP_L;
+		AnimationState jumpEndState = ANIM_JUMP_END_L;
 
-            if (currentFacingDirection == RIGHT)
-            {
-                changeAnimation(ANIM_IDLE_R,resources);
-            }
-        }
-    }
-    // 功能：推进实体当前动画帧。
+		if (currentFacingDirection == RIGHT)
+		{
+			idleState = ANIM_IDLE_R;
+			walkState = ANIM_WALK_RIGHT;
+			runState = ANIM_RUN_RIGHT;
+			jumpStartState = ANIM_JUMP_START_R;
+			jumpLoopState = ANIM_JUMP_LOOP_R;
+			jumpEndState = ANIM_JUMP_END_R;
+		}
+		if (justLanded && !hasMoveInput)
+		{
+			changeAnimation(jumpEndState, resources);
+			wasInAir = InAir;
+			return;
+		}
+		bool currentIsJumpStart =
+			currentAnimState == ANIM_JUMP_START_L ||
+			currentAnimState == ANIM_JUMP_START_R;
+
+
+		if (InAir)
+		{
+			bool shouldPlayJumpStart = jumping && intent.wantJump && !wasInAir;
+
+			if (shouldPlayJumpStart)
+			{
+				changeAnimation(jumpStartState, resources);
+				wasInAir = InAir;
+				return;
+			}
+
+			if (currentIsJumpStart)
+			{
+				if (animation.isFinished())
+				{
+					changeAnimation(jumpLoopState, resources);
+				}
+
+				wasInAir = InAir;
+				return;
+			}
+
+			changeAnimation(jumpLoopState, resources);
+			wasInAir = InAir;
+			return;
+		}
+		bool currentIsJumpEnd =
+			currentAnimState == ANIM_JUMP_END_L ||
+			currentAnimState == ANIM_JUMP_END_R;
+
+		if (currentIsJumpEnd && !hasMoveInput && !animation.isFinished())
+		{
+			wasInAir = InAir;
+			return;
+		}
+		if (hasMoveInput)
+		{
+			if (sprinting)
+			{
+				changeAnimation(runState, resources);
+			}
+			else
+			{
+				changeAnimation(walkState, resources);
+			}
+		}
+		else
+		{
+			changeAnimation(idleState, resources);
+		}
+
+		wasInAir = InAir;
+	}    // 功能：推进实体当前动画帧。
     void updateAnimatedSprite()
     {
         animation.update();
@@ -3028,6 +3170,8 @@ private:
 		if (input.isKeyPressed(VK_F6))
 		{
 			renderer.toggleTileCollisionBox();
+			cout << "Toggle map tile edge." << endl;
+
 		}
 	}
 
