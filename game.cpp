@@ -22,6 +22,24 @@ const double MAX_FALL_SPEED = -28.0;
 
 /*
 ============================================================
+单文件临时结构顺序
+============================================================
+
+当前 game.cpp 仍然把多个模块放在同一个文件中。为了后续拆分文件，
+临时按下面顺序组织：
+    1. 全局常量、坐标转换、绘制辅助函数
+    2. 基础数据枚举与资源描述
+    3. 资源、动画播放、碰撞盒、地图、UI、输入
+    4. 控制器、系统声明、Entity 声明
+    5. Animator / Movement / Collision 等跨类函数实现
+    6. Camera 跟随、Renderer、Level、main
+
+后续拆文件时，可以基本按这些块拆成独立 .h / .cpp。
+============================================================
+*/
+
+/*
+============================================================
 当前代码的核心数据流向
 ============================================================
 
@@ -269,8 +287,8 @@ class Sound
 
 };
 // AnimationState：
- // 玩家动画状态枚举。当前主要用于 Entity::changeAnimation()
- // 根据移动意图和 sprinting 状态切换待机、行走、奔跑动画。
+ // 动画表现状态枚举。当前主要由 Animator 保存和切换。
+ // 它描述“现在应该播放什么动画”，不代表实体真实物理状态。
 enum AnimationState
 {
 	ANIM_IDLE_L,
@@ -290,6 +308,9 @@ enum AnimationState
 	ANIM_COUNT
 };
 
+// AnimationId：
+ // 资源层动画 ID。Animator 选择 AnimationState 后，
+ // 会通过 getPlayerAnimationId 转换成 AnimationId，再向 ResourceManager 请求 AnimationClip。
 enum AnimationId
 {
 	ANIM_ID_PLAYER_IDLE_L,
@@ -307,6 +328,10 @@ enum AnimationId
 	ANIM_ID_COUNT
 };
 
+// AnimationClip：
+ // 动画资源描述数据。
+ // 它只描述“哪张图、多少帧、播放速度、是否循环”，不保存当前播放进度。
+ // 当前播放进度由 animatedSprite 负责。
 struct AnimationClip
 {
 	IMAGE* image;
@@ -314,6 +339,7 @@ struct AnimationClip
 	int speed;
 	bool loop;
 
+	// 功能：初始化一个空动画片段描述。
 	AnimationClip()
 	{
 		image = NULL;
@@ -322,6 +348,7 @@ struct AnimationClip
 		loop = true;
 	}
 
+	// 功能：按图片指针、帧数、速度和循环标记创建动画片段描述。
 	AnimationClip(IMAGE* newImage, int newFrameCount, int newSpeed, bool newLoop)
 	{
 		image = newImage;
@@ -429,9 +456,10 @@ inline void putimage_alpha_tile(
         GetImageHDC(img),
         srcX, srcY, srcW, srcH,
         blend
-    );
+	);
 }
 
+// 功能：把动画表现状态转换为玩家动画资源 ID。
 AnimationId getPlayerAnimationId(AnimationState state)
 {
 	if (state == ANIM_IDLE_L)
@@ -495,7 +523,10 @@ AnimationId getPlayerAnimationId(AnimationState state)
 	return ANIM_ID_PLAYER_IDLE_L;
 }
 
-
+// ResourceManager：
+ // 当前关卡资源管理器。
+ // 目前主要负责提前加载玩家动画 IMAGE，并根据 AnimationId 返回 AnimationClip。
+ // 后续可以继续接管地图、音效、其它实体动画等资源。
 class ResourceManager
 {
 private:
@@ -1632,25 +1663,33 @@ public:
     }
 };
 
-//前置声明
-// 前置声明
+// 前置声明：
+// Animator、CollisionHandle、MovementHandle 都需要引用 Entity，
+// 而 Entity 内部又持有 Animator，因此这里先声明 Entity。
 class Entity;
 
-
-
-class Entity;
-
+// Animator：
+ // 动画状态控制组件。
+ // 它被 Entity 持有，但不拥有实体真实游戏状态。
+ // 它读取 Entity 的移动、跳跃、落地、冲刺、朝向等状态，
+ // 决定当前应该播放哪个 AnimationState，并通过 ResourceManager 获取 AnimationClip。
 class Animator
 {
 private:
+	// 当前动画表现状态，用于避免每帧重复 setClip。
 	AnimationState currentAnimState;
+
+	// 上一帧是否在空中，用于判断“刚刚落地”。
 	bool wasInAir;
 
 public:
+	// 功能：初始化 Animator 的默认动画状态缓存。
 	Animator();
 
+	// 功能：切换实体当前动画片段，若状态未变化则直接返回。
 	void changeAnimation(Entity& entity, AnimationState newState, ResourceManager& resources);
 
+	// 功能：根据实体真实状态和本帧行为意图更新动画表现状态。
 	void update(Entity& entity, BehaviorIntent intent, ResourceManager& resources);
 };
 // CollisionHandle：
@@ -1748,7 +1787,8 @@ public:
  //   - 速度 speed / velocityY
  //   - 状态 onGround / InAir / sprinting / jumping / isAlive
  //   - 碰撞配置 collisionBox
- //   - 动画 animation
+ //   - 动画播放对象 animation
+ //   - 动画控制组件 animator
  //   - 类型 entityType
 class Entity
 {
@@ -1779,7 +1819,7 @@ private:
     bool jumping;           //是否跳跃
     bool blockedByEntity;  // 本帧是否被实体阻挡
     bool blockedByWorld;   // 本帧是否被世界边界阻挡
-    bool wasInAir;         // 上一帧是否在空中
+    bool wasInAir;         // 旧动画逻辑遗留缓存，当前 Animator 已经拥有自己的 wasInAir
     //做临时用，添加实体类型标签
     EntityType entityType;
 
@@ -1787,7 +1827,7 @@ private:
     bool isAlive;
 
     CollisionBox collisionBox;
-    AnimationState currentAnimState;//记录当前的动画状态
+    AnimationState currentAnimState;//旧动画逻辑遗留状态，当前 Animator 已经拥有自己的 currentAnimState
     facingDirection currentFacingDirection;//记录当前操作的有效朝向
 	Animator animator;//实体的动画控制器
 public:
@@ -1919,11 +1959,13 @@ public:
     {
         return jumping;
     }
+	// 功能：判断实体是否由玩家输入控制。
 	bool isControlled()
 	{
 		return controlled;
 	}
-	//返回实体的当前朝向
+
+	// 功能：返回实体当前朝向。
 	facingDirection getFacingDirection()
 	{
 		return currentFacingDirection;
@@ -1933,17 +1975,19 @@ public:
 	{
 		currentFacingDirection = direction;
 	}
-	// 功能：获取实体当前动画帧的宽度。
+	// 功能：判断实体当前非循环动画是否已经播放结束。
 	bool isAnimationFinished()
 	{
 		return animation.isFinished();
 	}
-	// 功能：设置实体当前动画帧。
+
+	// 功能：把新的动画片段绑定到实体的动画播放器。
 	void setAnimationClip(AnimationClip clip)
 	{
 		animation.setClip(clip);
 	}
-	// 功能：更新实体动画状态。
+
+	// 功能：委托实体内部 Animator 更新动画状态。
 	void updateAnimator(BehaviorIntent intent, ResourceManager& resources)
 	{
 		animator.update(*this, intent, resources);
@@ -2059,7 +2103,7 @@ public:
 	{
 		collisionBox.setScale(scaleX, scaleY);
 	}
-    // 功能：切换玩家动画状态并加载对应序列帧资源。
+    // 功能：旧动画切换接口，当前保留作过渡；实际运行已改为 Animator::changeAnimation。
 	void changeAnimation(AnimationState newState, ResourceManager& resources)
 	{
 		if (currentAnimState == newState)
@@ -2074,7 +2118,7 @@ public:
 
 		animation.setClip(clip);
 	}    //更新动画状态by意图
-    // 功能：根据行为意图和冲刺状态更新实体动画。
+    // 功能：旧动画更新接口，当前保留作过渡；实际运行已改为 Entity::updateAnimator。
 	void updateAnimationByIntent(BehaviorIntent intent, ResourceManager& resources)
 	{
 		if (!controlled)
@@ -2248,16 +2292,18 @@ public:
 
 
 
-//抽象出一个 Animator 类，负责根据实体状态和行为意图切换动画状态和帧。
+// ============================================================
+// Animator 实现
+// ============================================================
 
+// 功能：初始化动画状态缓存。
 Animator::Animator()
 {
     currentAnimState = ANIM_COUNT;
     wasInAir = false;
+}
 
-
-};
-
+// 功能：按动画状态切换实体当前播放的 AnimationClip。
 void Animator::changeAnimation(Entity& entity, AnimationState newState, ResourceManager& resources)
 {
     if (currentAnimState == newState)
@@ -2272,113 +2318,115 @@ void Animator::changeAnimation(Entity& entity, AnimationState newState, Resource
 
     entity.setAnimationClip(clip);
 }
+
+// 功能：读取实体真实状态并决定 idle / walk / run / jumpStart / jumpLoop / jumpEnd。
 void Animator::update(Entity& entity, BehaviorIntent intent, ResourceManager& resources)
+{
+	if (!entity.isControlled())
 	{
-		if (!entity.isControlled())
+		return;
+	}
+
+	double inputX = intent.moveX;
+
+	bool hasMoveInput = fabs(inputX) > EPS;
+	bool justLanded = wasInAir && entity.isOnGround();
+
+	if (inputX < -EPS)
+	{
+		entity.setFacingDirection(LEFT);
+	}
+	else if (inputX > EPS)
+	{
+		entity.setFacingDirection(RIGHT);
+	}
+
+	AnimationState idleState = ANIM_IDLE_L;
+	AnimationState walkState = ANIM_WALK_LEFT;
+	AnimationState runState = ANIM_RUN_LEFT;
+	AnimationState jumpStartState = ANIM_JUMP_START_L;
+	AnimationState jumpLoopState = ANIM_JUMP_LOOP_L;
+	AnimationState jumpEndState = ANIM_JUMP_END_L;
+
+	if (entity.getFacingDirection() == RIGHT)
+	{
+		idleState = ANIM_IDLE_R;
+		walkState = ANIM_WALK_RIGHT;
+		runState = ANIM_RUN_RIGHT;
+		jumpStartState = ANIM_JUMP_START_R;
+		jumpLoopState = ANIM_JUMP_LOOP_R;
+		jumpEndState = ANIM_JUMP_END_R;
+	}
+
+	if (justLanded && !hasMoveInput)
+	{
+		changeAnimation(entity, jumpEndState, resources);
+		wasInAir = entity.isInAir();
+		return;
+	}
+
+	bool currentIsJumpStart =
+		currentAnimState == ANIM_JUMP_START_L ||
+		currentAnimState == ANIM_JUMP_START_R;
+
+	if (entity.isInAir())
+	{
+		bool shouldPlayJumpStart =
+			entity.isJumping() &&
+			intent.wantJump &&
+			!wasInAir;
+
+		if (shouldPlayJumpStart)
 		{
-			return;
-		}
-
-		double inputX = intent.moveX;
-
-		bool hasMoveInput = fabs(inputX) > EPS;
-		bool justLanded = wasInAir && entity.isOnGround();
-
-		if (inputX < -EPS)
-		{
-			entity.setFacingDirection(LEFT);
-		}
-		else if (inputX > EPS)
-		{
-			entity.setFacingDirection(RIGHT);
-		}
-
-		AnimationState idleState = ANIM_IDLE_L;
-		AnimationState walkState = ANIM_WALK_LEFT;
-		AnimationState runState = ANIM_RUN_LEFT;
-		AnimationState jumpStartState = ANIM_JUMP_START_L;
-		AnimationState jumpLoopState = ANIM_JUMP_LOOP_L;
-		AnimationState jumpEndState = ANIM_JUMP_END_L;
-
-		if (entity.getFacingDirection() == RIGHT)
-		{
-			idleState = ANIM_IDLE_R;
-			walkState = ANIM_WALK_RIGHT;
-			runState = ANIM_RUN_RIGHT;
-			jumpStartState = ANIM_JUMP_START_R;
-			jumpLoopState = ANIM_JUMP_LOOP_R;
-			jumpEndState = ANIM_JUMP_END_R;
-		}
-
-		if (justLanded && !hasMoveInput)
-		{
-			changeAnimation(entity, jumpEndState, resources);
+			changeAnimation(entity, jumpStartState, resources);
 			wasInAir = entity.isInAir();
 			return;
 		}
 
-		bool currentIsJumpStart =
-			currentAnimState == ANIM_JUMP_START_L ||
-			currentAnimState == ANIM_JUMP_START_R;
-
-		if (entity.isInAir())
+		if (currentIsJumpStart)
 		{
-			bool shouldPlayJumpStart =
-				entity.isJumping() &&
-				intent.wantJump &&
-				!wasInAir;
-
-			if (shouldPlayJumpStart)
+			if (entity.isAnimationFinished())
 			{
-				changeAnimation(entity, jumpStartState, resources);
-				wasInAir = entity.isInAir();
-				return;
+				changeAnimation(entity, jumpLoopState, resources);
 			}
 
-			if (currentIsJumpStart)
-			{
-				if (entity.isAnimationFinished())
-				{
-					changeAnimation(entity, jumpLoopState, resources);
-				}
-
-				wasInAir = entity.isInAir();
-				return;
-			}
-
-			changeAnimation(entity, jumpLoopState, resources);
 			wasInAir = entity.isInAir();
 			return;
 		}
 
-		bool currentIsJumpEnd =
-			currentAnimState == ANIM_JUMP_END_L ||
-			currentAnimState == ANIM_JUMP_END_R;
+		changeAnimation(entity, jumpLoopState, resources);
+		wasInAir = entity.isInAir();
+		return;
+	}
 
-		if (currentIsJumpEnd && !hasMoveInput && !entity.isAnimationFinished())
-		{
-			wasInAir = entity.isInAir();
-			return;
-		}
+	bool currentIsJumpEnd =
+		currentAnimState == ANIM_JUMP_END_L ||
+		currentAnimState == ANIM_JUMP_END_R;
 
-		if (hasMoveInput)
+	if (currentIsJumpEnd && !hasMoveInput && !entity.isAnimationFinished())
+	{
+		wasInAir = entity.isInAir();
+		return;
+	}
+
+	if (hasMoveInput)
+	{
+		if (entity.isSprinting())
 		{
-			if (entity.isSprinting())
-			{
-				changeAnimation(entity, runState, resources);
-			}
-			else
-			{
-				changeAnimation(entity, walkState, resources);
-			}
+			changeAnimation(entity, runState, resources);
 		}
 		else
 		{
-			changeAnimation(entity, idleState, resources);
+			changeAnimation(entity, walkState, resources);
 		}
+	}
+	else
+	{
+		changeAnimation(entity, idleState, resources);
+	}
 
-		wasInAir = entity.isInAir();
-    };
+	wasInAir = entity.isInAir();
+}
 
 // 功能：根据行为意图、物理规则和碰撞结果更新实体移动状态。
 void MovementHandle::update(
