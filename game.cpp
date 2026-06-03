@@ -52,8 +52,9 @@ main()
         -> MovementHandle::update()
         -> CollisionHandle 计算 allowedMoveX / allowedMoveY
         -> MovementHandle 把允许位移写回 Entity 的 x/y/velocity/onGround 等状态
-        -> Entity::updateAnimationByIntent()
-        -> Entity::draw()
+        -> Entity::updateAnimator()
+        -> Animator 根据 Entity 状态切换动画
+        -> Renderer 绘制实体
 
 职责边界：
     InputManager      只负责“输入采集”
@@ -61,6 +62,7 @@ main()
     BehaviorIntent    只保存“这一帧想做什么”
     MovementHandle    负责“速度、冲刺、跳跃、重力、期望位移”
     CollisionHandle   负责“阻挡检测、允许位移、世界边界修正、重叠判断”
+    Animator          负责“读取实体状态并切换动画表现”
     Level             负责“当前关卡的对象持有、初始化、更新调度和绘制调度”
     Entity            主要保存实体数据，并提供碰撞盒、动画、绘制等接口
 ============================================================
@@ -520,8 +522,8 @@ public:
 		loadimage(&playerWalkR, _T("assets\\tex\\entities\\characters\\player1_walk_R.png"));
 		loadimage(&playerRunL, _T("assets\\tex\\entities\\characters\\player1_run_L.png"));
 		loadimage(&playerRunR, _T("assets\\tex\\entities\\characters\\player1_run_R.png"));
-		loadimage(&playerJumpStartL, _T("assets\\tex\\entities\\characters\\j_test_sprite_L.png"));
-		loadimage(&playerJumpStartR, _T("assets\\tex\\entities\\characters\\j_test_sprite_R.png"));
+		loadimage(&playerJumpStartL, _T("assets\\tex\\entities\\characters\\player1_jumpStart_L.png"));
+		loadimage(&playerJumpStartR, _T("assets\\tex\\entities\\characters\\player1_jumpStart_R.png"));
 		loadimage(&playerJumpLoopL, _T("assets\\tex\\entities\\characters\\player1_jumpLoop_L.png"));
 		loadimage(&playerJumpLoopR, _T("assets\\tex\\entities\\characters\\player1_jumpLoop_R.png"));
 		loadimage(&playerJumpEndL, _T("assets\\tex\\entities\\characters\\player1_jumpEnd_L.png"));
@@ -562,12 +564,12 @@ public:
 		}
 		if (id == ANIM_ID_PLAYER_JUMP_START_L)
 		{
-			return AnimationClip(&playerJumpStartL, 7, 2, false);
+			return AnimationClip(&playerJumpStartL, 8, 2, false);
 		}
 
 		if (id == ANIM_ID_PLAYER_JUMP_START_R)
 		{
-			return AnimationClip(&playerJumpStartR, 7, 2, false);
+			return AnimationClip(&playerJumpStartR, 8, 2, false);
 		}
 
 		if (id == ANIM_ID_PLAYER_JUMP_LOOP_L)
@@ -1634,6 +1636,23 @@ public:
 // 前置声明
 class Entity;
 
+
+
+class Entity;
+
+class Animator
+{
+private:
+	AnimationState currentAnimState;
+	bool wasInAir;
+
+public:
+	Animator();
+
+	void changeAnimation(Entity& entity, AnimationState newState, ResourceManager& resources);
+
+	void update(Entity& entity, BehaviorIntent intent, ResourceManager& resources);
+};
 // CollisionHandle：
  // 碰撞底层能力提供者。
  // 主要职责：
@@ -1736,6 +1755,7 @@ class Entity
     //声明友元使MovementHandle可以访问entity的私有数据
     friend class MovementHandle;
     friend class CollisionHandle;
+	friend class Animator;
 private:
     animatedSprite animation;
     // 世界坐标，左下角原点
@@ -1769,6 +1789,7 @@ private:
     CollisionBox collisionBox;
     AnimationState currentAnimState;//记录当前的动画状态
     facingDirection currentFacingDirection;//记录当前操作的有效朝向
+	Animator animator;//实体的动画控制器
 public:
     // 功能：初始化一个默认实体及其基础状态。
     Entity()
@@ -1898,6 +1919,36 @@ public:
     {
         return jumping;
     }
+	bool isControlled()
+	{
+		return controlled;
+	}
+	//返回实体的当前朝向
+	facingDirection getFacingDirection()
+	{
+		return currentFacingDirection;
+	}
+	// 功能：设置实体当前朝向。
+	void setFacingDirection(facingDirection direction)
+	{
+		currentFacingDirection = direction;
+	}
+	// 功能：获取实体当前动画帧的宽度。
+	bool isAnimationFinished()
+	{
+		return animation.isFinished();
+	}
+	// 功能：设置实体当前动画帧。
+	void setAnimationClip(AnimationClip clip)
+	{
+		animation.setClip(clip);
+	}
+	// 功能：更新实体动画状态。
+	void updateAnimator(BehaviorIntent intent, ResourceManager& resources)
+	{
+		animator.update(*this, intent, resources);
+	}
+
     // 功能：判断实体本帧是否处于碰撞或重叠反馈状态。
     bool hasCollisionState()//获取碰撞状态
     {
@@ -2194,7 +2245,140 @@ public:
 
 };
 
-//声音播放支持，声音当然也跟sprite等类似是一个单独的类，也具有多种状态
+
+
+
+//抽象出一个 Animator 类，负责根据实体状态和行为意图切换动画状态和帧。
+
+Animator::Animator()
+{
+    currentAnimState = ANIM_COUNT;
+    wasInAir = false;
+
+
+};
+
+void Animator::changeAnimation(Entity& entity, AnimationState newState, ResourceManager& resources)
+{
+    if (currentAnimState == newState)
+    {
+        return;
+    }
+
+    currentAnimState = newState;
+
+    AnimationId animationId = getPlayerAnimationId(newState);
+    AnimationClip clip = resources.getAnimationClip(animationId);
+
+    entity.setAnimationClip(clip);
+}
+void Animator::update(Entity& entity, BehaviorIntent intent, ResourceManager& resources)
+	{
+		if (!entity.isControlled())
+		{
+			return;
+		}
+
+		double inputX = intent.moveX;
+
+		bool hasMoveInput = fabs(inputX) > EPS;
+		bool justLanded = wasInAir && entity.isOnGround();
+
+		if (inputX < -EPS)
+		{
+			entity.setFacingDirection(LEFT);
+		}
+		else if (inputX > EPS)
+		{
+			entity.setFacingDirection(RIGHT);
+		}
+
+		AnimationState idleState = ANIM_IDLE_L;
+		AnimationState walkState = ANIM_WALK_LEFT;
+		AnimationState runState = ANIM_RUN_LEFT;
+		AnimationState jumpStartState = ANIM_JUMP_START_L;
+		AnimationState jumpLoopState = ANIM_JUMP_LOOP_L;
+		AnimationState jumpEndState = ANIM_JUMP_END_L;
+
+		if (entity.getFacingDirection() == RIGHT)
+		{
+			idleState = ANIM_IDLE_R;
+			walkState = ANIM_WALK_RIGHT;
+			runState = ANIM_RUN_RIGHT;
+			jumpStartState = ANIM_JUMP_START_R;
+			jumpLoopState = ANIM_JUMP_LOOP_R;
+			jumpEndState = ANIM_JUMP_END_R;
+		}
+
+		if (justLanded && !hasMoveInput)
+		{
+			changeAnimation(entity, jumpEndState, resources);
+			wasInAir = entity.isInAir();
+			return;
+		}
+
+		bool currentIsJumpStart =
+			currentAnimState == ANIM_JUMP_START_L ||
+			currentAnimState == ANIM_JUMP_START_R;
+
+		if (entity.isInAir())
+		{
+			bool shouldPlayJumpStart =
+				entity.isJumping() &&
+				intent.wantJump &&
+				!wasInAir;
+
+			if (shouldPlayJumpStart)
+			{
+				changeAnimation(entity, jumpStartState, resources);
+				wasInAir = entity.isInAir();
+				return;
+			}
+
+			if (currentIsJumpStart)
+			{
+				if (entity.isAnimationFinished())
+				{
+					changeAnimation(entity, jumpLoopState, resources);
+				}
+
+				wasInAir = entity.isInAir();
+				return;
+			}
+
+			changeAnimation(entity, jumpLoopState, resources);
+			wasInAir = entity.isInAir();
+			return;
+		}
+
+		bool currentIsJumpEnd =
+			currentAnimState == ANIM_JUMP_END_L ||
+			currentAnimState == ANIM_JUMP_END_R;
+
+		if (currentIsJumpEnd && !hasMoveInput && !entity.isAnimationFinished())
+		{
+			wasInAir = entity.isInAir();
+			return;
+		}
+
+		if (hasMoveInput)
+		{
+			if (entity.isSprinting())
+			{
+				changeAnimation(entity, runState, resources);
+			}
+			else
+			{
+				changeAnimation(entity, walkState, resources);
+			}
+		}
+		else
+		{
+			changeAnimation(entity, idleState, resources);
+		}
+
+		wasInAir = entity.isInAir();
+    };
 
 // 功能：根据行为意图、物理规则和碰撞结果更新实体移动状态。
 void MovementHandle::update(
@@ -2871,7 +3055,6 @@ private:
     IMAGE background;
 
     Entity entitys[ENTITY_COUNT];
-
     SmoothUIPanel listPanel;
     Renderer renderer;
 
@@ -3105,8 +3288,8 @@ private:
                 collisionHandle
             );
 
-            entitys[i].updateAnimationByIntent(intent,resources);
-            entitys[i].updateAnimatedSprite();
+			entitys[i].updateAnimator(intent, resources);
+			entitys[i].updateAnimatedSprite();
         }
     }
 

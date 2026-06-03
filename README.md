@@ -1,4 +1,4 @@
-# 基础 C++ 2D 游戏方向练习测试
+﻿# 基础 C++ 2D 游戏方向练习测试
 
 这是一个个人学习向的 C++ 2D 游戏原型项目。
 
@@ -15,11 +15,12 @@
 - EasyX 窗口与主循环
 - 背景图绘制
 - tile map 读取和绘制
-- 玩家动画 idle / walk / run 切换
+- 玩家动画 idle / walk / run / jumpStart / jumpLoop / jumpEnd 切换
 - 基础重力、跳跃、冲刺
 - 实体之间的 AABB 阻挡和重叠检测
 - 金币拾取事件和音效播放
 - 摄像机跟随、缩放和鼠标偏移
+- `Animator` 已作为实体动画控制组件接入
 - 简单 UI 面板测试
 - 实体碰撞框和 tile 碰撞框调试显示开关
 
@@ -78,7 +79,8 @@
 - 物理状态，例如 `onGround`、`InAir`、`jumping`、`sprinting`
 - 碰撞盒组件 `CollisionBox`
 - 动画播放对象 `animatedSprite`
-- 当前动画状态和朝向
+- 朝向状态
+- 动画控制组件 `Animator`
 
 已经从 `Entity` 中逐步剥离出去的内容：
 
@@ -92,8 +94,8 @@
 
 目前 `Entity` 仍然需要继续拆分的内容：
 
-- 动画状态切换逻辑仍然在 `Entity::updateAnimationByIntent`
-- `changeAnimation` 仍然属于实体内部逻辑，后续希望迁移到 `Animator`
+- 动画状态切换逻辑已经迁移到 `Animator`
+- 旧的 `updateAnimationByIntent` 和 `changeAnimation` 仍保留在代码中，后续可以清理
 - 实体构造函数仍然保留部分旧的图片路径加载逻辑
 - 不同类型对象目前仍然用同一个 `Entity` 表示
 
@@ -223,7 +225,7 @@ tile 碰撞接口已经有基础，但尚未接入角色移动。
 - 多行 sprite sheet 读取规则
 
 但这些仍然应该只是“数据描述”。  
-真正的每帧播放逻辑应该由 `animatedSprite` 或未来的 `Animator` 处理。
+真正的每帧播放逻辑应该由 `animatedSprite` 或未来更明确的 `AnimationPlayer` 处理。
 
 ### `animatedSprite`
 
@@ -244,26 +246,19 @@ tile 碰撞接口已经有基础，但尚未接入角色移动。
 
 这让它可以绑定已经由 `ResourceManager` 加载好的图片资源。
 
-### 未来的 `Animator`
+### `Animator`
 
-目前项目还没有真正抽出 `Animator`。
+项目已经初步抽出 `Animator`。
 
-现在动画状态切换逻辑仍然在 `Entity` 里，例如：
+当前 `Animator` 已经作为 `Entity` 内部持有的动画控制组件存在。它负责：
 
-- 根据 `intent.moveX` 判断左右
-- 根据 `sprinting` 判断 walk / run
-- 根据最后朝向判断 idle_L / idle_R
-- 根据 `AnimationState` 切换到对应 `AnimationClip`
-
-后续希望抽象出 `Animator`，让它负责：
-
-- 当前动画状态
-- 当前朝向
-- 根据实体真实状态决定播放哪个动画
-- 调用 `ResourceManager` 获取 `AnimationClip`
-- 调用 `animatedSprite::setClip`
-- 推进动画帧
-- 绘制 sprite
+- 保存当前动画状态
+- 保存上一帧空中状态，用于判断刚落地
+- 根据 `BehaviorIntent` 和 `Entity` 真实状态选择动画
+- 根据朝向选择左/右动画资源
+- 处理 idle / walk / run / jumpStart / jumpLoop / jumpEnd 的切换
+- 通过 `ResourceManager` 获取 `AnimationClip`
+- 通过 `Entity::setAnimationClip` 将动画片段交给 `animatedSprite`
 
 设计理解：
 
@@ -271,6 +266,7 @@ tile 碰撞接口已经有基础，但尚未接入角色移动。
 - `Animator` 读取这些状态，决定如何表现
 - `AnimationClip` 只保存动画资源描述
 - `animatedSprite` 只负责播放当前 clip
+- 旧的 `Entity::updateAnimationByIntent` 仍待后续删除
 
 ---
 
@@ -284,10 +280,12 @@ InputManager
   -> BehaviorIntent
   -> MovementHandle
   -> 更新 Entity 的真实状态，例如 sprinting
-  -> Entity::updateAnimationByIntent(intent, resources)
-  -> Entity::changeAnimation(newState, resources)
+  -> Entity::updateAnimator(intent, resources)
+  -> Animator::update(entity, intent, resources)
+  -> Animator::changeAnimation(entity, newState, resources)
   -> getPlayerAnimationId(newState)
   -> ResourceManager::getAnimationClip(animationId)
+  -> Entity::setAnimationClip(clip)
   -> animatedSprite::setClip(clip)
   -> animatedSprite::update()
   -> Renderer::drawEntities()
@@ -295,7 +293,7 @@ InputManager
   -> animatedSprite::draw(x, y)
 ```
 
-也就是说，资源加载已经从运行时切换中逐步剥离出来，但动画状态机本身还没有完全从 `Entity` 中剥离。
+也就是说，资源加载已经从运行时切换中逐步剥离出来，动画状态切换也已经由 `Animator` 接管。当前还剩旧接口清理和后续多类型 Animator 扩展。
 
 ---
 
@@ -363,10 +361,11 @@ for each alive entity
        -> 施加重力
        -> 调用 CollisionHandle 计算允许位移
        -> 写回 Entity 的位置和状态
-  -> Entity::updateAnimationByIntent(intent, resources)
-       -> 根据 intent 和 sprinting 判断动画状态
+  -> Entity::updateAnimator(intent, resources)
+       -> Animator 读取 Entity 状态和 intent
+       -> 判断 idle / walk / run / jumpStart / jumpLoop / jumpEnd
        -> 通过 ResourceManager 获取 AnimationClip
-       -> animatedSprite::setClip(...)
+       -> Entity::setAnimationClip(...)
   -> Entity::updateAnimatedSprite()
        -> 推进当前动画帧
 ```
@@ -411,7 +410,7 @@ MovementHandle
   -> 调用 CollisionHandle::getAllowedMoveX
   -> 如果左侧没有阻挡，写回 Entity.x
 
-Entity 动画逻辑
+Animator 动画逻辑
   -> inputX < 0
   -> currentFacingDirection = LEFT
   -> sprinting == false
@@ -459,7 +458,7 @@ MovementHandle
   -> 继续处理重力和垂直碰撞
   -> 如果已经在地面，会维持落地状态
 
-Entity 动画逻辑
+Animator 动画逻辑
   -> inputX == 0
   -> 根据 currentFacingDirection 选择 idle_L 或 idle_R
 
@@ -492,7 +491,7 @@ MovementHandle
   -> 调用 CollisionHandle 修正水平位移
   -> 写回 Entity.x
 
-Entity 动画逻辑
+Animator 动画逻辑
   -> inputX < 0
   -> currentFacingDirection = LEFT
   -> sprinting == true
@@ -524,7 +523,7 @@ MovementHandle
   -> CollisionHandle 检测右侧阻挡
   -> 写回新的 Entity.x
 
-Entity 动画逻辑
+Animator 动画逻辑
   -> inputX > 0
   -> currentFacingDirection = RIGHT
   -> sprinting == true
@@ -593,7 +592,7 @@ MovementHandle
   -> velocityY = 0
 ```
 
-目前跳跃动画还没有单独接入，后续如果加入 `Animator`，这里的 `onGround / InAir / jumping / velocityY` 就会成为动画状态判断的重要输入。
+目前跳跃动画已经接入 `Animator`。`onGround / InAir / jumping` 会参与判断 `jumpStart / jumpLoop / jumpEnd` 的切换。
 
 ### 复杂情景：同一帧里同时发生移动、相机更新、动画切换和调试绘制
 
@@ -677,16 +676,21 @@ GameObject
 
 ### Animator
 
-`Animator` 是接下来比较明确的重构方向。
+`Animator` 已经初步接入，后续还需要继续整理。
 
-它应该接管：
+已经接管：
 
 - `currentAnimState`
-- `currentFacingDirection`
+- `wasInAir`
 - `changeAnimation`
 - `updateAnimationByIntent`
-- `animatedSprite`
-- sprite 更新和绘制转发
+
+后续还可以继续做：
+
+- 删除 `Entity` 中旧的动画状态和旧函数
+- 按实体类型扩展不同的 Animator
+- 将人形实体、交互地图元素、装饰元素的动画控制区分开
+- 继续精简 `animatedSprite`，让其更接近 AnimationPlayer
 
 但它不应该接管实体的真实游戏状态。
 
@@ -780,6 +784,12 @@ assets/
         player1_walk_R.png
         player1_run_L.png
         player1_run_R.png
+        player1_jumpStart_L.png
+        player1_jumpStart_R.png
+        player1_jumpLoop_L.png
+        player1_jumpLoop_R.png
+        player1_jumpEnd_L.png
+        player1_jumpEnd_R.png
         player2.png
         player3.png
         player4.png
@@ -834,7 +844,7 @@ assets/
 - `ResourceManager` 应该负责资源生命周期
 - `AnimationClip` 应该只描述动画资源
 - `animatedSprite` 应该负责播放当前 clip
-- `Animator` 后续应该负责动画状态切换
+- `Animator` 负责动画状态切换
 - `CollisionBox` 应该负责碰撞盒数据和局部到世界转换
 - `CollisionHandle` 应该负责真正碰撞检测和移动修正
 
@@ -858,7 +868,7 @@ assets/
 短期目标：
 
 - 继续完善 `ResourceManager`
-- 抽出 `Animator`
+- 完善 `Animator` 并删除旧动画切换函数
 - 让 `Entity` 构造函数逐步摆脱资源路径
 - 接入 tile 碰撞
 - 继续清理 `Entity` 中的表现逻辑
