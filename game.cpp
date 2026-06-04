@@ -1070,12 +1070,7 @@ public:
             frameWidth,
             frameHeight
         );
-		targetSprite.setTransform(
-            scaleX,
-            scaleY,
-            offsetX,
-            offsetY
-        );
+
 
 
     }
@@ -2329,10 +2324,9 @@ public:
     }
 
 
-    // 功能：设置实体 sprite 绘制缩放和偏移；当前过渡期同时同步给动画播放器和 renderSprite。
+    // 功能：设置实体 sprite 绘制缩放和偏移。
     void setSpriteTransform(double scaleX, double scaleY, double offsetX, double offsetY)
     {
-        animation.setTransform(scaleX, scaleY, offsetX, offsetY);
         renderSprite.setTransform(scaleX, scaleY, offsetX, offsetY);
     }
     // 功能：设置实体动画播放速度。
