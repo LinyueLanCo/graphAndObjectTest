@@ -1,4 +1,4 @@
-#include <graphics.h>
+﻿#include <graphics.h>
 #include <windows.h>
 #include <conio.h>
 #include <cmath>
@@ -143,12 +143,14 @@ struct Camera
     // 功能：计算当前相机缩放下屏幕可见的世界宽度。
     double getVisibleWorldWidth()
     {
+        // 用屏幕像素宽度除以 zoom，得到当前视口覆盖的世界宽度。
         return WINDOW_WIDTH / zoom;
     }
 
     // 功能：计算当前相机缩放下屏幕可见的世界高度。
     double getVisibleWorldHeight()
     {
+        // 用屏幕像素高度除以 zoom，得到当前视口覆盖的世界高度。
         return WINDOW_HEIGHT / zoom;
     }
 
@@ -158,6 +160,7 @@ struct Camera
         double visibleW = getVisibleWorldWidth();
         double visibleH = getVisibleWorldHeight();
 
+        // 用目标中心点减去半个可见范围，得到相机左下角坐标。
         x = targetWorldX - visibleW / 2.0;
         y = targetWorldY - visibleH / 2.0;
 
@@ -177,12 +180,14 @@ struct Camera
         double visibleW = getVisibleWorldWidth();
         double visibleH = getVisibleWorldHeight();
 
+        // 用目标中心点、半个视口和鼠标世界偏移，计算相机希望到达的左下角坐标。
         targetX = targetWorldX - visibleW / 2.0 + offsetWorldX;
         targetY = targetWorldY - visibleH / 2.0 + offsetWorldY;
 
         // 数值越小越“拖”，越大越紧跟
         double followSpeed = 0.08;
 
+        // 用当前位置与目标位置的差值乘以跟随系数，得到本帧相机平滑位移。
         x += (targetX - x) * followSpeed;
         y += (targetY - y) * followSpeed;
 
@@ -209,6 +214,7 @@ struct Camera
     void updateZoom()
     {
         double zoomSpeed = 0.08;
+        // 用当前缩放和目标缩放的差值乘以速度，得到本帧缩放变化量。
         zoom += (targetZoom - zoom) * zoomSpeed;
     }
 
@@ -259,18 +265,21 @@ struct Camera
     // 功能：把世界坐标 X 转换为屏幕坐标 X。
     int worldToScreenX(double worldX) const
     {
+        // 用世界坐标减去相机左边界，再乘 zoom，得到屏幕 X。
         return (int)((worldX - x) * zoom);
     }
 
     // 功能：把世界坐标 Y 转换为 EasyX 屏幕坐标 Y。
     int worldToScreenY(double worldY) const
     {
+        // 用窗口高度减去相机相对 Y 偏移，完成世界左下原点到 EasyX 左上原点的翻转。
         return (int)(WINDOW_HEIGHT - (worldY - y) * zoom);
     }
 
     // 功能：把世界空间尺寸转换为当前缩放下的屏幕尺寸。
     int worldSizeToScreen(double worldSize) const
     {
+        // 用世界尺寸乘 zoom，得到屏幕像素尺寸。
         return (int)(worldSize * zoom);
     }
 
@@ -350,8 +359,8 @@ enum AnimationId
 
 // AnimationClip：
  // 动画资源描述数据。
- // 它只描述“哪张图、多少帧、播放速度、是否循环”，不保存当前播放进度。
- // 当前播放进度由 animatedSprite 负责。
+ // 它描述“哪张图、多少帧、播放速度、是否循环”，也描述 sprite sheet 的裁剪规则。
+ // 它不保存当前播放进度，当前播放进度由 animatedSprite / 未来的 AnimationPlayer 负责。
 struct AnimationClip
 {
 	IMAGE* image;
@@ -359,23 +368,95 @@ struct AnimationClip
 	int speed;
 	bool loop;
 
+    // 单帧宽高，为 0 时由动画播放器按旧规则自动计算。
+    int frameWidth;
+    int frameHeight;
+
+    // 当前 clip 在 sprite sheet 中的起始裁剪坐标。
+    int sourceStartX;
+    int sourceStartY;
+
+    // 相邻帧之间的横向和纵向间隔。
+    int frameSpacingX;
+    int frameSpacingY;
+
+    // 每行帧数，为 0 时暂时按横向单行动画处理。
+    int frameColumns;
+
+
+
 	// 功能：初始化一个空动画片段描述。
-	AnimationClip()
-	{
-		image = NULL;
-		frameCount = 1;
-		speed = 4;
-		loop = true;
-	}
+    AnimationClip()
+    {
+        image = NULL;
+        frameCount = 1;
+        speed = 4;
+        loop = true;
+
+        frameWidth = 0;
+        frameHeight = 0;
+
+        sourceStartX = 0;
+        sourceStartY = 0;
+
+        frameSpacingX = 0;
+        frameSpacingY = 0;
+
+        frameColumns = 0;
+    }
 
 	// 功能：按图片指针、帧数、速度和循环标记创建动画片段描述。
-	AnimationClip(IMAGE* newImage, int newFrameCount, int newSpeed, bool newLoop)
-	{
-		image = newImage;
-		frameCount = newFrameCount;
-		speed = newSpeed;
-		loop = newLoop;
-	}
+    AnimationClip(IMAGE* newImage, int newFrameCount, int newSpeed, bool newLoop)
+    {
+        image = newImage;
+        frameCount = newFrameCount;
+        speed = newSpeed;
+        loop = newLoop;
+
+        frameWidth = 0;
+        frameHeight = 0;
+
+        sourceStartX = 0;
+        sourceStartY = 0;
+
+        frameSpacingX = 0;
+        frameSpacingY = 0;
+
+        frameColumns = 0;
+    }
+
+    // 功能：按完整 sprite sheet 裁剪配置创建动画片段描述。
+    AnimationClip(
+        IMAGE* newImage,
+        int newFrameCount,
+        int newSpeed,
+        bool newLoop,
+        int newFrameWidth,
+        int newFrameHeight,
+        int newSourceStartX,
+        int newSourceStartY,
+        int newFrameSpacingX,
+        int newFrameSpacingY,
+        int newFrameColumns
+    )
+    {
+        image = newImage;
+        frameCount = newFrameCount;
+        speed = newSpeed;
+        loop = newLoop;
+
+        frameWidth = newFrameWidth;
+        frameHeight = newFrameHeight;
+
+        sourceStartX = newSourceStartX;
+        sourceStartY = newSourceStartY;
+
+        frameSpacingX = newFrameSpacingX;
+        frameSpacingY = newFrameSpacingY;
+
+        frameColumns = newFrameColumns;
+    }
+
 };
 
 
@@ -646,6 +727,7 @@ public:
 	}
 };
 
+
 // sprite：
  // 单帧渲染数据容器。
  // 它只记录当前要绘制的图片来源、源图裁剪矩形、可见性、缩放和偏移。
@@ -709,25 +791,42 @@ class animatedSprite
 private:
 	IMAGE image;
 	IMAGE* imageSource;
+
     int frameCount;
     int currentFrame;
+
     int frameWidth;
     int frameHeight;
+
+    int sourceStartX;
+    int sourceStartY;
+
+    int frameSpacingX;
+    int frameSpacingY;
+
+    int frameColumns;
+
     bool isPlaying;
     bool isLoop;
 
     int frameInterval;//帧间隔
     int frameTimer;//计时器
-    double scaleX;
-    double scaleY;
-    double offsetX;
-    double offsetY;
+
 public:
     // 功能：初始化序列帧动画的默认播放参数。
     animatedSprite()//基础构造
     {
         frameWidth = 0;
         frameHeight = 0;
+
+        sourceStartX = 0;
+        sourceStartY = 0;
+
+        frameSpacingX = 0;
+        frameSpacingY = 0;
+
+        frameColumns = 0;
+
         frameCount = 0;
         currentFrame = 0;
 
@@ -737,10 +836,6 @@ public:
         isPlaying = true;
         isLoop = true;
 
-        scaleX = 1.0;
-        scaleY = 1.0;
-        offsetX = 0;
-        offsetY = 0;
         imageSource = &image;
     }
 
@@ -757,6 +852,14 @@ public:
         this->frameWidth = frameWidth;
         this->frameHeight = frameHeight;
         this->frameCount = frameCount;
+
+        sourceStartX = 0;
+        sourceStartY = 0;
+
+        frameSpacingX = 0;
+        frameSpacingY = 0;
+
+        frameColumns = frameCount;
 
         currentFrame = 0;
         frameTimer = 0;
@@ -779,6 +882,14 @@ public:
         frameWidth = image.getwidth() / frameCount;
         frameHeight = image.getheight();
 
+        sourceStartX = 0;
+        sourceStartY = 0;
+
+        frameSpacingX = 0;
+        frameSpacingY = 0;
+
+        frameColumns = frameCount;
+
         currentFrame = 0;
         frameTimer = 0;
         isPlaying = true;
@@ -800,9 +911,42 @@ public:
 		{
 			frameCount = 1;
 		}
+		// 如果动画片段描述里指定了单帧宽高，就用它；否则按旧规则平均切分。
+        if (clip.frameWidth > 0)
+        {
+            frameWidth = clip.frameWidth;
+        }
+        else
+        {
+            // 用图片总宽度除以帧数，得到旧横向单行动画的单帧宽度。
+            frameWidth = imageSource->getwidth() / frameCount;
+        }
+		// 同上，指定了单帧高度就用它，否则默认整张图高就是单帧高。
+        if (clip.frameHeight > 0)
+        {
+            frameHeight = clip.frameHeight;
+        }
+        else
+        {
+            // 用图片总高度作为单帧高度，兼容旧横向单行动画。
+            frameHeight = imageSource->getheight();
+        }
 
-		frameWidth = imageSource->getwidth() / frameCount;
-		frameHeight = imageSource->getheight();
+        sourceStartX = clip.sourceStartX;
+        sourceStartY = clip.sourceStartY;
+
+        frameSpacingX = clip.frameSpacingX;
+        frameSpacingY = clip.frameSpacingY;
+
+        if (clip.frameColumns > 0)
+        {
+            frameColumns = clip.frameColumns;
+        }
+        else
+        {
+            // 未显式指定列数时，用总帧数作为列数，等价于旧的单行动画。
+            frameColumns = frameCount;
+        }
 
 		setSpeed(clip.speed);
 		setLoop(clip.loop);
@@ -843,14 +987,7 @@ public:
     {
         isPlaying = false;
     }
-    // 功能：设置动画绘制缩放和相对实体中心的偏移。
-    void setTransform(double newScaleX, double newScaleY, double newOffsetX, double newOffsetY)
-    {
-        scaleX = newScaleX;
-        scaleY = newScaleY;
-        offsetX = newOffsetX;
-        offsetY = newOffsetY;
-    }
+
     // 功能：重置动画到第一帧并清空计时器。
     void reset()
     {
@@ -873,6 +1010,7 @@ public:
         if (frameTimer >= frameInterval)
         {
             frameTimer = 0;//每自增到interval，重置计数器
+            // 每到达帧间隔就推进一帧，currentFrame 表示当前播放到第几帧。
             currentFrame++;
             if (currentFrame >= frameCount)
             {
@@ -905,8 +1043,24 @@ public:
             return;
         }
 
-        int srcX = currentFrame * frameWidth;
-        int srcY = 0;
+        int activeColumns = frameColumns;
+
+        if (activeColumns < 1)
+        {
+            activeColumns = frameCount;
+        }
+
+        if (activeColumns < 1)
+        {
+            activeColumns = 1;
+        }
+
+        int frameCol = currentFrame % activeColumns;
+        int frameRow = currentFrame / activeColumns;
+
+        // 用当前帧序号换算出行列，再按起点、单帧尺寸和间距计算源图裁剪坐标。
+        int srcX = sourceStartX + frameCol * (frameWidth + frameSpacingX);
+        int srcY = sourceStartY + frameRow * (frameHeight + frameSpacingY);
 
 
 		targetSprite.setSource(
@@ -916,12 +1070,7 @@ public:
             frameWidth,
             frameHeight
         );
-		targetSprite.setTransform(
-            scaleX,
-            scaleY,
-            offsetX,
-            offsetY
-        );
+
 
 
     }
@@ -991,12 +1140,15 @@ struct CollisionBox
 	{
 		RectBox box;
 
+        // 用实体中心点加碰撞盒偏移，得到碰撞盒自己的世界中心点。
 		double colliderCenterX = ownerX + offsetX;
 		double colliderCenterY = ownerY + offsetY;
 
+        // 用原始宽高乘缩放，得到最终参与检测的世界宽高。
 		double colliderWidth = width * scaleX;
 		double colliderHeight = height * scaleY;
 
+        // 用中心点加减半宽半高，得到 AABB 的四条世界边界。
 		box.left = colliderCenterX - colliderWidth / 2.0;
 		box.right = colliderCenterX + colliderWidth / 2.0;
 		box.bottom = colliderCenterY - colliderHeight / 2.0;
@@ -1175,9 +1327,11 @@ public:
 
         int tilesetCols = tileset.getwidth() / sourceTileWidth;
 
+        // 用 tile id 在 tileset 中的序号换算列和行，得到源图裁剪坐标。
         int srcX = (realTileIndex % tilesetCols) * sourceTileWidth;
         int srcY = (realTileIndex / tilesetCols) * sourceTileHeight;
 
+        // 用地图偏移、列号和行号计算 tile 在世界坐标中的矩形位置。
         double worldLeft = offsetX + col * drawTileWidth;
         double worldBottom = offsetY + (rows - 1 - row) * drawTileHeight;
         double worldRight = worldLeft + drawTileWidth;
@@ -1188,6 +1342,7 @@ public:
         int screenTop = worldToScreenY(worldTop);
         int screenBottom = worldToScreenY(worldBottom);
 
+        // 用屏幕左右/上下边界相减，得到最终绘制到屏幕上的 tile 尺寸。
         int screenTileW = screenRight - screenLeft;
         int screenTileH = screenBottom - screenTop;
 
@@ -1239,9 +1394,11 @@ public:
     {
         RectBox box;
 
+        // 用地图偏移、列号和反向行号，计算 tile 的世界左下角。
         double worldLeft = offsetX + col * drawTileWidth;
         double worldBottom = offsetY + (rows - 1 - row) * drawTileHeight;
 
+        // 用左下角加绘制宽高，得到 tile 的世界 AABB。
         box.left = worldLeft;
         box.right = worldLeft + drawTileWidth;
         box.bottom = worldBottom;
@@ -1431,6 +1588,7 @@ struct SmoothUIPanel
     // 功能：平滑推进 UI 面板当前位置，使其靠近目标位置。
     void update()
     {
+        // 用当前位置和目标位置的差值乘移动系数，得到本帧 UI 面板平滑位移。
         x += (targetX - x) * moveSpeed;
         y += (targetY - y) * moveSpeed;
 
@@ -2175,10 +2333,9 @@ public:
     }
 
 
-    // 功能：设置实体 sprite 绘制缩放和偏移；当前过渡期同时同步给动画播放器和 renderSprite。
+    // 功能：设置实体 sprite 绘制缩放和偏移。
     void setSpriteTransform(double scaleX, double scaleY, double offsetX, double offsetY)
     {
-        animation.setTransform(scaleX, scaleY, offsetX, offsetY);
         renderSprite.setTransform(scaleX, scaleY, offsetX, offsetY);
     }
     // 功能：设置实体动画播放速度。
@@ -2888,11 +3045,13 @@ void updateCameraFollow(
     }
 
     // 屏幕像素偏移 -> 世界坐标偏移
+    // 用鼠标屏幕偏移除以 zoom，把屏幕像素距离还原成世界距离。
     double offsetWorldX = mouseOffsetX / gCamera.zoom * lookStrength;
 
     // 注意这里要反过来：
     // 鼠标在屏幕上方时 mouseOffsetY 是负数，
     // 但是世界坐标里向上应该是正数。
+    // 用负号翻转屏幕 Y 方向，再除以 zoom 得到世界 Y 偏移。
     double offsetWorldY = -mouseOffsetY / gCamera.zoom * lookStrength;
 
     gCamera.followSmooth(
@@ -3049,14 +3208,17 @@ public:
         if(targetSprite.srcW <= 0 || targetSprite.srcH <= 0)
         {
             return;
-        }
+		}
 		// 计算世界坐标系下的绘制尺寸,绘制位置以实体中心点为基准，并加上 sprite 的偏移
+        // 用源帧尺寸乘 sprite 缩放，得到当前帧在世界坐标里的绘制宽高。
 		double worldDrawW = targetSprite.srcW * targetSprite.scaleX;
 		double worldDrawH = targetSprite.srcH * targetSprite.scaleY;
 
+        // 用实体中心点加 sprite 偏移，得到 sprite 自己的世界中心点。
 		double spriteCenterX = ownerX + targetSprite.offsetX;
 		double spriteCenterY = ownerY + targetSprite.offsetY;
 
+        // 用 sprite 世界中心点减半宽、加半高，得到世界绘制矩形左上角。
 		double worldDrawLeft = spriteCenterX - worldDrawW / 2.0;
 		double worldDrawTop = spriteCenterY + worldDrawH / 2.0;
 

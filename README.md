@@ -215,17 +215,19 @@ tile 碰撞接口已经有基础，但尚未接入角色移动。
 - `frameCount`
 - `speed`
 - `loop`
+- `frameWidth / frameHeight`
+- `sourceStartX / sourceStartY`
+- `frameSpacingX / frameSpacingY`
+- `frameColumns`
 
 它的定位是 **动画资源描述数据**，而不是动画播放器，也不是状态机。
 
-后续可能继续扩展：
+现在它已经可以描述：
 
-- 单帧宽度
-- 单帧高度
-- 起始帧
-- 每行帧数
-- 是否倒序
-- 多行 sprite sheet 读取规则
+- 手动指定单帧宽高
+- 指定 sprite sheet 中第一帧的起始裁剪坐标
+- 指定横向和纵向帧间距
+- 指定一行有多少帧
 
 但这些仍然应该只是“数据描述”。  
 真正的每帧播放逻辑目前由 `animatedSprite` 处理，后续可以进一步改名或拆分成更明确的 `AnimationPlayer`。
@@ -240,9 +242,15 @@ tile 碰撞接口已经有基础，但尚未接入角色移动。
 - 帧计时
 - 播放速度
 - 循环控制
-- sprite 缩放和偏移
+- 根据 `AnimationClip` 的帧尺寸、起点、间距和列数计算源图裁剪坐标
 - 根据当前帧计算 sprite sheet 中的源图区域
 - 把当前帧数据写入 `Entity` 持有的 `sprite`
+
+它已经不再负责：
+
+- 实体绘制
+- sprite 缩放和偏移
+- 根据实体状态选择动画
 
 现在它既兼容旧的 `load(path, frameCount)`，也支持新的：
 
@@ -269,7 +277,8 @@ tile 碰撞接口已经有基础，但尚未接入角色移动。
 - `Entity` 保存真实游戏状态，例如是否在地面、是否冲刺、是否存活
 - `Animator` 读取这些状态，决定如何表现
 - `AnimationClip` 只保存动画资源描述
-- `animatedSprite` 只负责播放当前 clip，并把当前帧同步到 `sprite`
+- `animatedSprite` 只负责播放当前 clip，按 clip 裁剪规则计算当前帧，并把源图矩形同步到 `sprite`
+- `sprite` 保存当前帧源图矩形、缩放、偏移和可见性
 - `Renderer` 读取 `sprite` 和实体坐标完成最终绘制
 - 旧的 `Entity::updateAnimationByIntent` 和 `Entity::changeAnimation` 已清理
 
@@ -292,14 +301,19 @@ InputManager
   -> ResourceManager::getAnimationClip(animationId)
   -> Entity::setAnimationClip(clip)
   -> animatedSprite::setClip(clip)
+       -> 读取 frameWidth / frameHeight
+       -> 读取 sourceStartX / sourceStartY
+       -> 读取 frameSpacingX / frameSpacingY
+       -> 读取 frameColumns
   -> animatedSprite::update()
   -> animatedSprite::writeCurrentFrameTo(renderSprite)
+       -> 计算 srcX / srcY / srcW / srcH
   -> Renderer::drawEntities()
   -> Renderer::drawSprite(entity.getSprite(), entity.getX(), entity.getY())
   -> Renderer::drawImageTileAlpha()
 ```
 
-也就是说，资源加载已经从运行时切换中逐步剥离出来，动画状态切换已经由 `Animator` 接管，实体绘制也已经改为由 `Renderer` 读取 `sprite` 数据统一完成。
+也就是说，资源加载已经从运行时切换中逐步剥离出来，动画状态切换已经由 `Animator` 接管，动画播放器只计算当前帧源图矩形，实体绘制则由 `Renderer` 读取 `sprite` 数据统一完成。
 
 ---
 
@@ -694,7 +708,6 @@ GameObject
 
 后续还可以继续做：
 
-- 继续把 `animatedSprite` 向 `AnimationPlayer` 命名和职责靠拢
 - 按实体类型扩展不同的 Animator
 - 将人形实体、交互地图元素、装饰元素的动画控制区分开
 
@@ -710,6 +723,22 @@ GameObject
 
 这些仍然属于 `Entity` 或移动/碰撞系统。  
 `Animator` 只读取这些状态，并决定动画表现。
+
+### AnimationPlayer 命名
+
+`animatedSprite` 现在已经基本不再承担绘制职责，也不再保存 sprite 显示缩放和偏移。
+
+它当前更接近：
+
+```text
+AnimationPlayer
+  -> 持有当前 clip 播放状态
+  -> 推进 currentFrame
+  -> 根据 AnimationClip 计算源图裁剪矩形
+  -> 写入 sprite 的 imageSource / srcX / srcY / srcW / srcH
+```
+
+后续可以在独立文件拆分阶段，将 `animatedSprite` 正式改名为 `AnimationPlayer`。
 
 ### ResourceManager 继续完善
 
