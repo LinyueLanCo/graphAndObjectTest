@@ -782,10 +782,21 @@ class animatedSprite
 private:
 	IMAGE image;
 	IMAGE* imageSource;
+
     int frameCount;
     int currentFrame;
+
     int frameWidth;
     int frameHeight;
+
+    int sourceStartX;
+    int sourceStartY;
+
+    int frameSpacingX;
+    int frameSpacingY;
+
+    int frameColumns;
+
     bool isPlaying;
     bool isLoop;
 
@@ -801,6 +812,15 @@ public:
     {
         frameWidth = 0;
         frameHeight = 0;
+
+        sourceStartX = 0;
+        sourceStartY = 0;
+
+        frameSpacingX = 0;
+        frameSpacingY = 0;
+
+        frameColumns = 0;
+
         frameCount = 0;
         currentFrame = 0;
 
@@ -831,6 +851,14 @@ public:
         this->frameHeight = frameHeight;
         this->frameCount = frameCount;
 
+        sourceStartX = 0;
+        sourceStartY = 0;
+
+        frameSpacingX = 0;
+        frameSpacingY = 0;
+
+        frameColumns = frameCount;
+
         currentFrame = 0;
         frameTimer = 0;
         isPlaying = 1;
@@ -851,6 +879,14 @@ public:
 
         frameWidth = image.getwidth() / frameCount;
         frameHeight = image.getheight();
+
+        sourceStartX = 0;
+        sourceStartY = 0;
+
+        frameSpacingX = 0;
+        frameSpacingY = 0;
+
+        frameColumns = frameCount;
 
         currentFrame = 0;
         frameTimer = 0;
@@ -890,6 +926,21 @@ public:
         else
         {
             frameHeight = imageSource->getheight();
+        }
+
+        sourceStartX = clip.sourceStartX;
+        sourceStartY = clip.sourceStartY;
+
+        frameSpacingX = clip.frameSpacingX;
+        frameSpacingY = clip.frameSpacingY;
+
+        if (clip.frameColumns > 0)
+        {
+            frameColumns = clip.frameColumns;
+        }
+        else
+        {
+            frameColumns = frameCount;
         }
 
 		setSpeed(clip.speed);
@@ -993,8 +1044,23 @@ public:
             return;
         }
 
-        int srcX = currentFrame * frameWidth;
-        int srcY = 0;
+        int activeColumns = frameColumns;
+
+        if (activeColumns < 1)
+        {
+            activeColumns = frameCount;
+        }
+
+        if (activeColumns < 1)
+        {
+            activeColumns = 1;
+        }
+
+        int frameCol = currentFrame % activeColumns;
+        int frameRow = currentFrame / activeColumns;
+
+        int srcX = sourceStartX + frameCol * (frameWidth + frameSpacingX);
+        int srcY = sourceStartY + frameRow * (frameHeight + frameSpacingY);
 
 
 		targetSprite.setSource(
