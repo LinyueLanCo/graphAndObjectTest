@@ -143,12 +143,14 @@ struct Camera
     // 功能：计算当前相机缩放下屏幕可见的世界宽度。
     double getVisibleWorldWidth()
     {
+        // 用屏幕像素宽度除以 zoom，得到当前视口覆盖的世界宽度。
         return WINDOW_WIDTH / zoom;
     }
 
     // 功能：计算当前相机缩放下屏幕可见的世界高度。
     double getVisibleWorldHeight()
     {
+        // 用屏幕像素高度除以 zoom，得到当前视口覆盖的世界高度。
         return WINDOW_HEIGHT / zoom;
     }
 
@@ -158,6 +160,7 @@ struct Camera
         double visibleW = getVisibleWorldWidth();
         double visibleH = getVisibleWorldHeight();
 
+        // 用目标中心点减去半个可见范围，得到相机左下角坐标。
         x = targetWorldX - visibleW / 2.0;
         y = targetWorldY - visibleH / 2.0;
 
@@ -177,12 +180,14 @@ struct Camera
         double visibleW = getVisibleWorldWidth();
         double visibleH = getVisibleWorldHeight();
 
+        // 用目标中心点、半个视口和鼠标世界偏移，计算相机希望到达的左下角坐标。
         targetX = targetWorldX - visibleW / 2.0 + offsetWorldX;
         targetY = targetWorldY - visibleH / 2.0 + offsetWorldY;
 
         // 数值越小越“拖”，越大越紧跟
         double followSpeed = 0.08;
 
+        // 用当前位置与目标位置的差值乘以跟随系数，得到本帧相机平滑位移。
         x += (targetX - x) * followSpeed;
         y += (targetY - y) * followSpeed;
 
@@ -209,6 +214,7 @@ struct Camera
     void updateZoom()
     {
         double zoomSpeed = 0.08;
+        // 用当前缩放和目标缩放的差值乘以速度，得到本帧缩放变化量。
         zoom += (targetZoom - zoom) * zoomSpeed;
     }
 
@@ -259,18 +265,21 @@ struct Camera
     // 功能：把世界坐标 X 转换为屏幕坐标 X。
     int worldToScreenX(double worldX) const
     {
+        // 用世界坐标减去相机左边界，再乘 zoom，得到屏幕 X。
         return (int)((worldX - x) * zoom);
     }
 
     // 功能：把世界坐标 Y 转换为 EasyX 屏幕坐标 Y。
     int worldToScreenY(double worldY) const
     {
+        // 用窗口高度减去相机相对 Y 偏移，完成世界左下原点到 EasyX 左上原点的翻转。
         return (int)(WINDOW_HEIGHT - (worldY - y) * zoom);
     }
 
     // 功能：把世界空间尺寸转换为当前缩放下的屏幕尺寸。
     int worldSizeToScreen(double worldSize) const
     {
+        // 用世界尺寸乘 zoom，得到屏幕像素尺寸。
         return (int)(worldSize * zoom);
     }
 
@@ -909,6 +918,7 @@ public:
         }
         else
         {
+            // 用图片总宽度除以帧数，得到旧横向单行动画的单帧宽度。
             frameWidth = imageSource->getwidth() / frameCount;
         }
 		// 同上，指定了单帧高度就用它，否则默认整张图高就是单帧高。
@@ -918,6 +928,7 @@ public:
         }
         else
         {
+            // 用图片总高度作为单帧高度，兼容旧横向单行动画。
             frameHeight = imageSource->getheight();
         }
 
@@ -933,6 +944,7 @@ public:
         }
         else
         {
+            // 未显式指定列数时，用总帧数作为列数，等价于旧的单行动画。
             frameColumns = frameCount;
         }
 
@@ -998,6 +1010,7 @@ public:
         if (frameTimer >= frameInterval)
         {
             frameTimer = 0;//每自增到interval，重置计数器
+            // 每到达帧间隔就推进一帧，currentFrame 表示当前播放到第几帧。
             currentFrame++;
             if (currentFrame >= frameCount)
             {
@@ -1045,6 +1058,7 @@ public:
         int frameCol = currentFrame % activeColumns;
         int frameRow = currentFrame / activeColumns;
 
+        // 用当前帧序号换算出行列，再按起点、单帧尺寸和间距计算源图裁剪坐标。
         int srcX = sourceStartX + frameCol * (frameWidth + frameSpacingX);
         int srcY = sourceStartY + frameRow * (frameHeight + frameSpacingY);
 
@@ -1126,12 +1140,15 @@ struct CollisionBox
 	{
 		RectBox box;
 
+        // 用实体中心点加碰撞盒偏移，得到碰撞盒自己的世界中心点。
 		double colliderCenterX = ownerX + offsetX;
 		double colliderCenterY = ownerY + offsetY;
 
+        // 用原始宽高乘缩放，得到最终参与检测的世界宽高。
 		double colliderWidth = width * scaleX;
 		double colliderHeight = height * scaleY;
 
+        // 用中心点加减半宽半高，得到 AABB 的四条世界边界。
 		box.left = colliderCenterX - colliderWidth / 2.0;
 		box.right = colliderCenterX + colliderWidth / 2.0;
 		box.bottom = colliderCenterY - colliderHeight / 2.0;
@@ -1310,9 +1327,11 @@ public:
 
         int tilesetCols = tileset.getwidth() / sourceTileWidth;
 
+        // 用 tile id 在 tileset 中的序号换算列和行，得到源图裁剪坐标。
         int srcX = (realTileIndex % tilesetCols) * sourceTileWidth;
         int srcY = (realTileIndex / tilesetCols) * sourceTileHeight;
 
+        // 用地图偏移、列号和行号计算 tile 在世界坐标中的矩形位置。
         double worldLeft = offsetX + col * drawTileWidth;
         double worldBottom = offsetY + (rows - 1 - row) * drawTileHeight;
         double worldRight = worldLeft + drawTileWidth;
@@ -1323,6 +1342,7 @@ public:
         int screenTop = worldToScreenY(worldTop);
         int screenBottom = worldToScreenY(worldBottom);
 
+        // 用屏幕左右/上下边界相减，得到最终绘制到屏幕上的 tile 尺寸。
         int screenTileW = screenRight - screenLeft;
         int screenTileH = screenBottom - screenTop;
 
@@ -1374,9 +1394,11 @@ public:
     {
         RectBox box;
 
+        // 用地图偏移、列号和反向行号，计算 tile 的世界左下角。
         double worldLeft = offsetX + col * drawTileWidth;
         double worldBottom = offsetY + (rows - 1 - row) * drawTileHeight;
 
+        // 用左下角加绘制宽高，得到 tile 的世界 AABB。
         box.left = worldLeft;
         box.right = worldLeft + drawTileWidth;
         box.bottom = worldBottom;
@@ -1566,6 +1588,7 @@ struct SmoothUIPanel
     // 功能：平滑推进 UI 面板当前位置，使其靠近目标位置。
     void update()
     {
+        // 用当前位置和目标位置的差值乘移动系数，得到本帧 UI 面板平滑位移。
         x += (targetX - x) * moveSpeed;
         y += (targetY - y) * moveSpeed;
 
@@ -3022,11 +3045,13 @@ void updateCameraFollow(
     }
 
     // 屏幕像素偏移 -> 世界坐标偏移
+    // 用鼠标屏幕偏移除以 zoom，把屏幕像素距离还原成世界距离。
     double offsetWorldX = mouseOffsetX / gCamera.zoom * lookStrength;
 
     // 注意这里要反过来：
     // 鼠标在屏幕上方时 mouseOffsetY 是负数，
     // 但是世界坐标里向上应该是正数。
+    // 用负号翻转屏幕 Y 方向，再除以 zoom 得到世界 Y 偏移。
     double offsetWorldY = -mouseOffsetY / gCamera.zoom * lookStrength;
 
     gCamera.followSmooth(
@@ -3183,14 +3208,17 @@ public:
         if(targetSprite.srcW <= 0 || targetSprite.srcH <= 0)
         {
             return;
-        }
+		}
 		// 计算世界坐标系下的绘制尺寸,绘制位置以实体中心点为基准，并加上 sprite 的偏移
+        // 用源帧尺寸乘 sprite 缩放，得到当前帧在世界坐标里的绘制宽高。
 		double worldDrawW = targetSprite.srcW * targetSprite.scaleX;
 		double worldDrawH = targetSprite.srcH * targetSprite.scaleY;
 
+        // 用实体中心点加 sprite 偏移，得到 sprite 自己的世界中心点。
 		double spriteCenterX = ownerX + targetSprite.offsetX;
 		double spriteCenterY = ownerY + targetSprite.offsetY;
 
+        // 用 sprite 世界中心点减半宽、加半高，得到世界绘制矩形左上角。
 		double worldDrawLeft = spriteCenterX - worldDrawW / 2.0;
 		double worldDrawTop = spriteCenterY + worldDrawH / 2.0;
 
