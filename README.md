@@ -79,6 +79,7 @@
 - 物理状态，例如 `onGround`、`InAir`、`jumping`、`sprinting`
 - 碰撞盒组件 `CollisionBox`
 - 动画播放对象 `animatedSprite`
+- 当前单帧渲染数据 `sprite`
 - 朝向状态
 - 动画控制组件 `Animator`
 
@@ -89,13 +90,15 @@
 - 移动、重力、跳跃、冲刺处理交给 `MovementHandle`
 - 碰撞重叠、阻挡位移修正和世界边界限制交给 `CollisionHandle`
 - 绘制调度交给 `Renderer`
+- 实体 sprite 绘制和实体碰撞框调试绘制交给 `Renderer`
 - 碰撞盒世界坐标计算交给 `CollisionBox`
 - 动画图片资源开始交给 `ResourceManager` 管理
 
 目前 `Entity` 仍然需要继续拆分的内容：
 
 - 动画状态切换逻辑已经迁移到 `Animator`
-- 旧的 `updateAnimationByIntent` 和 `changeAnimation` 仍保留在代码中，后续可以清理
+- 旧的 `updateAnimationByIntent` 和 `changeAnimation` 已从 `Entity` 中删除
+- `animatedSprite` 当前已经更接近动画播放器，后续可以继续改名或拆成 `AnimationPlayer`
 - 实体构造函数仍然保留部分旧的图片路径加载逻辑
 - 不同类型对象目前仍然用同一个 `Entity` 表示
 
@@ -225,11 +228,11 @@ tile 碰撞接口已经有基础，但尚未接入角色移动。
 - 多行 sprite sheet 读取规则
 
 但这些仍然应该只是“数据描述”。  
-真正的每帧播放逻辑应该由 `animatedSprite` 或未来更明确的 `AnimationPlayer` 处理。
+真正的每帧播放逻辑目前由 `animatedSprite` 处理，后续可以进一步改名或拆分成更明确的 `AnimationPlayer`。
 
 ### `animatedSprite`
 
-`animatedSprite` 是当前的底层序列帧播放器。
+`animatedSprite` 是当前的底层序列帧播放器，已经不再直接负责绘制。
 
 它负责：
 
@@ -238,7 +241,8 @@ tile 碰撞接口已经有基础，但尚未接入角色移动。
 - 播放速度
 - 循环控制
 - sprite 缩放和偏移
-- 根据当前帧绘制 sprite sheet 中的对应区域
+- 根据当前帧计算 sprite sheet 中的源图区域
+- 把当前帧数据写入 `Entity` 持有的 `sprite`
 
 现在它既兼容旧的 `load(path, frameCount)`，也支持新的：
 
@@ -265,8 +269,9 @@ tile 碰撞接口已经有基础，但尚未接入角色移动。
 - `Entity` 保存真实游戏状态，例如是否在地面、是否冲刺、是否存活
 - `Animator` 读取这些状态，决定如何表现
 - `AnimationClip` 只保存动画资源描述
-- `animatedSprite` 只负责播放当前 clip
-- 旧的 `Entity::updateAnimationByIntent` 仍待后续删除
+- `animatedSprite` 只负责播放当前 clip，并把当前帧同步到 `sprite`
+- `Renderer` 读取 `sprite` 和实体坐标完成最终绘制
+- 旧的 `Entity::updateAnimationByIntent` 和 `Entity::changeAnimation` 已清理
 
 ---
 
@@ -288,12 +293,13 @@ InputManager
   -> Entity::setAnimationClip(clip)
   -> animatedSprite::setClip(clip)
   -> animatedSprite::update()
+  -> animatedSprite::writeCurrentFrameTo(renderSprite)
   -> Renderer::drawEntities()
-  -> Entity::drawSprite()
-  -> animatedSprite::draw(x, y)
+  -> Renderer::drawSprite(entity.getSprite(), entity.getX(), entity.getY())
+  -> Renderer::drawImageTileAlpha()
 ```
 
-也就是说，资源加载已经从运行时切换中逐步剥离出来，动画状态切换也已经由 `Animator` 接管。当前还剩旧接口清理和后续多类型 Animator 扩展。
+也就是说，资源加载已经从运行时切换中逐步剥离出来，动画状态切换已经由 `Animator` 接管，实体绘制也已经改为由 `Renderer` 读取 `sprite` 数据统一完成。
 
 ---
 
@@ -527,11 +533,11 @@ Animator 动画逻辑
   -> inputX > 0
   -> currentFacingDirection = RIGHT
   -> sprinting == true
-  -> changeAnimation(ANIM_RUN_RIGHT, resources)
+  -> Animator::changeAnimation(ANIM_RUN_RIGHT, resources)
 
-changeAnimation
+Animator::changeAnimation
   -> 如果当前动画不是 ANIM_RUN_RIGHT
-  -> 切换 currentAnimState
+  -> 切换 Animator 内部 currentAnimState
   -> 通过 ResourceManager 获取 run right 的 clip
   -> animatedSprite::setClip(run right)
 ```
@@ -610,8 +616,9 @@ level.update(input)
   -> updateEntities(input)
        -> PlayerController 生成 moveX = 1, wantSprint = true
        -> MovementHandle 更新冲刺移动和碰撞
-       -> Entity 动画切换到 run right
+       -> Animator 将实体动画切换到 run right
        -> animatedSprite 推进当前帧
+       -> animatedSprite 把当前帧写入 renderSprite
   -> handleRendererInput(input)
        -> F5 切换实体碰撞框显示
   -> updateCamera(input)
@@ -687,10 +694,9 @@ GameObject
 
 后续还可以继续做：
 
-- 删除 `Entity` 中旧的动画状态和旧函数
+- 继续把 `animatedSprite` 向 `AnimationPlayer` 命名和职责靠拢
 - 按实体类型扩展不同的 Animator
 - 将人形实体、交互地图元素、装饰元素的动画控制区分开
-- 继续精简 `animatedSprite`，让其更接近 AnimationPlayer
 
 但它不应该接管实体的真实游戏状态。
 

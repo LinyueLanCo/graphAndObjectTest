@@ -256,25 +256,45 @@ struct Camera
         }
     }
 
+    // 功能：把世界坐标 X 转换为屏幕坐标 X。
+    int worldToScreenX(double worldX) const
+    {
+        return (int)((worldX - x) * zoom);
+    }
+
+    // 功能：把世界坐标 Y 转换为 EasyX 屏幕坐标 Y。
+    int worldToScreenY(double worldY) const
+    {
+        return (int)(WINDOW_HEIGHT - (worldY - y) * zoom);
+    }
+
+    // 功能：把世界空间尺寸转换为当前缩放下的屏幕尺寸。
+    int worldSizeToScreen(double worldSize) const
+    {
+        return (int)(worldSize * zoom);
+    }
+
 };
 Camera gCamera;
 
+
+//修改为转发，逻辑已迁移到camera内部
 // 功能：把世界坐标 X 转换为屏幕坐标 X。
 int worldToScreenX(double worldX)
 {
-    return (int)((worldX - gCamera.x) * gCamera.zoom);
+    return gCamera.worldToScreenX(worldX);
 }
 
 // 功能：把世界坐标 Y 转换为 EasyX 屏幕坐标 Y。
 int worldToScreenY(double worldY)
 {
-    return (int)(WINDOW_HEIGHT - (worldY - gCamera.y) * gCamera.zoom);
+    return gCamera.worldToScreenY(worldY);
 }
 
 // 功能：把世界空间尺寸转换为当前缩放下的屏幕尺寸。
 int worldSizeToScreen(double worldSize)
 {
-    return (int)(worldSize * gCamera.zoom);
+    return gCamera.worldSizeToScreen(worldSize);
 }
 
 // Sound：
@@ -625,17 +645,65 @@ public:
 		return AnimationClip();
 	}
 };
+
+// sprite：
+ // 单帧渲染数据容器。
+ // 它只记录当前要绘制的图片来源、源图裁剪矩形、可见性、缩放和偏移。
+ // 它不负责动画播放、不负责动画状态切换，也不直接调用 EasyX 绘制函数。
+struct sprite
+{
+    IMAGE* imageSource;
+
+    int srcX;
+    int srcY;
+	int srcW;
+	int srcH;
+
+    bool visible;
+
+	double scaleX;
+	double scaleY;
+	double offsetX;
+	double offsetY;
+
+	// 功能：初始化一个空精灵，默认没有图、帧矩形和变换。
+    sprite() : imageSource(NULL),
+    srcX(0),
+    srcY(0),
+    srcW(0),
+    srcH(0),
+    scaleX(1.0),
+    scaleY(1.0),
+    offsetX(0.0),
+    offsetY(0.0),
+    visible(true)
+	{
+	}
+	// 功能：设置精灵当前帧使用的图像资源和源图裁剪矩形。
+    void setSource(IMAGE* newImageSource,int newSrcX, int newSrcY, int newSrcW, int newSrcH)
+    {
+        imageSource = newImageSource;
+        srcX = newSrcX;
+        srcY = newSrcY;
+        srcW = newSrcW;
+        srcH = newSrcH;
+    }
+
+	// 功能：设置精灵的缩放和相对实体中心的偏移。
+	void setTransform(double newScaleX, double newScaleY, double newOffsetX, double newOffsetY)
+	{
+		scaleX = newScaleX;
+		scaleY = newScaleY;
+		offsetX = newOffsetX;
+		offsetY = newOffsetY;
+	}
+};
+
+
 // animatedSprite：
- // 带帧动画支持的精灵类。
- // 它只关心“图片帧如何播放”和“如何根据 Entity 的世界坐标绘制到屏幕上”。
- // 注意：它不负责实体逻辑、不负责输入、不负责碰撞。
- // 绘制公式：
- //   worldDrawW = frameWidth * scaleX
- //   worldDrawH = frameHeight * scaleY
- //   spriteCenter = ownerPosition + offset
- //   drawLeft = spriteCenterX - worldDrawW / 2
- //   drawTop  = spriteCenterY + worldDrawH / 2
- // 再通过 worldToScreenX/Y 转成屏幕坐标。
+ // 过渡期的序列帧动画播放器，后续可以进一步改名为 AnimationPlayer。
+ // 它根据 AnimationClip 绑定图片资源，推进 currentFrame，并把当前帧写入 sprite。
+ // 注意：它不再负责绘制，不负责实体输入、移动、碰撞，也不负责动画状态机判断。
 class animatedSprite
 {
 private:
@@ -823,50 +891,39 @@ public:
 
     }
 
-
-
-    // 功能：根据拥有者世界坐标把当前动画帧绘制到屏幕。
-    void draw(double ownerX, double ownerY)
+	//功能：将当前计算出的动画帧的数据写入一个基础 sprite 结构中，供 Entity 绘制使用。
+    void writeCurrentFrameTo(sprite& targetSprite)
     {
-		if (imageSource == NULL)
-		{
-			return;
-		}
-
-        if (frameCount <= 0)
+        if (imageSource == NULL)
         {
+            targetSprite.setSource(NULL, 0, 0, 0, 0);
             return;
         }
-
-        double worldDrawW = frameWidth * scaleX;
-        double worldDrawH = frameHeight * scaleY;
-
-        double spriteCenterX = ownerX + offsetX;
-        double spriteCenterY = ownerY + offsetY;
-
-        double worldLeft = spriteCenterX - worldDrawW / 2.0;
-        double worldTop = spriteCenterY + worldDrawH / 2.0;
-
-        int drawX = worldToScreenX(worldLeft);
-        int drawY = worldToScreenY(worldTop);
-
-        int screenDrawW = worldSizeToScreen(worldDrawW);
-        int screenDrawH = worldSizeToScreen(worldDrawH);
+        if(frameCount <= 0||frameWidth <= 0||frameHeight <= 0)
+        {
+            targetSprite.setSource(NULL, 0, 0, 0, 0);
+            return;
+        }
 
         int srcX = currentFrame * frameWidth;
         int srcY = 0;
 
-		putimage_alpha_tile(
-			drawX,
-			drawY,
-			screenDrawW,
-			screenDrawH,
-			imageSource,
-			srcX,
-			srcY,
-			frameWidth,
-			frameHeight
-		);
+
+		targetSprite.setSource(
+            imageSource,
+            srcX,
+            srcY,
+            frameWidth,
+            frameHeight
+        );
+		targetSprite.setTransform(
+            scaleX,
+            scaleY,
+            offsetX,
+            offsetY
+        );
+
+
     }
 };
 
@@ -1778,9 +1835,10 @@ public:
 };// 实体类
 
 // Entity：
- // 实体数据容器 + 少量表现接口。
- // 旧的移动/阻挡/边界修正逻辑已经迁移到 MovementHandle 和 CollisionHandle。
- // 因此 Entity 不再自己执行移动物理，只保存状态并提供碰撞盒、动画、绘制等接口。
+ // 实体数据容器 + 组件持有者。
+ // 移动/阻挡/边界修正逻辑已经迁移到 MovementHandle 和 CollisionHandle。
+ // 动画表现状态切换已经迁移到 Animator，实体绘制已经迁移到 Renderer。
+ // 因此 Entity 主要保存真实游戏状态，并向外提供位置、碰撞盒、动画播放器和 sprite 数据接口。
  //
  // Entity 当前主要保存：
  //   - 世界坐标 x/y
@@ -1788,16 +1846,18 @@ public:
  //   - 状态 onGround / InAir / sprinting / jumping / isAlive
  //   - 碰撞配置 collisionBox
  //   - 动画播放对象 animation
+ //   - 当前单帧渲染数据 renderSprite
  //   - 动画控制组件 animator
  //   - 类型 entityType
 class Entity
 {
-    //声明友元使MovementHandle可以访问entity的私有数据
+	// 声明 Animator、CollisionHandle、MovementHandle 为 Entity 的友元类，使它们可以访问 Entity 的私有状态。
     friend class MovementHandle;
     friend class CollisionHandle;
 	friend class Animator;
 private:
-    animatedSprite animation;
+    animatedSprite animation; // 当前动画播放器，负责推进帧并写入 renderSprite。
+	sprite renderSprite;      // 实际用于 Renderer 绘制的单帧 sprite 数据。
     // 世界坐标，左下角原点
     // x / y 表示实体中心点
     double x;
@@ -1819,7 +1879,6 @@ private:
     bool jumping;           //是否跳跃
     bool blockedByEntity;  // 本帧是否被实体阻挡
     bool blockedByWorld;   // 本帧是否被世界边界阻挡
-    bool wasInAir;         // 旧动画逻辑遗留缓存，当前 Animator 已经拥有自己的 wasInAir
     //做临时用，添加实体类型标签
     EntityType entityType;
 
@@ -1827,7 +1886,6 @@ private:
     bool isAlive;
 
     CollisionBox collisionBox;
-    AnimationState currentAnimState;//旧动画逻辑遗留状态，当前 Animator 已经拥有自己的 currentAnimState
     facingDirection currentFacingDirection;//记录当前操作的有效朝向
 	Animator animator;//实体的动画控制器
 public:
@@ -1851,13 +1909,10 @@ public:
         onGround = false;
         sprinting = false;
         InAir = false;
-        wasInAir = false;
         jumping = false;
         blockedByEntity = false;
         blockedByWorld = false;
 
-        //默认构造定义entity的动画状态
-        currentAnimState = ANIM_COUNT;
         currentFacingDirection = LEFT;
 
         entityType = DEFAULT;
@@ -1899,7 +1954,6 @@ public:
         onGround = false;
         sprinting = false;
         InAir = false;
-        wasInAir = false;
         jumping = false;
         blockedByEntity = false;
         blockedByWorld = false;
@@ -1908,9 +1962,7 @@ public:
         int imgH = animation.getFrameHeight();
 
         collisionBox.setBaseSize(imgW, imgH);
-        //有参构造定义entity的动画状态
 
-        currentAnimState = ANIM_COUNT;
         currentFacingDirection = LEFT;
 
         entityType = Type;
@@ -2038,6 +2090,17 @@ public:
     {
         return y;
     }
+
+	sprite& getRenderSprite()// 获取实体当前用于渲染的 sprite 可写接口。
+	{
+		return renderSprite;
+	}
+
+	const sprite& getSprite() const// 获取实体当前用于渲染的 sprite 只读接口。
+	{
+		return renderSprite;
+	}
+
     // 功能：设置实体本帧重叠状态并触发碰撞反馈显示。
     void setOverlapping(bool value)//设置重叠状态
     {
@@ -2103,183 +2166,20 @@ public:
 	{
 		collisionBox.setScale(scaleX, scaleY);
 	}
-    // 功能：旧动画切换接口，当前保留作过渡；实际运行已改为 Animator::changeAnimation。
-	void changeAnimation(AnimationState newState, ResourceManager& resources)
-	{
-		if (currentAnimState == newState)
-		{
-			return;
-		}
 
-		currentAnimState = newState;
-
-		AnimationId animationId = getPlayerAnimationId(newState);
-		AnimationClip clip = resources.getAnimationClip(animationId);
-
-		animation.setClip(clip);
-	}    //更新动画状态by意图
-    // 功能：旧动画更新接口，当前保留作过渡；实际运行已改为 Entity::updateAnimator。
-	void updateAnimationByIntent(BehaviorIntent intent, ResourceManager& resources)
-	{
-		if (!controlled)
-		{
-			return;
-		}
-
-		double inputX = intent.moveX;
-
-		bool hasMoveInput = fabs(inputX) > EPS;
-		bool justLanded = wasInAir && onGround;
-
-		if (inputX < -EPS)
-		{
-			currentFacingDirection = LEFT;
-		}
-		else if (inputX > EPS)
-		{
-			currentFacingDirection = RIGHT;
-		}
-
-		AnimationState idleState = ANIM_IDLE_L;
-		AnimationState walkState = ANIM_WALK_LEFT;
-		AnimationState runState = ANIM_RUN_LEFT;
-		AnimationState jumpStartState = ANIM_JUMP_START_L;
-		AnimationState jumpLoopState = ANIM_JUMP_LOOP_L;
-		AnimationState jumpEndState = ANIM_JUMP_END_L;
-
-		if (currentFacingDirection == RIGHT)
-		{
-			idleState = ANIM_IDLE_R;
-			walkState = ANIM_WALK_RIGHT;
-			runState = ANIM_RUN_RIGHT;
-			jumpStartState = ANIM_JUMP_START_R;
-			jumpLoopState = ANIM_JUMP_LOOP_R;
-			jumpEndState = ANIM_JUMP_END_R;
-		}
-		if (justLanded && !hasMoveInput)
-		{
-			changeAnimation(jumpEndState, resources);
-			wasInAir = InAir;
-			return;
-		}
-		bool currentIsJumpStart =
-			currentAnimState == ANIM_JUMP_START_L ||
-			currentAnimState == ANIM_JUMP_START_R;
-
-
-		if (InAir)
-		{
-			bool shouldPlayJumpStart = jumping && intent.wantJump && !wasInAir;
-
-			if (shouldPlayJumpStart)
-			{
-				changeAnimation(jumpStartState, resources);
-				wasInAir = InAir;
-				return;
-			}
-
-			if (currentIsJumpStart)
-			{
-				if (animation.isFinished())
-				{
-					changeAnimation(jumpLoopState, resources);
-				}
-
-				wasInAir = InAir;
-				return;
-			}
-
-			changeAnimation(jumpLoopState, resources);
-			wasInAir = InAir;
-			return;
-		}
-		bool currentIsJumpEnd =
-			currentAnimState == ANIM_JUMP_END_L ||
-			currentAnimState == ANIM_JUMP_END_R;
-
-		if (currentIsJumpEnd && !hasMoveInput && !animation.isFinished())
-		{
-			wasInAir = InAir;
-			return;
-		}
-		if (hasMoveInput)
-		{
-			if (sprinting)
-			{
-				changeAnimation(runState, resources);
-			}
-			else
-			{
-				changeAnimation(walkState, resources);
-			}
-		}
-		else
-		{
-			changeAnimation(idleState, resources);
-		}
-
-		wasInAir = InAir;
-	}    // 功能：推进实体当前动画帧。
+    // 功能：推进实体当前动画播放器，并把当前帧同步写入 renderSprite。
     void updateAnimatedSprite()
     {
         animation.update();
+		animation.writeCurrentFrameTo(renderSprite);
     }
 
 
-
-    // 渲染
-
-
-
-
-	// 功能：绘制实体当前动画画面。
-	void drawSprite()
-	{
-		animation.draw(x, y);
-	}
-
-	// 功能：绘制实体调试碰撞框。
-	void drawDebugCollisionBox()
-	{
-		drawCollisionBox();
-	}
-
-	// 功能：按旧接口绘制实体画面和调试碰撞框。
-	void draw()
-	{
-		drawSprite();
-		drawDebugCollisionBox();
-	}
-    // 功能：根据实体碰撞状态绘制红色或绿色碰撞盒。
-    void drawCollisionBox()
-    {
-        RectBox box = getWorldCollisionBox();
-
-        // 碰撞箱颜色只跟碰撞状态有关：
-        // 绿色：正常
-        // 红色：本帧发生碰撞状态
-        if (collisionState)
-        {
-            setlinecolor(RED);
-        }
-        else
-        {
-            setlinecolor(GREEN);
-        }
-
-        int screenLeft = worldToScreenX(box.left);
-        int screenRight = worldToScreenX(box.right);
-
-        int screenTop = worldToScreenY(box.top);
-        int screenBottom = worldToScreenY(box.bottom);
-
-        rectangle(screenLeft, screenTop, screenRight, screenBottom);
-    }
-    // 功能：设置实体 sprite 绘制缩放和偏移。
+    // 功能：设置实体 sprite 绘制缩放和偏移；当前过渡期同时同步给动画播放器和 renderSprite。
     void setSpriteTransform(double scaleX, double scaleY, double offsetX, double offsetY)
     {
         animation.setTransform(scaleX, scaleY, offsetX, offsetY);
-
+        renderSprite.setTransform(scaleX, scaleY, offsetX, offsetY);
     }
     // 功能：设置实体动画播放速度。
     void setAnimationSpeed(int speed)
@@ -3004,12 +2904,84 @@ void updateCameraFollow(
         offsetWorldY
     );
 }
-//抽象出render类统一管理各类renderable object
+// Renderer：
+ // 统一管理当前关卡中的可渲染对象。
+ // 它负责把 sprite / tile / UI 等数据绘制到屏幕，并集中处理实体调试碰撞框绘制。
+ // 实体自身不再直接调用 EasyX 绘图函数。
 class Renderer
 {
 private:
 	bool showCollisionBox;
 	bool showTileCollisionBox;
+
+
+    // 功能：从图集中裁剪指定区域，并以 Alpha 混合绘制到屏幕目标矩形。
+    void drawImageTileAlpha(
+        int destX,
+        int destY,
+        int destW,
+        int destH,
+        IMAGE* imageSource,
+        int srcX,
+        int srcY,
+        int srcW,
+        int srcH
+    )
+    {
+        if (imageSource == NULL)
+        {
+            return;
+        }
+
+        if (destW <= 0 || destH <= 0 || srcW <= 0 || srcH <= 0)
+        {
+            return;
+        }
+
+        BLENDFUNCTION blend;
+        blend.BlendOp = AC_SRC_OVER;
+        blend.BlendFlags = 0;
+        blend.SourceConstantAlpha = 255;
+        blend.AlphaFormat = AC_SRC_ALPHA;
+
+        AlphaBlend(
+            GetImageHDC(NULL),
+            destX,
+            destY,
+            destW,
+            destH,
+            GetImageHDC(imageSource),
+            srcX,
+            srcY,
+            srcW,
+            srcH,
+            blend
+        );
+    }
+
+    // 功能：绘制实体当前世界碰撞盒的调试矩形。
+    void drawEntityCollisionBox(Entity& entity)
+    {
+        RectBox box = entity.getWorldCollisionBox();
+
+        if (entity.hasCollisionState())
+        {
+            setlinecolor(RED);
+        }
+        else
+        {
+            setlinecolor(GREEN);
+        }
+
+        int screenLeft = gCamera.worldToScreenX(box.left);
+        int screenRight = gCamera.worldToScreenX(box.right);
+
+        int screenTop = gCamera.worldToScreenY(box.top);
+        int screenBottom = gCamera.worldToScreenY(box.bottom);
+
+        rectangle(screenLeft, screenTop, screenRight, screenBottom);
+    }
+
 
 public:
 	// 功能：初始化渲染器的调试绘制开关。
@@ -3060,6 +3032,56 @@ public:
 		}
 	}
 
+	// 功能：根据实体中心点和 sprite 数据绘制单帧图像。
+	void drawSprite(const sprite& targetSprite, double ownerX, double ownerY)
+	{
+        if(!targetSprite.visible)
+        {
+            return;
+
+        }
+
+        if (targetSprite.imageSource == NULL)
+        {
+            return;
+        }
+
+        if(targetSprite.srcW <= 0 || targetSprite.srcH <= 0)
+        {
+            return;
+        }
+		// 计算世界坐标系下的绘制尺寸,绘制位置以实体中心点为基准，并加上 sprite 的偏移
+		double worldDrawW = targetSprite.srcW * targetSprite.scaleX;
+		double worldDrawH = targetSprite.srcH * targetSprite.scaleY;
+
+		double spriteCenterX = ownerX + targetSprite.offsetX;
+		double spriteCenterY = ownerY + targetSprite.offsetY;
+
+		double worldDrawLeft = spriteCenterX - worldDrawW / 2.0;
+		double worldDrawTop = spriteCenterY + worldDrawH / 2.0;
+
+		//再经历一次世界坐标 -> 屏幕坐标的转换，得到最终的绘制位置
+		int drawX = gCamera.worldToScreenX(worldDrawLeft);
+		int drawY = gCamera.worldToScreenY(worldDrawTop);
+		// 世界尺寸 -> 屏幕尺寸的转换，得到最终的绘制尺寸,这个过程会经历camera的zoom
+		int screenDrawW = gCamera.worldSizeToScreen(worldDrawW);
+		int screenDrawH = gCamera.worldSizeToScreen(worldDrawH);
+
+        // 根据源图裁剪矩形和屏幕目标矩形完成 Alpha 混合绘制。
+        drawImageTileAlpha(
+            drawX,
+            drawY,
+            screenDrawW,
+            screenDrawH,
+            targetSprite.imageSource,
+            targetSprite.srcX,
+            targetSprite.srcY,
+            targetSprite.srcW,
+            targetSprite.srcH
+        );
+
+    }
+
 	// 功能：绘制所有存活实体，并根据开关绘制实体调试碰撞框。
 	void drawEntities(Entity entitys[], int entityCount)
 	{
@@ -3070,11 +3092,14 @@ public:
 				continue;
 			}
 
-			entitys[i].drawSprite();
-
+            drawSprite(
+                entitys[i].getSprite(),
+                entitys[i].getX(),
+                entitys[i].getY()
+            );
 			if (showCollisionBox)
 			{
-				entitys[i].drawDebugCollisionBox();
+                drawEntityCollisionBox(entitys[i]);
 			}
 		}
 	}
