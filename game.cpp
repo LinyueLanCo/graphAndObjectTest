@@ -802,10 +802,7 @@ private:
 
     int frameInterval;//帧间隔
     int frameTimer;//计时器
-    double scaleX;
-    double scaleY;
-    double offsetX;
-    double offsetY;
+
 public:
     // 功能：初始化序列帧动画的默认播放参数。
     animatedSprite()//基础构造
@@ -830,10 +827,6 @@ public:
         isPlaying = true;
         isLoop = true;
 
-        scaleX = 1.0;
-        scaleY = 1.0;
-        offsetX = 0;
-        offsetY = 0;
         imageSource = &image;
     }
 
@@ -982,14 +975,7 @@ public:
     {
         isPlaying = false;
     }
-    // 功能：设置动画绘制缩放和相对实体中心的偏移。
-    void setTransform(double newScaleX, double newScaleY, double newOffsetX, double newOffsetY)
-    {
-        scaleX = newScaleX;
-        scaleY = newScaleY;
-        offsetX = newOffsetX;
-        offsetY = newOffsetY;
-    }
+
     // 功能：重置动画到第一帧并清空计时器。
     void reset()
     {
