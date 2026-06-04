@@ -873,9 +873,24 @@ public:
 		{
 			frameCount = 1;
 		}
-
-		frameWidth = imageSource->getwidth() / frameCount;
-		frameHeight = imageSource->getheight();
+		// 如果动画片段描述里指定了单帧宽高，就用它；否则按旧规则平均切分。
+        if (clip.frameWidth > 0)
+        {
+            frameWidth = clip.frameWidth;
+        }
+        else
+        {
+            frameWidth = imageSource->getwidth() / frameCount;
+        }
+		// 同上，指定了单帧高度就用它，否则默认整张图高就是单帧高。
+        if (clip.frameHeight > 0)
+        {
+            frameHeight = clip.frameHeight;
+        }
+        else
+        {
+            frameHeight = imageSource->getheight();
+        }
 
 		setSpeed(clip.speed);
 		setLoop(clip.loop);
