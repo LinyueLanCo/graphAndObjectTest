@@ -1,4 +1,4 @@
-#include <graphics.h>
+﻿#include <graphics.h>
 #include <windows.h>
 #include <conio.h>
 #include <cmath>
@@ -350,8 +350,8 @@ enum AnimationId
 
 // AnimationClip：
  // 动画资源描述数据。
- // 它只描述“哪张图、多少帧、播放速度、是否循环”，不保存当前播放进度。
- // 当前播放进度由 animatedSprite 负责。
+ // 它描述“哪张图、多少帧、播放速度、是否循环”，也描述 sprite sheet 的裁剪规则。
+ // 它不保存当前播放进度，当前播放进度由 animatedSprite / 未来的 AnimationPlayer 负责。
 struct AnimationClip
 {
 	IMAGE* image;
@@ -359,23 +359,95 @@ struct AnimationClip
 	int speed;
 	bool loop;
 
+    // 单帧宽高，为 0 时由动画播放器按旧规则自动计算。
+    int frameWidth;
+    int frameHeight;
+
+    // 当前 clip 在 sprite sheet 中的起始裁剪坐标。
+    int sourceStartX;
+    int sourceStartY;
+
+    // 相邻帧之间的横向和纵向间隔。
+    int frameSpacingX;
+    int frameSpacingY;
+
+    // 每行帧数，为 0 时暂时按横向单行动画处理。
+    int frameColumns;
+
+
+
 	// 功能：初始化一个空动画片段描述。
-	AnimationClip()
-	{
-		image = NULL;
-		frameCount = 1;
-		speed = 4;
-		loop = true;
-	}
+    AnimationClip()
+    {
+        image = NULL;
+        frameCount = 1;
+        speed = 4;
+        loop = true;
+
+        frameWidth = 0;
+        frameHeight = 0;
+
+        sourceStartX = 0;
+        sourceStartY = 0;
+
+        frameSpacingX = 0;
+        frameSpacingY = 0;
+
+        frameColumns = 0;
+    }
 
 	// 功能：按图片指针、帧数、速度和循环标记创建动画片段描述。
-	AnimationClip(IMAGE* newImage, int newFrameCount, int newSpeed, bool newLoop)
-	{
-		image = newImage;
-		frameCount = newFrameCount;
-		speed = newSpeed;
-		loop = newLoop;
-	}
+    AnimationClip(IMAGE* newImage, int newFrameCount, int newSpeed, bool newLoop)
+    {
+        image = newImage;
+        frameCount = newFrameCount;
+        speed = newSpeed;
+        loop = newLoop;
+
+        frameWidth = 0;
+        frameHeight = 0;
+
+        sourceStartX = 0;
+        sourceStartY = 0;
+
+        frameSpacingX = 0;
+        frameSpacingY = 0;
+
+        frameColumns = 0;
+    }
+
+    // 功能：按完整 sprite sheet 裁剪配置创建动画片段描述。
+    AnimationClip(
+        IMAGE* newImage,
+        int newFrameCount,
+        int newSpeed,
+        bool newLoop,
+        int newFrameWidth,
+        int newFrameHeight,
+        int newSourceStartX,
+        int newSourceStartY,
+        int newFrameSpacingX,
+        int newFrameSpacingY,
+        int newFrameColumns
+    )
+    {
+        image = newImage;
+        frameCount = newFrameCount;
+        speed = newSpeed;
+        loop = newLoop;
+
+        frameWidth = newFrameWidth;
+        frameHeight = newFrameHeight;
+
+        sourceStartX = newSourceStartX;
+        sourceStartY = newSourceStartY;
+
+        frameSpacingX = newFrameSpacingX;
+        frameSpacingY = newFrameSpacingY;
+
+        frameColumns = newFrameColumns;
+    }
+
 };
 
 
@@ -645,6 +717,7 @@ public:
 		return AnimationClip();
 	}
 };
+
 
 // sprite：
  // 单帧渲染数据容器。
