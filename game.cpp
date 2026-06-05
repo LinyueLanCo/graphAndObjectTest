@@ -337,6 +337,16 @@ enum AnimationState
 	ANIM_COUNT
 };
 
+// AnimationSetId：
+ // 动画资源组 ID，用来描述“这个实体使用哪一套动画图片资源”。
+ // 它不代表实体实例编号，也不代表动画状态；AnimationState + AnimationSetId 才能定位到具体 AnimationClip。
+enum AnimationSetId
+{
+    ANIM_SET_NONE,
+	ANIM_SET_PLAYER1,
+};
+
+
 // AnimationId：
  // 资源层动画 ID。Animator 选择 AnimationState 后，
  // 会通过 getPlayerAnimationId 转换成 AnimationId，再向 ResourceManager 请求 AnimationClip。
@@ -622,6 +632,17 @@ AnimationId getPlayerAnimationId(AnimationState state)
 		return ANIM_ID_PLAYER_JUMP_END_R;
 	}
 	return ANIM_ID_PLAYER_IDLE_L;
+}
+
+// 功能：根据动画资源组和动画表现状态，解析出资源层 AnimationId。
+AnimationId getAnimationId(AnimationSetId setId, AnimationState state)
+{
+    if (setId == ANIM_SET_PLAYER1)
+    {
+        return getPlayerAnimationId(state);
+    }
+
+    return ANIM_ID_COUNT;
 }
 
 // ResourceManager：
@@ -1897,6 +1918,12 @@ private:
 	// 上一帧是否在空中，用于判断“刚刚落地”。
 	bool wasInAir;
 
+    // 当前 Animator 绑定的动画资源组，用于把 AnimationState 解析为具体 AnimationClip。
+    AnimationSetId animationSetId;
+
+    // 初始化时要绑定的动画表现状态，用于在第一帧绘制前设置默认 clip。
+    AnimationState initialAnimState;
+
 public:
 	// 功能：初始化 Animator 的默认动画状态缓存。
 	Animator();
@@ -1905,7 +1932,13 @@ public:
 	void changeAnimation(Entity& entity, AnimationState newState, ResourceManager& resources);
 
 	// 功能：根据实体真实状态和本帧行为意图更新动画表现状态。
-	void update(Entity& entity, BehaviorIntent intent, ResourceManager& resources);
+    void update(Entity& entity, BehaviorIntent intent, ResourceManager& resources);
+
+    // 功能：配置当前 Animator 使用的动画资源组和初始动画状态。
+    void configure(AnimationSetId newSetId, AnimationState newInitialState);
+
+    // 功能：在资源加载完成后，根据初始动画状态为实体绑定第一段动画。
+    void initAnimation(Entity& entity, ResourceManager& resources);
 };
 // CollisionHandle：
  // 碰撞底层能力提供者。
@@ -2126,6 +2159,79 @@ public:
         entityType = Type;
         isAlive = alive;
     }
+
+    // 功能：按初始逻辑状态和动画资源组创建实体，不再直接从构造函数加载图片路径。
+    Entity(
+        double startX,
+        double startY,
+        bool isControlled,
+        bool isCollidable,
+        bool isBlocking,
+        bool isGod,
+        EntityType Type,
+        AnimationSetId animationSet,
+        facingDirection initialFacing,
+        AnimationState initialAnim,
+        bool alive = 1
+    )
+    {
+        x = startX;
+        y = startY;
+
+        speed = 5;
+        velocityY = 0;
+
+        controlled = isControlled;
+        collidable = isCollidable;
+        blocking = isBlocking;
+        god = isGod;
+
+        overlapping = false;
+        collisionState = false;
+
+        onGround = false;
+        sprinting = false;
+        InAir = false;
+        jumping = false;
+        blockedByEntity = false;
+        blockedByWorld = false;
+
+        currentFacingDirection = initialFacing;
+
+        entityType = Type;
+        isAlive = alive;
+
+        animator.configure(animationSet, initialAnim);
+    }
+
+
+    // 功能：按默认朝向和默认待机状态创建绑定动画资源组的实体。
+    Entity(
+        double startX,
+        double startY,
+        bool isControlled,
+        bool isCollidable,
+        bool isBlocking,
+        bool isGod,
+        EntityType Type,
+        AnimationSetId animationSet,
+        bool alive = 1
+    )
+        : Entity(
+            startX,
+            startY,
+            isControlled,
+            isCollidable,
+            isBlocking,
+            isGod,
+            Type,
+            animationSet,
+            RIGHT,
+            ANIM_IDLE_R,
+            alive
+        )
+    {}
+
     // 功能：获取实体类型标签。
     EntityType getEntityType()
     {
@@ -2344,6 +2450,21 @@ public:
         animation.setSpeed(speed);
     }
 
+    // 功能：让实体内部 Animator 根据初始状态绑定动画，并同步第一帧 sprite 和碰撞盒尺寸。
+    void initAnimationFromAnimator(ResourceManager& resources)
+    {
+        animator.initAnimation(*this, resources);
+
+        animation.writeCurrentFrameTo(renderSprite);
+
+        if (animation.getFrameWidth() > 0 && animation.getFrameHeight() > 0)
+        {
+            collisionBox.setBaseSize(
+                animation.getFrameWidth(),
+                animation.getFrameHeight()
+            );
+        }
+    }
 };
 
 
@@ -2358,6 +2479,8 @@ Animator::Animator()
 {
     currentAnimState = ANIM_COUNT;
     wasInAir = false;
+    animationSetId = ANIM_SET_NONE;
+    initialAnimState = ANIM_IDLE_R;
 }
 
 // 功能：按动画状态切换实体当前播放的 AnimationClip。
@@ -2368,12 +2491,24 @@ void Animator::changeAnimation(Entity& entity, AnimationState newState, Resource
         return;
     }
 
-    currentAnimState = newState;
+    // 用当前资源组和动画状态解析具体资源 ID，避免 Animator 直接绑定某个角色资源。
+    AnimationId animationId = getAnimationId(animationSetId, newState);
 
-    AnimationId animationId = getPlayerAnimationId(newState);
+    if (animationId == ANIM_ID_COUNT)
+    {
+        return;
+    }
+
     AnimationClip clip = resources.getAnimationClip(animationId);
 
+    if (clip.image == NULL)
+    {
+        return;
+    }
+
+    // 只有拿到有效 clip 后才写入播放器并更新当前状态缓存。
     entity.setAnimationClip(clip);
+    currentAnimState = newState;
 }
 
 // 功能：读取实体真实状态并决定 idle / walk / run / jumpStart / jumpLoop / jumpEnd。
@@ -2389,14 +2524,7 @@ void Animator::update(Entity& entity, BehaviorIntent intent, ResourceManager& re
 	bool hasMoveInput = fabs(inputX) > EPS;
 	bool justLanded = wasInAir && entity.isOnGround();
 
-	if (inputX < -EPS)
-	{
-		entity.setFacingDirection(LEFT);
-	}
-	else if (inputX > EPS)
-	{
-		entity.setFacingDirection(RIGHT);
-	}
+
 
 	AnimationState idleState = ANIM_IDLE_L;
 	AnimationState walkState = ANIM_WALK_LEFT;
@@ -2484,7 +2612,25 @@ void Animator::update(Entity& entity, BehaviorIntent intent, ResourceManager& re
 
 	wasInAir = entity.isInAir();
 }
+// 功能：配置 Animator 的资源组和初始状态，并重置动画状态缓存。
+void Animator::configure(AnimationSetId newSetId, AnimationState newInitialState)
+{
+    animationSetId = newSetId;
+    initialAnimState = newInitialState;
+    currentAnimState = ANIM_COUNT;
+    wasInAir = false;
+}
 
+// 功能：在资源加载完成后，根据初始状态绑定实体第一段动画。
+void Animator::initAnimation(Entity& entity, ResourceManager& resources)
+{
+    if (animationSetId == ANIM_SET_NONE)
+    {
+        return;
+    }
+
+    changeAnimation(entity, initialAnimState, resources);
+}
 // 功能：根据行为意图、物理规则和碰撞结果更新实体移动状态。
 void MovementHandle::update(
     Entity& self,
@@ -2522,6 +2668,16 @@ void MovementHandle::update(
     {
         hasMoveInput = true;
     }
+    // 朝向是真实游戏状态，后续会影响攻击、交互、射线检测等逻辑，因此由移动层更新。
+    if (inputX < -EPS)
+    {
+        self.setFacingDirection(LEFT);
+    }
+    else if (inputX > EPS)
+    {
+        self.setFacingDirection(RIGHT);
+    }
+
 
     bool wantSprint = false;
 
@@ -3313,7 +3469,7 @@ public:
     Level()
         : entitys
         {
-            Entity(_T("assets\\tex\\entities\\characters\\player1_Idle_L.png"), 200, 700, true, true, true, false, PLAYER, 8, 1),
+            Entity(200, 700, true, true, true, false, PLAYER, ANIM_SET_PLAYER1, 1),
 
             Entity(_T("assets\\tex\\entities\\characters\\player2.png"), 600, 900, false, true, false, false, ENTITY, 1),
 
@@ -3332,6 +3488,15 @@ public:
         worldHeight = WINDOW_HEIGHT;
     }
 
+    // 功能：在资源加载完成后，为所有实体同步初始动画帧。
+    void initEntityAnimations()
+    {
+        for (int i = 0; i < ENTITY_COUNT; i++)
+        {
+            entitys[i].initAnimationFromAnimator(resources);
+        }
+    }
+
     // 功能：初始化关卡地图、背景、UI、实体设置和历史状态缓存。
     void init()
     {
@@ -3339,9 +3504,12 @@ public:
         initMap();
         initBackground();
         initUI();
+        initEntityAnimations();
         initEntitySettings();
         initLastStates();
     }
+
+
 
     // 功能：按固定顺序更新关卡中的输入、实体、相机、事件和 UI。
     void update(InputManager& input)
@@ -3390,7 +3558,7 @@ public:
 		renderer.drawBackground(background);
 		renderer.drawTileMap(tileMap);
 		renderer.drawEntities(entitys, ENTITY_COUNT);
-		renderer.drawUI(listPanel);
+		//renderer.drawUI(listPanel);
 	}
 
 private:
