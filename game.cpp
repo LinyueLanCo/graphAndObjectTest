@@ -185,7 +185,7 @@ struct Camera
         targetY = targetWorldY - visibleH / 2.0 + offsetWorldY;
 
         // 数值越小越“拖”，越大越紧跟
-        double followSpeed = 0.08;
+        double followSpeed = 0.16;
 
         // 用当前位置与目标位置的差值乘以跟随系数，得到本帧相机平滑位移。
         x += (targetX - x) * followSpeed;
@@ -1237,6 +1237,18 @@ public:
     {
         release();
     }
+
+
+	int getRows()
+	{
+		return rows;
+	}
+
+	int getCols()
+	{
+		return cols;
+	}
+
 
     // 功能：释放并清空当前地图二维数组。
     void release()
@@ -2424,7 +2436,8 @@ public:
         Entity& self,
         double moveX,
         vector<Entity>& entitys,
-        int selfIndex
+        int selfIndex,
+        TileMap& tileMap
     );
 
     // 功能：声明 Y 轴允许位移计算接口。
@@ -2432,7 +2445,8 @@ public:
         Entity& self,
         double moveY,
         vector<Entity>& entitys,
-        int selfIndex
+        int selfIndex,
+        TileMap& tileMap
     );
 
     // 功能：声明实体世界边界限制接口。
@@ -2465,6 +2479,7 @@ public:
         BehaviorIntent intent,
         vector<Entity>& entitys,
         int selfIndex,
+        TileMap& tileMap,
         int worldWidth,
         int worldHeight,
         CollisionHandle& collisionHandle
@@ -2641,6 +2656,7 @@ void MovementHandle::update(
     BehaviorIntent intent,
     vector<Entity>& entitys,
     int selfIndex,
+    TileMap& tileMap,
     int worldWidth,
     int worldHeight,
     CollisionHandle& collisionHandle
@@ -2746,7 +2762,8 @@ void MovementHandle::update(
         self,
         wantMoveX,
         entitys,
-        selfIndex
+        selfIndex,
+        tileMap
     );
     if (fabs(allowedMoveX - wantMoveX) > EPS)
     {
@@ -2777,7 +2794,8 @@ void MovementHandle::update(
         self,
         wantMoveY,
         entitys,
-        selfIndex
+        selfIndex,
+        tileMap
     );
     if (fabs(allowedMoveY - wantMoveY) > EPS)
     {
@@ -2853,7 +2871,8 @@ double CollisionHandle::getAllowedMoveX(
     Entity& self,
     double moveX,
     vector<Entity>& entitys,
-    int selfIndex
+    int selfIndex,
+    TileMap& tileMap
 )
 {
     /*
@@ -2945,6 +2964,61 @@ double CollisionHandle::getAllowedMoveX(
         }
     }
 
+
+    for (int row = 0; row < tileMap.getRows(); row++)
+    {
+        for (int col = 0; col < tileMap.getCols(); col++)
+        {
+            if (!tileMap.isSolidTile(row, col))
+            {
+                continue;
+            }
+
+            RectBox tileBox = tileMap.getTileWorldBox(row, col);
+
+            if (!isRangeOverlapping(myBox.bottom, myBox.top, tileBox.bottom, tileBox.top))
+            {
+                continue;
+            }
+
+            if (moveX > 0)
+            {
+                if (tileBox.left >= myBox.right - EPS)
+                {
+                    double distance = tileBox.left - myBox.right;
+
+                    if (distance < 0)
+                    {
+                        distance = 0;
+                    }
+
+                    if (distance < allowedMove)
+                    {
+                        allowedMove = distance;
+                    }
+                }
+            }
+            else if (moveX < 0)
+            {
+                if (tileBox.right <= myBox.left + EPS)
+                {
+                    double distance = tileBox.right - myBox.left;
+
+                    if (distance > 0)
+                    {
+                        distance = 0;
+                    }
+
+                    if (distance > allowedMove)
+                    {
+                        allowedMove = distance;
+                    }
+                }
+            }
+        }
+    }
+
+
     return allowedMove;
 }
 // 功能：计算实体在 Y 轴上不会穿透阻挡物的最大允许位移。
@@ -2952,7 +3026,8 @@ double CollisionHandle::getAllowedMoveY(
     Entity& self,
     double moveY,
     vector<Entity>& entitys,
-    int selfIndex
+    int selfIndex,
+    TileMap& tileMap
 )
 {
     /*
@@ -3039,6 +3114,60 @@ double CollisionHandle::getAllowedMoveY(
                 if (distance > allowedMove)
                 {
                     allowedMove = distance;
+                }
+            }
+        }
+    }
+
+
+    for (int row = 0; row < tileMap.getRows(); row++)
+    {
+        for (int col = 0; col < tileMap.getCols(); col++)
+        {
+            if (!tileMap.isSolidTile(row, col))
+            {
+                continue;
+            }
+
+            RectBox tileBox = tileMap.getTileWorldBox(row, col);
+
+            if (!isRangeOverlapping(myBox.left, myBox.right, tileBox.left, tileBox.right))
+            {
+                continue;
+            }
+
+            if (moveY > 0)
+            {
+                if (tileBox.bottom >= myBox.top - EPS)
+                {
+                    double distance = tileBox.bottom - myBox.top;
+
+                    if (distance < 0)
+                    {
+                        distance = 0;
+                    }
+
+                    if (distance < allowedMove)
+                    {
+                        allowedMove = distance;
+                    }
+                }
+            }
+            else if (moveY < 0)
+            {
+                if (tileBox.top <= myBox.bottom + EPS)
+                {
+                    double distance = tileBox.top - myBox.bottom;
+
+                    if (distance > 0)
+                    {
+                        distance = 0;
+                    }
+
+                    if (distance > allowedMove)
+                    {
+                        allowedMove = distance;
+                    }
                 }
             }
         }
@@ -3483,11 +3612,11 @@ public:
 
         entitys.emplace_back(200, 700, true, true, true, false, PLAYER, ANIM_SET_PLAYER1, 1);
 
-        entitys.emplace_back(_T("assets\\tex\\entities\\characters\\player2.png"), 600, 900, false, true, false, false, ENTITY, 1);
+        entitys.emplace_back(_T("assets\\tex\\entities\\characters\\player2.png"), 600, 1300, false, true, false, false, ENTITY, 1);
 
-        entitys.emplace_back(_T("assets\\tex\\entities\\characters\\player3.png"), 950, 850, false, true, true, false, ENTITY, 1);
+        entitys.emplace_back(_T("assets\\tex\\entities\\characters\\player3.png"), 950, 1300, false, true, true, false, ENTITY, 1);
 
-        entitys.emplace_back(_T("assets\\tex\\entities\\characters\\player4.png"), 1300, 650, false, true, false, false, ENTITY, 1);
+        entitys.emplace_back(_T("assets\\tex\\entities\\characters\\player4.png"), 1300, 1300, false, true, false, false, ENTITY, 1);
 
         entitys.emplace_back(_T("assets\\tex\\entities\\items\\MonedaD.png"), 256, 256, false, true, false, true, COIN, 5, 1);
 
@@ -3617,7 +3746,7 @@ private:
     // 功能：设置实体 sprite 缩放、动画速度和碰撞盒缩放。
     void initEntitySettings()
     {
-        entitys[0].setSpriteTransform(4.0, 4.0, 0, 0);
+        entitys[0].setSpriteTransform(2.0, 2.0, 0, 0);
 
         entitys[3].setSpriteTransform(2.0, 2.0, 0, 0);
 
@@ -3628,7 +3757,7 @@ private:
         entitys[0].setAnimationSpeed(3);
         entitys[4].setAnimationSpeed(3);
 
-        entitys[0].setCollisionScale(4, 4);
+        entitys[0].setCollisionScale(2, 2);
     }
 
     // 功能：初始化用于检测状态变化的历史缓存。
@@ -3697,6 +3826,7 @@ private:
                 intent,
                 entitys,
                 i,
+                tileMap,
                 worldWidth,
                 worldHeight,
                 collisionHandle
