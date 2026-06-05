@@ -4,14 +4,14 @@
 #include <cmath>
 #include <iostream>
 #include<fstream>
-//后续会添加外部
+#include <vector>
+// 后续会继续接入 JSON 配置读取。
 using namespace std;
 
 #pragma comment(lib, "Msimg32.lib")
 #pragma comment(lib,"winmm.lib")
 const int WINDOW_WIDTH = 1600;
 const int WINDOW_HEIGHT = 900;
-const int ENTITY_COUNT = 7;
 
 const double EPS = 0.001;
 
@@ -1940,90 +1940,11 @@ public:
     // 功能：在资源加载完成后，根据初始动画状态为实体绑定第一段动画。
     void initAnimation(Entity& entity, ResourceManager& resources);
 };
-// CollisionHandle：
- // 碰撞底层能力提供者。
- // 主要职责：
- //   1. 判断两个 AABB 是否重叠：isRectOverlapping
- //   2. 判断一维范围是否重叠：isRangeOverlapping
- //   3. 根据期望位移计算允许位移：getAllowedMoveX/Y
- //   4. 把实体限制在世界边界内：limitInWorld
- //
- // 阻挡碰撞和重叠事件的底层都和 AABB / overlap 有关，
- // 但是用途不同：
- //   - 重叠事件：关心“两个盒子现在有没有重叠”
- //   - 阻挡移动：关心“想移动这么多，最多允许移动多少”
- //
- // 当前 getAllowedMoveX/Y 并不是简单地“把实体移动到下一帧再判断是否 overlap”，
- // 而是用当前碰撞盒 + 移动方向 + 另一轴范围重叠，计算离最近阻挡物还有多远。
- // 它本质上是在“阻止下一帧发生 overlap”。
-class CollisionHandle
-{
-public:
-    // 功能：声明两个 AABB 矩形重叠检测接口。
-    bool isRectOverlapping(RectBox a, RectBox b);
 
-    // 功能：声明两个一维区间重叠检测接口。
-    bool isRangeOverlapping(
-        double aMin,
-        double aMax,
-        double bMin,
-        double bMax
-    );
+class CollisionHandle;
+class MovementHandle;
 
-    // 功能：声明 X 轴允许位移计算接口。
-    double getAllowedMoveX(
-        Entity& self,
-        double moveX,
-        Entity entitys[],
-        int entityCount,
-        int selfIndex
-    );
-
-    // 功能：声明 Y 轴允许位移计算接口。
-    double getAllowedMoveY(
-        Entity& self,
-        double moveY,
-        Entity entitys[],
-        int entityCount,
-        int selfIndex
-    );
-
-    // 功能：声明实体世界边界限制接口。
-    void limitInWorld(
-        Entity& self,
-        int worldWidth,
-        int worldHeight
-    );
-};
-
-
-// MovementHandle：
- // 移动/物理执行系统。
- // 它读取 BehaviorIntent，计算速度、冲刺、跳跃、重力和期望位移。
- // 它不亲自判断碰撞细节，而是把 wantMoveX/wantMoveY 交给 CollisionHandle，
- // 得到 allowedMoveX/allowedMoveY 后，再把结果写回 Entity。
- //
- // 重要公式：
- //   currentSpeed = speed 或 speed * 2
- //   wantMoveX = inputX * currentSpeed
- //   velocityY -= GRAVITY
- //   wantMoveY = velocityY
- //   actualMove = allowedMove
-class MovementHandle
-{
-public:
-    // 功能：声明实体移动与物理更新接口。
-    void update(
-        Entity& self,
-        BehaviorIntent intent,
-        Entity entitys[],
-        int entityCount,
-        int selfIndex,
-        int worldWidth,
-        int worldHeight,
-        CollisionHandle& collisionHandle
-    );
-};// 实体类
+// 实体类
 
 // Entity：
  // 实体数据容器 + 组件持有者。
@@ -2468,6 +2389,89 @@ public:
 };
 
 
+// CollisionHandle：
+ // 碰撞底层能力提供者。
+ // 主要职责：
+ //   1. 判断两个 AABB 是否重叠：isRectOverlapping
+ //   2. 判断一维范围是否重叠：isRangeOverlapping
+ //   3. 根据期望位移计算允许位移：getAllowedMoveX/Y
+ //   4. 把实体限制在世界边界内：limitInWorld
+ //
+ // 阻挡碰撞和重叠事件的底层都和 AABB / overlap 有关，
+ // 但是用途不同：
+ //   - 重叠事件：关心“两个盒子现在有没有重叠”
+ //   - 阻挡移动：关心“想移动这么多，最多允许移动多少”
+ //
+ // 当前 getAllowedMoveX/Y 并不是简单地“把实体移动到下一帧再判断是否 overlap”，
+ // 而是用当前碰撞盒 + 移动方向 + 另一轴范围重叠，计算离最近阻挡物还有多远。
+ // 它本质上是在“阻止下一帧发生 overlap”。
+class CollisionHandle
+{
+public:
+    // 功能：声明两个 AABB 矩形重叠检测接口。
+    bool isRectOverlapping(RectBox a, RectBox b);
+
+    // 功能：声明两个一维区间重叠检测接口。
+    bool isRangeOverlapping(
+        double aMin,
+        double aMax,
+        double bMin,
+        double bMax
+    );
+
+    // 功能：声明 X 轴允许位移计算接口。
+    double getAllowedMoveX(
+        Entity& self,
+        double moveX,
+        vector<Entity>& entitys,
+        int selfIndex
+    );
+
+    // 功能：声明 Y 轴允许位移计算接口。
+    double getAllowedMoveY(
+        Entity& self,
+        double moveY,
+        vector<Entity>& entitys,
+        int selfIndex
+    );
+
+    // 功能：声明实体世界边界限制接口。
+    void limitInWorld(
+        Entity& self,
+        int worldWidth,
+        int worldHeight
+    );
+};
+
+
+// MovementHandle：
+ // 移动/物理执行系统。
+ // 它读取 BehaviorIntent，计算速度、冲刺、跳跃、重力和期望位移。
+ // 它不亲自判断碰撞细节，而是把 wantMoveX/wantMoveY 交给 CollisionHandle，
+ // 得到 allowedMoveX/allowedMoveY 后，再把结果写回 Entity。
+ //
+ // 重要公式：
+ //   currentSpeed = speed 或 speed * 2
+ //   wantMoveX = inputX * currentSpeed
+ //   velocityY -= GRAVITY
+ //   wantMoveY = velocityY
+ //   actualMove = allowedMove
+class MovementHandle
+{
+public:
+    // 功能：声明实体移动与物理更新接口。
+    void update(
+        Entity& self,
+        BehaviorIntent intent,
+        vector<Entity>& entitys,
+        int selfIndex,
+        int worldWidth,
+        int worldHeight,
+        CollisionHandle& collisionHandle
+    );
+};
+
+
 
 
 // ============================================================
@@ -2635,8 +2639,7 @@ void Animator::initAnimation(Entity& entity, ResourceManager& resources)
 void MovementHandle::update(
     Entity& self,
     BehaviorIntent intent,
-    Entity entitys[],
-    int entityCount,
+    vector<Entity>& entitys,
     int selfIndex,
     int worldWidth,
     int worldHeight,
@@ -2743,7 +2746,6 @@ void MovementHandle::update(
         self,
         wantMoveX,
         entitys,
-        entityCount,
         selfIndex
     );
     if (fabs(allowedMoveX - wantMoveX) > EPS)
@@ -2775,7 +2777,6 @@ void MovementHandle::update(
         self,
         wantMoveY,
         entitys,
-        entityCount,
         selfIndex
     );
     if (fabs(allowedMoveY - wantMoveY) > EPS)
@@ -2851,8 +2852,7 @@ bool CollisionHandle::isRangeOverlapping(
 double CollisionHandle::getAllowedMoveX(
     Entity& self,
     double moveX,
-    Entity entitys[],
-    int entityCount,
+    vector<Entity>& entitys,
     int selfIndex
 )
 {
@@ -2883,7 +2883,7 @@ double CollisionHandle::getAllowedMoveX(
     RectBox myBox = self.getWorldCollisionBox();
     double allowedMove = moveX;
 
-    for (int i = 0; i < entityCount; i++)
+    for (int i = 0; i < (int)entitys.size(); i++)
     {
         if (i == selfIndex)
         {
@@ -2951,8 +2951,7 @@ double CollisionHandle::getAllowedMoveX(
 double CollisionHandle::getAllowedMoveY(
     Entity& self,
     double moveY,
-    Entity entitys[],
-    int entityCount,
+    vector<Entity>& entitys,
     int selfIndex
 )
 {
@@ -2983,7 +2982,7 @@ double CollisionHandle::getAllowedMoveY(
     RectBox myBox = self.getWorldCollisionBox();
     double allowedMove = moveY;
 
-    for (int i = 0; i < entityCount; i++)
+    for (int i = 0; i < (int)entitys.size(); i++)
     {
         if (i == selfIndex)
         {
@@ -3123,9 +3122,12 @@ int gCameraFollowTargetIndex = 0;
 
 // setCameraFollowTarget：
  // 根据实体下标切换相机跟随对象。无效下标或死亡实体不会被设置为目标。
+ // 当前仍然用 vector 下标作为临时目标标识，后续真正 erase 实体时需要同步修正。
 // 功能：切换相机当前跟随的实体下标。
-void setCameraFollowTarget(int newTargetIndex, Entity entitys[], int entityCount)
+void setCameraFollowTarget(int newTargetIndex, vector<Entity>& entitys)
 {
+    int entityCount = (int)entitys.size();
+
     if (newTargetIndex < 0 || newTargetIndex >= entityCount)
     {
         return;
@@ -3148,14 +3150,20 @@ void setCameraFollowTarget(int newTargetIndex, Entity entitys[], int entityCount
  // 数据流：Level::updateCamera -> updateCameraFollow -> gCamera.followSmooth
 // 功能：根据跟随目标、鼠标偏移和缩放输入更新相机。
 void updateCameraFollow(
-    Entity entitys[],
-    int entityCount,
+    vector<Entity>& entitys,
     int worldWidth,
     int worldHeight,
     int mouseOffsetX,
     int mouseOffsetY
 )
 {
+    int entityCount = (int)entitys.size();
+
+    if (entityCount <= 0)
+    {
+        return;
+    }
+
     if (gCameraFollowTargetIndex < 0 || gCameraFollowTargetIndex >= entityCount)
     {
         gCameraFollowTargetIndex = 0;
@@ -3400,10 +3408,10 @@ public:
 
     }
 
-	// 功能：绘制所有存活实体，并根据开关绘制实体调试碰撞框。
-	void drawEntities(Entity entitys[], int entityCount)
+	// 功能：绘制实体列表中的所有存活实体，并根据开关绘制实体调试碰撞框。
+	void drawEntities(vector<Entity>& entitys)
 	{
-		for (int i = 0; i < entityCount; i++)
+		for (int i = 0; i < (int)entitys.size(); i++)
 		{
 			if (!entitys[i].getIsAlive())
 			{
@@ -3431,7 +3439,7 @@ public:
 
 // Level：
  // 当前关卡/场景管理器。
- // 它持有当前关卡的地图、背景、实体数组、UI面板和各种 Handle。
+ // 它持有当前关卡的地图、背景、实体列表、UI面板和各种 Handle。
  // 它不应该亲自写复杂的移动/碰撞细节，而是负责“调度顺序”：
  //   init()   加载关卡内容
  //   update() 每帧按顺序调度输入、实体、相机、事件、UI
@@ -3445,7 +3453,8 @@ private:
     TileMap tileMap;
     IMAGE background;
 
-    Entity entitys[ENTITY_COUNT];
+    // 当前关卡实体列表。使用 vector 取代固定数组，为后续动态生成和清理实体做准备。
+    vector<Entity> entitys;
     SmoothUIPanel listPanel;
     Renderer renderer;
 
@@ -3456,34 +3465,36 @@ private:
     int worldWidth;
     int worldHeight;
 
-    bool lastOverlap[ENTITY_COUNT][ENTITY_COUNT];
-    bool lastCollisionState[ENTITY_COUNT];
-    bool lastGroundState[ENTITY_COUNT];
-    bool lastSprintState[ENTITY_COUNT];
-    bool lastInAirState[ENTITY_COUNT];
-    bool lastJumpingState[ENTITY_COUNT];
-    bool lastAliveState[ENTITY_COUNT];
+    // 以下历史状态缓存必须与 entitys.size() 同步，用于判断状态变化和重叠事件首次触发。
+    vector<vector<bool>> lastOverlap;
+    vector<bool> lastCollisionState;
+    vector<bool> lastGroundState;
+    vector<bool> lastSprintState;
+    vector<bool> lastInAirState;
+    vector<bool> lastJumpingState;
+    vector<bool> lastAliveState;
 
 public:
     // 功能：初始化关卡实体列表和默认世界尺寸。
     Level()
-        : entitys
-        {
-            Entity(200, 700, true, true, true, false, PLAYER, ANIM_SET_PLAYER1, 1),
-
-            Entity(_T("assets\\tex\\entities\\characters\\player2.png"), 600, 900, false, true, false, false, ENTITY, 1),
-
-            Entity(_T("assets\\tex\\entities\\characters\\player3.png"), 950, 850, false, true, true, false, ENTITY, 1),
-
-            Entity(_T("assets\\tex\\entities\\characters\\player4.png"), 1300, 650, false, true, false, false, ENTITY, 1),
-
-            Entity(_T("assets\\tex\\entities\\items\\MonedaD.png"), 256, 256, false, true, false, true, COIN, 5, 1),
-
-            Entity(_T("assets\\tex\\entities\\items\\MonedaP.png"), 256 + 48 + 16, 256, false, true, false, true, COIN, 5, 1),
-
-            Entity(_T("assets\\tex\\entities\\items\\MonedaR.png"), 256 + (48 * 2) + (16 * 2), 256, false, true, false, true, COIN, 5, 1)
-        }
     {
+        // 预留当前测试关卡的实体数量，避免初始化期间 vector 扩容搬移 Entity。
+        entitys.reserve(7);
+
+        entitys.emplace_back(200, 700, true, true, true, false, PLAYER, ANIM_SET_PLAYER1, 1);
+
+        entitys.emplace_back(_T("assets\\tex\\entities\\characters\\player2.png"), 600, 900, false, true, false, false, ENTITY, 1);
+
+        entitys.emplace_back(_T("assets\\tex\\entities\\characters\\player3.png"), 950, 850, false, true, true, false, ENTITY, 1);
+
+        entitys.emplace_back(_T("assets\\tex\\entities\\characters\\player4.png"), 1300, 650, false, true, false, false, ENTITY, 1);
+
+        entitys.emplace_back(_T("assets\\tex\\entities\\items\\MonedaD.png"), 256, 256, false, true, false, true, COIN, 5, 1);
+
+        entitys.emplace_back(_T("assets\\tex\\entities\\items\\MonedaP.png"), 256 + 48 + 16, 256, false, true, false, true, COIN, 5, 1);
+
+        entitys.emplace_back(_T("assets\\tex\\entities\\items\\MonedaR.png"), 256 + (48 * 2) + (16 * 2), 256, false, true, false, true, COIN, 5, 1);
+
         worldWidth = WINDOW_WIDTH;
         worldHeight = WINDOW_HEIGHT;
     }
@@ -3491,7 +3502,7 @@ public:
     // 功能：在资源加载完成后，为所有实体同步初始动画帧。
     void initEntityAnimations()
     {
-        for (int i = 0; i < ENTITY_COUNT; i++)
+        for (int i = 0; i < (int)entitys.size(); i++)
         {
             entitys[i].initAnimationFromAnimator(resources);
         }
@@ -3557,7 +3568,7 @@ public:
 	{
 		renderer.drawBackground(background);
 		renderer.drawTileMap(tileMap);
-		renderer.drawEntities(entitys, ENTITY_COUNT);
+		renderer.drawEntities(entitys);
 		//renderer.drawUI(listPanel);
 	}
 
@@ -3623,26 +3634,27 @@ private:
     // 功能：初始化用于检测状态变化的历史缓存。
     void initLastStates()
     {
-        for (int i = 0; i < ENTITY_COUNT; i++)
-        {
-            lastCollisionState[i] = false;
-            lastGroundState[i] = false;
-            lastSprintState[i] = false;
-            lastInAirState[i] = false;
-            lastJumpingState[i] = false;
-            lastAliveState[i] = entitys[i].getIsAlive();
+        int entityCount = (int)entitys.size();
 
-            for (int j = 0; j < ENTITY_COUNT; j++)
-            {
-                lastOverlap[i][j] = false;
-            }
+        // 根据当前实体数量重建缓存；以后真正 erase 实体后也需要重新同步这些容器。
+        lastCollisionState.assign(entityCount, false);
+        lastGroundState.assign(entityCount, false);
+        lastSprintState.assign(entityCount, false);
+        lastInAirState.assign(entityCount, false);
+        lastJumpingState.assign(entityCount, false);
+        lastAliveState.assign(entityCount, false);
+        lastOverlap.assign(entityCount, vector<bool>(entityCount, false));
+
+        for (int i = 0; i < entityCount; i++)
+        {
+            lastAliveState[i] = entitys[i].getIsAlive();
         }
     }
 
     // 功能：清理所有存活实体的本帧临时状态。
     void clearEntityFrameState()
     {
-        for (int i = 0; i < ENTITY_COUNT; i++)
+        for (int i = 0; i < (int)entitys.size(); i++)
         {
             if (!entitys[i].getIsAlive())
             {
@@ -3666,7 +3678,7 @@ private:
                 5. Entity 根据 intent 和 sprinting 等状态切换动画
                 6. 推进动画帧
         */
-        for (int i = 0; i < ENTITY_COUNT; i++)
+        for (int i = 0; i < (int)entitys.size(); i++)
         {
             if (!entitys[i].getIsAlive())
             {
@@ -3684,7 +3696,6 @@ private:
                 entitys[i],
                 intent,
                 entitys,
-                ENTITY_COUNT,
                 i,
                 worldWidth,
                 worldHeight,
@@ -3701,22 +3712,22 @@ private:
     {
         if (input.isKeyPressed(VK_F1))
         {
-            setCameraFollowTarget(0, entitys, ENTITY_COUNT);
+            setCameraFollowTarget(0, entitys);
         }
 
         if (input.isKeyPressed(VK_F2))
         {
-            setCameraFollowTarget(1, entitys, ENTITY_COUNT);
+            setCameraFollowTarget(1, entitys);
         }
 
         if (input.isKeyPressed(VK_F3))
         {
-            setCameraFollowTarget(2, entitys, ENTITY_COUNT);
+            setCameraFollowTarget(2, entitys);
         }
 
         if (input.isKeyPressed(VK_F4))
         {
-            setCameraFollowTarget(3, entitys, ENTITY_COUNT);
+            setCameraFollowTarget(3, entitys);
         }
     }
 
@@ -3766,7 +3777,6 @@ private:
     {
         updateCameraFollow(
             entitys,
-            ENTITY_COUNT,
             worldWidth,
             worldHeight,
             input.getMouseOffsetX(),
@@ -3777,7 +3787,7 @@ private:
     // 功能：检测实体状态变化并输出调试信息。
     void updateDebugStates()
     {
-        for (int i = 0; i < ENTITY_COUNT; i++)
+        for (int i = 0; i < (int)entitys.size(); i++)
         {
             if (entitys[i].hasCollisionState() && !lastCollisionState[i])
             {
@@ -3787,7 +3797,7 @@ private:
             lastCollisionState[i] = entitys[i].hasCollisionState();
         }
 
-        for (int i = 0; i < ENTITY_COUNT; i++)
+        for (int i = 0; i < (int)entitys.size(); i++)
         {
             bool nowAlive = entitys[i].getIsAlive();
 
@@ -3799,7 +3809,7 @@ private:
             lastAliveState[i] = nowAlive;
         }
 
-        for (int i = 0; i < ENTITY_COUNT; i++)
+        for (int i = 0; i < (int)entitys.size(); i++)
         {
             if (entitys[i].isOnGround() && !lastGroundState[i])
             {
@@ -3809,7 +3819,7 @@ private:
             lastGroundState[i] = entitys[i].isOnGround();
         }
 
-        for (int i = 0; i < ENTITY_COUNT; i++)
+        for (int i = 0; i < (int)entitys.size(); i++)
         {
             if (entitys[i].isInAir() && !lastInAirState[i])
             {
@@ -3819,7 +3829,7 @@ private:
             lastInAirState[i] = entitys[i].isInAir();
         }
 
-        for (int i = 0; i < ENTITY_COUNT; i++)
+        for (int i = 0; i < (int)entitys.size(); i++)
         {
             bool nowJumping = entitys[i].isJumping();
 
@@ -3836,7 +3846,7 @@ private:
             lastJumpingState[i] = nowJumping;
         }
 
-        for (int i = 0; i < ENTITY_COUNT; i++)
+        for (int i = 0; i < (int)entitys.size(); i++)
         {
             bool nowSprinting = entitys[i].isSprinting();
 
@@ -3868,9 +3878,9 @@ private:
 
         当前这里复用 CollisionHandle::isRectOverlapping() 作为底层 AABB 判断。
         */
-        for (int i = 0; i < ENTITY_COUNT; i++)
+        for (int i = 0; i < (int)entitys.size(); i++)
         {
-            for (int j = i + 1; j < ENTITY_COUNT; j++)
+            for (int j = i + 1; j < (int)entitys.size(); j++)
             {
                 if (!entitys[i].getIsAlive() || !entitys[j].getIsAlive())
                 {
