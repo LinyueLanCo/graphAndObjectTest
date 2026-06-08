@@ -185,7 +185,7 @@ struct Camera
         targetY = targetWorldY - visibleH / 2.0 + offsetWorldY;
 
         // 数值越小越“拖”，越大越紧跟
-        double followSpeed = 0.08;
+        double followSpeed = 0.16;
 
         // 用当前位置与目标位置的差值乘以跟随系数，得到本帧相机平滑位移。
         x += (targetX - x) * followSpeed;
@@ -1180,11 +1180,24 @@ struct CollisionBox
 };
 
 // TileId：
- // 地图 tile 编号。当前 TILE_EMPTY=0 表示空格，不绘制也不视为 solid tile。
+ // 地图 tile 编号。当前 TILE_EMPTY=0 表示空格，不绘制，也不生成默认地图碰撞。
 enum TileId
 {
     TILE_EMPTY = 0
 };
+
+// TileCollisionType：
+// 定义地图碰撞层中每个格子的碰撞规则类型。
+enum TileCollisionType
+{
+    TILE_COLLISION_NONE = 0,                // 不参与地图碰撞。
+    TILE_COLLISION_FULL_SOLID = 1,          // 完整 tile 实体碰撞，阻挡上下左右。
+    TILE_COLLISION_FULL_ONE_WAY = 2,        // 完整 tile 单向平台，只阻挡从上方下落。
+    TILE_COLLISION_TOP_HALF_ONE_WAY = 3,    // 顶部半格单向平台。
+    TILE_COLLISION_TOP_LEFT_HALF_ONE_WAY = 4,   // 左上半格单向平台。
+    TILE_COLLISION_TOP_RIGHT_HALF_ONE_WAY = 5   // 右上半格单向平台。
+};
+
 
 // TileMap：
  // 负责加载 tileset 和地图文本数据，并把 tile 绘制到世界坐标中。
@@ -1206,8 +1219,11 @@ private:
     int drawTileWidth;
     int drawTileHeight;
 
-    // 动态二维数组
+    // 视觉 tile 二维数组，存放用于绘制的 tile id。
     int** tiles;
+
+    // 碰撞 tile 二维数组，存放 TileCollisionType 对应的编号。
+    int** collisionTiles;
 
     // 整张地图在世界坐标里的偏移
     double offsetX;
@@ -1227,6 +1243,7 @@ public:
         drawTileHeight = 48;
 
         tiles = NULL;
+        collisionTiles = NULL;
 
         offsetX = 0;
         offsetY = 0;
@@ -1237,6 +1254,34 @@ public:
     {
         release();
     }
+
+
+	int getRows()
+	{
+		return rows;
+	}
+
+	int getCols()
+	{
+		return cols;
+	}
+
+
+    // 功能：释放并清空当前地图碰撞层二维数组。
+    void releaseCollisionTiles()
+    {
+        if (collisionTiles != NULL)
+        {
+            for (int row = 0; row < rows; row++)
+            {
+                delete[] collisionTiles[row];
+            }
+
+            delete[] collisionTiles;
+            collisionTiles = NULL;
+        }
+    }
+
 
     // 功能：释放并清空当前地图二维数组。
     void release()
@@ -1251,6 +1296,8 @@ public:
             delete[] tiles;
             tiles = NULL;
         }
+        // 视觉层重载时同步释放碰撞层，避免新旧地图尺寸不一致。
+        releaseCollisionTiles();
 
         rows = 0;
         cols = 0;
@@ -1283,6 +1330,137 @@ public:
     {
         loadimage(&tileset, imagePath);
     }
+
+    // 功能：根据视觉 tile id 返回默认碰撞类型。
+    TileCollisionType getDefaultCollisionTypeByTileId(int tileId)
+    {
+        if (tileId == TILE_EMPTY)
+        {
+            return TILE_COLLISION_NONE;
+        }
+
+        // 这些 tile 暂时作为完整固体处理，用于箱子、砖块、金属块等硬阻挡。
+        switch (tileId)
+        {
+        case 13:
+        case 14:
+        case 15:
+        case 16:
+        case 18:
+        case 19:
+        case 20:
+        case 21:
+        case 35:
+        case 36:
+        case 37:
+        case 38:
+        case 40:
+        case 41:
+        case 42:
+        case 58:
+        case 59:
+        case 60:
+        case 62:
+        case 63:
+        case 64:
+        case 101:
+        case 102:
+        case 103:
+        case 106:
+        case 107:
+        case 108:
+        case 109:
+        case 110:
+        case 123:
+        case 124:
+        case 125:
+        case 126:
+        case 128:
+        case 129:
+        case 130:
+        case 131:
+        case 132:
+        case 146:
+        case 147:
+        case 148:
+        case 150:
+        case 151:
+        case 152:
+        case 189:
+        case 190:
+        case 191:
+        case 192:
+        case 194:
+        case 195:
+        case 196:
+        case 197:
+        case 211:
+        case 212:
+        case 213:
+        case 214:
+        case 216:
+        case 217:
+        case 218:
+        case 219:
+        case 234:
+        case 235:
+        case 236:
+        case 238:
+        case 239:
+        case 240:
+        case 241:
+            return TILE_COLLISION_FULL_SOLID;
+        }
+
+        if (tileId == 33 || tileId == 55)
+        {
+            return TILE_COLLISION_TOP_LEFT_HALF_ONE_WAY;
+        }
+
+        // 草地平台主体默认是顶部半格单向平台：下落时站住，向上跳时穿过。
+        if (
+            tileId == 7 ||
+            tileId == 8 ||
+            tileId == 9 ||
+            tileId == 73 ||
+            tileId == 74 ||
+            tileId == 75 ||
+            tileId == 76 ||
+            tileId == 77
+            )
+        {
+            return TILE_COLLISION_TOP_HALF_ONE_WAY;
+        }
+
+        if (tileId == 32 || tileId == 54)
+        {
+            return TILE_COLLISION_TOP_RIGHT_HALF_ONE_WAY;
+        }
+
+        return TILE_COLLISION_NONE;
+    }
+
+    // 功能：根据视觉 tile 数据自动生成默认碰撞层。
+    void generateDefaultCollisionFromTiles()
+    {
+        releaseCollisionTiles();
+
+        collisionTiles = new int* [rows];
+
+        for (int row = 0; row < rows; row++)
+        {
+            collisionTiles[row] = new int[cols];
+
+            for (int col = 0; col < cols; col++)
+            {
+                int tileId = tiles[row][col];
+
+                collisionTiles[row][col] = getDefaultCollisionTypeByTileId(tileId);
+            }
+        }
+    }
+
+
 
     // 功能：从文本文件读取地图行列数和 tile id 数据。
     bool loadFromFile(const char* mapPath)
@@ -1318,6 +1496,8 @@ public:
         }
 
         inFile.close();
+
+        generateDefaultCollisionFromTiles();
 
         return true;
     }
@@ -1390,24 +1570,28 @@ public:
         );
     }
 
-    // 功能：判断指定 tile 是否作为 solid tile 参与调试碰撞显示。
-    bool isSolidTile(int row, int col)
+
+    // 功能：获取指定行列的 tile 碰撞类型。
+    TileCollisionType getTileCollisionType(int row, int col)
     {
         if (row < 0 || row >= rows || col < 0 || col >= cols)
         {
-            return false;
+            return TILE_COLLISION_NONE;
         }
 
-        int tileId = tiles[row][col];
-
-        // 第一版先简单处理：
-        // 只要不是空格，就当作有碰撞
-        if (tileId != TILE_EMPTY)
+        if (collisionTiles == NULL)
         {
-            return true;
+            return TILE_COLLISION_NONE;
         }
 
-        return false;
+        return (TileCollisionType)collisionTiles[row][col];
+    }
+
+
+    // 功能：判断指定 tile 是否拥有任何地图碰撞类型。
+    bool hasTileCollision(int row, int col)
+    {
+        return getTileCollisionType(row, col) != TILE_COLLISION_NONE;
     }
 
     // 功能：获取指定 tile 在世界坐标中的矩形范围。
@@ -1428,7 +1612,44 @@ public:
         return box;
     }
 
-    // 功能：绘制所有 solid tile 的调试碰撞框。
+    // 功能：根据 tile 碰撞类型，获取指定 tile 实际参与碰撞的世界矩形范围。
+    RectBox getTileCollisionWorldBox(int row, int col)
+    {
+        RectBox tileBox = getTileWorldBox(row, col);
+        RectBox collisionBox = tileBox;
+
+        TileCollisionType collisionType = getTileCollisionType(row, col);
+
+        double tileWidth = tileBox.right - tileBox.left;
+        double tileHeight = tileBox.top - tileBox.bottom;
+
+        if (collisionType == TILE_COLLISION_TOP_HALF_ONE_WAY)
+        {
+            // 由完整 tile 顶边向下取半格高度，得到平台主体的实际碰撞盒。
+            collisionBox.bottom = tileBox.top - tileHeight * 0.5;
+            collisionBox.top = tileBox.top;
+        }
+        else if (collisionType == TILE_COLLISION_TOP_LEFT_HALF_ONE_WAY)
+        {
+            // 由完整 tile 左边向右取半格宽度，并由顶边向下取半格高度。
+            collisionBox.right = tileBox.left + tileWidth * 0.5;
+            collisionBox.bottom = tileBox.top - tileHeight * 0.5;
+            collisionBox.top = tileBox.top;
+        }
+        else if (collisionType == TILE_COLLISION_TOP_RIGHT_HALF_ONE_WAY)
+        {
+            // 由完整 tile 中线向右取半格宽度，并由顶边向下取半格高度。
+            collisionBox.left = tileBox.left + tileWidth * 0.5;
+            collisionBox.bottom = tileBox.top - tileHeight * 0.5;
+            collisionBox.top = tileBox.top;
+        }
+
+        return collisionBox;
+    }
+
+
+
+    // 功能：绘制所有拥有地图碰撞类型的 tile 调试碰撞框。
     void drawDebugCollisionBoxes()
     {
         setlinecolor(YELLOW);
@@ -1437,12 +1658,24 @@ public:
         {
             for (int col = 0; col < cols; col++)
             {
-                if (!isSolidTile(row, col))
+                if (!hasTileCollision(row, col))
                 {
                     continue;
                 }
 
-                RectBox box = getTileWorldBox(row, col);
+                TileCollisionType collisionType = getTileCollisionType(row, col);
+
+                if (collisionType == TILE_COLLISION_FULL_SOLID)
+                {
+                    setlinecolor(YELLOW);
+                }
+                else
+                {
+                    setlinecolor(GREEN);
+                }
+
+                RectBox box = getTileCollisionWorldBox(row, col);
+
 
                 int screenLeft = worldToScreenX(box.left);
                 int screenRight = worldToScreenX(box.right);
@@ -2424,7 +2657,8 @@ public:
         Entity& self,
         double moveX,
         vector<Entity>& entitys,
-        int selfIndex
+        int selfIndex,
+        TileMap& tileMap
     );
 
     // 功能：声明 Y 轴允许位移计算接口。
@@ -2432,7 +2666,8 @@ public:
         Entity& self,
         double moveY,
         vector<Entity>& entitys,
-        int selfIndex
+        int selfIndex,
+        TileMap& tileMap
     );
 
     // 功能：声明实体世界边界限制接口。
@@ -2465,6 +2700,7 @@ public:
         BehaviorIntent intent,
         vector<Entity>& entitys,
         int selfIndex,
+        TileMap& tileMap,
         int worldWidth,
         int worldHeight,
         CollisionHandle& collisionHandle
@@ -2641,6 +2877,7 @@ void MovementHandle::update(
     BehaviorIntent intent,
     vector<Entity>& entitys,
     int selfIndex,
+    TileMap& tileMap,
     int worldWidth,
     int worldHeight,
     CollisionHandle& collisionHandle
@@ -2746,7 +2983,8 @@ void MovementHandle::update(
         self,
         wantMoveX,
         entitys,
-        selfIndex
+        selfIndex,
+        tileMap
     );
     if (fabs(allowedMoveX - wantMoveX) > EPS)
     {
@@ -2777,7 +3015,8 @@ void MovementHandle::update(
         self,
         wantMoveY,
         entitys,
-        selfIndex
+        selfIndex,
+        tileMap
     );
     if (fabs(allowedMoveY - wantMoveY) > EPS)
     {
@@ -2853,7 +3092,8 @@ double CollisionHandle::getAllowedMoveX(
     Entity& self,
     double moveX,
     vector<Entity>& entitys,
-    int selfIndex
+    int selfIndex,
+    TileMap& tileMap
 )
 {
     /*
@@ -2945,6 +3185,71 @@ double CollisionHandle::getAllowedMoveX(
         }
     }
 
+
+    for (int row = 0; row < tileMap.getRows(); row++)
+    {
+        for (int col = 0; col < tileMap.getCols(); col++)
+        {
+            TileCollisionType collisionType = tileMap.getTileCollisionType(row, col);
+
+            if (collisionType == TILE_COLLISION_NONE)
+            {
+                continue;
+            }
+
+            if (collisionType == TILE_COLLISION_FULL_ONE_WAY ||
+                collisionType == TILE_COLLISION_TOP_HALF_ONE_WAY ||
+                collisionType == TILE_COLLISION_TOP_LEFT_HALF_ONE_WAY ||
+                collisionType == TILE_COLLISION_TOP_RIGHT_HALF_ONE_WAY)
+            {
+                continue;
+            }
+
+            RectBox tileBox = tileMap.getTileCollisionWorldBox(row, col);
+
+            if (!isRangeOverlapping(myBox.bottom, myBox.top, tileBox.bottom, tileBox.top))
+            {
+                continue;
+            }
+
+            if (moveX > 0)
+            {
+                if (tileBox.left >= myBox.right - EPS)
+                {
+                    double distance = tileBox.left - myBox.right;
+
+                    if (distance < 0)
+                    {
+                        distance = 0;
+                    }
+
+                    if (distance < allowedMove)
+                    {
+                        allowedMove = distance;
+                    }
+                }
+            }
+            else if (moveX < 0)
+            {
+                if (tileBox.right <= myBox.left + EPS)
+                {
+                    double distance = tileBox.right - myBox.left;
+
+                    if (distance > 0)
+                    {
+                        distance = 0;
+                    }
+
+                    if (distance > allowedMove)
+                    {
+                        allowedMove = distance;
+                    }
+                }
+            }
+        }
+    }
+
+
     return allowedMove;
 }
 // 功能：计算实体在 Y 轴上不会穿透阻挡物的最大允许位移。
@@ -2952,7 +3257,8 @@ double CollisionHandle::getAllowedMoveY(
     Entity& self,
     double moveY,
     vector<Entity>& entitys,
-    int selfIndex
+    int selfIndex,
+    TileMap& tileMap
 )
 {
     /*
@@ -3039,6 +3345,74 @@ double CollisionHandle::getAllowedMoveY(
                 if (distance > allowedMove)
                 {
                     allowedMove = distance;
+                }
+            }
+        }
+    }
+
+
+    for (int row = 0; row < tileMap.getRows(); row++)
+    {
+        for (int col = 0; col < tileMap.getCols(); col++)
+        {
+            TileCollisionType collisionType = tileMap.getTileCollisionType(row, col);
+
+            if (collisionType == TILE_COLLISION_NONE)
+            {
+                continue;
+            }
+
+            if (collisionType == TILE_COLLISION_FULL_ONE_WAY ||
+                collisionType == TILE_COLLISION_TOP_HALF_ONE_WAY ||
+                collisionType == TILE_COLLISION_TOP_LEFT_HALF_ONE_WAY ||
+                collisionType == TILE_COLLISION_TOP_RIGHT_HALF_ONE_WAY)
+            {
+                if (moveY >= 0)
+                {
+                    continue;
+                }
+            }
+
+            RectBox tileBox = tileMap.getTileCollisionWorldBox(row, col);
+
+
+            if (!isRangeOverlapping(myBox.left, myBox.right, tileBox.left, tileBox.right))
+            {
+                continue;
+            }
+
+            if (moveY > 0)
+            {
+                if (tileBox.bottom >= myBox.top - EPS)
+                {
+                    double distance = tileBox.bottom - myBox.top;
+
+                    if (distance < 0)
+                    {
+                        distance = 0;
+                    }
+
+                    if (distance < allowedMove)
+                    {
+                        allowedMove = distance;
+                    }
+                }
+            }
+            else if (moveY < 0)
+            {
+                if (tileBox.top <= myBox.bottom + EPS)
+                {
+                    double distance = tileBox.top - myBox.bottom;
+
+                    if (distance > 0)
+                    {
+                        distance = 0;
+                    }
+
+                    if (distance > allowedMove)
+                    {
+                        allowedMove = distance;
+                    }
                 }
             }
         }
@@ -3483,11 +3857,11 @@ public:
 
         entitys.emplace_back(200, 700, true, true, true, false, PLAYER, ANIM_SET_PLAYER1, 1);
 
-        entitys.emplace_back(_T("assets\\tex\\entities\\characters\\player2.png"), 600, 900, false, true, false, false, ENTITY, 1);
+        entitys.emplace_back(_T("assets\\tex\\entities\\characters\\player2.png"), 600, 1300, false, true, false, false, ENTITY, 1);
 
-        entitys.emplace_back(_T("assets\\tex\\entities\\characters\\player3.png"), 950, 850, false, true, true, false, ENTITY, 1);
+        entitys.emplace_back(_T("assets\\tex\\entities\\characters\\player3.png"), 950, 1300, false, true, true, false, ENTITY, 1);
 
-        entitys.emplace_back(_T("assets\\tex\\entities\\characters\\player4.png"), 1300, 650, false, true, false, false, ENTITY, 1);
+        entitys.emplace_back(_T("assets\\tex\\entities\\characters\\player4.png"), 1300, 1300, false, true, false, false, ENTITY, 1);
 
         entitys.emplace_back(_T("assets\\tex\\entities\\items\\MonedaD.png"), 256, 256, false, true, false, true, COIN, 5, 1);
 
@@ -3617,7 +3991,7 @@ private:
     // 功能：设置实体 sprite 缩放、动画速度和碰撞盒缩放。
     void initEntitySettings()
     {
-        entitys[0].setSpriteTransform(4.0, 4.0, 0, 0);
+        entitys[0].setSpriteTransform(2.0, 2.0, 0, 0);
 
         entitys[3].setSpriteTransform(2.0, 2.0, 0, 0);
 
@@ -3628,7 +4002,7 @@ private:
         entitys[0].setAnimationSpeed(3);
         entitys[4].setAnimationSpeed(3);
 
-        entitys[0].setCollisionScale(4, 4);
+        entitys[0].setCollisionScale(1.2, 2);
     }
 
     // 功能：初始化用于检测状态变化的历史缓存。
@@ -3697,6 +4071,7 @@ private:
                 intent,
                 entitys,
                 i,
+                tileMap,
                 worldWidth,
                 worldHeight,
                 collisionHandle
