@@ -350,6 +350,9 @@ ASALocalRun/
 # Local History for Visual Studio
 .localhistory/
 
+# Local analysis cache generated during Codex-assisted visual inspection
+_video_frames/
+
 # BeatPulse healthcheck temp database
 healthchecksdb
 
