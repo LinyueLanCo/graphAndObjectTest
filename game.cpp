@@ -1366,6 +1366,7 @@ public:
         case 101:
         case 102:
         case 103:
+        case 104:
         case 106:
         case 107:
         case 108:
@@ -3713,12 +3714,89 @@ public:
 	}
 
 	// 功能：绘制当前关卡背景图。
-	void drawBackground(IMAGE& background)
-	{
-		putimage(0, 0, &background);
-	}
+    // 功能：绘制当前关卡背景图（支持与相机平移和 Zoom 自然联动，防止黑边）
+// 功能：绘制当前关卡多层视差背景。
+// parallaxOffsetX 表示相机目标实体相对初始位置移动了多少。
+// cameraZoom 表示当前真实相机 zoom。
+// 注意：这里不直接读取 gCamera.x，因为 gCamera.x 混合了 zoom 修正、鼠标 look offset 和相机平滑。
+    void drawBackground(IMAGE backgroundLayers[], int layerCount, double parallaxOffsetX, double cameraZoom)
+    {
+        // 数值越大，越靠近前景，横向移动越明显。
+        double parallaxFactors[4] = { 0.0, 0.04, 0.12, 0.25 };
+        // 数值越大，这一层越明显地响应 camera zoom。
+        // 最远天空层通常不明显缩放；近景层更接近场景元素。
+        double zoomFactors[4] = { 0.0, 0.25, 0.55, 0.85 };
 
-	// 功能：绘制 tile map，并根据开关绘制 tile 调试碰撞框。
+        if (layerCount > 4)
+        {
+            layerCount = 4;
+        }
+
+        for (int i = 0; i < layerCount; i++)
+        {
+            int imageW = backgroundLayers[i].getwidth();
+            int imageH = backgroundLayers[i].getheight();
+
+            if (imageW <= 0 || imageH <= 0)
+            {
+                continue;
+            }
+
+            // 计算这一层自己的 zoom。
+            // 不是所有背景层都必须 100% 跟随 camera zoom。
+            double layerZoom = 1.0 + (cameraZoom - 1.0) * zoomFactors[i];
+
+            // 防止 zoom out 时背景缩小露出黑边。
+            // 如果你想让背景完全像世界物体一样缩小，可以删掉这个 if。
+            if (layerZoom < 1.0)
+            {
+                layerZoom = 1.0;
+            }
+
+            int drawW = (int)(imageW * layerZoom);
+            int drawH = (int)(imageH * layerZoom);
+
+            if (drawW < 1)
+            {
+                drawW = 1;
+            }
+
+            if (drawH < 1)
+            {
+                drawH = 1;
+            }
+
+            // tile 层的屏幕移动速度约等于：-cameraMoveX * cameraZoom。
+            // 背景层在这个基础上乘 parallaxFactor，保证背景永远比 tile 慢。
+            double screenOriginX =
+                -parallaxOffsetX * cameraZoom * parallaxFactors[i]
+                + WINDOW_WIDTH / 2.0
+                - drawW / 2.0;
+
+            int baseX = (int)fmod(screenOriginX, (double)drawW);
+
+            if (baseX > 0)
+            {
+                baseX -= drawW;
+            }
+
+            // 纵向先保持屏幕中心缩放。
+            // 这样 zoom in 时背景从屏幕中心向外放大。
+            int drawY = (WINDOW_HEIGHT - drawH) / 2;
+
+            for (int drawX = baseX; drawX < WINDOW_WIDTH; drawX += drawW)
+            {
+                if (i == 0)
+                {
+                    putimage(drawX, drawY, drawW, drawH, &backgroundLayers[i], 0, 0);
+                }
+                else
+                {
+                    putimage_alpha(drawX, drawY, drawW, drawH, &backgroundLayers[i]);
+                }
+            }
+        }
+    }	// 功能：绘制 tile map，并根据开关绘制 tile 调试碰撞框。
 	void drawTileMap(TileMap& tileMap)
 	{
 		tileMap.draw();
@@ -3825,19 +3903,33 @@ private:
     ResourceManager resources;
 
     TileMap tileMap;
-    IMAGE background;
+    IMAGE backgrounds[4];
 
     // 当前关卡实体列表。使用 vector 取代固定数组，为后续动态生成和清理实体做准备。
     vector<Entity> entitys;
     SmoothUIPanel listPanel;
     Renderer renderer;
 
+    int controlTargerIndex;
+
     PlayerController playerController;
     MovementHandle movementHandle;
     CollisionHandle collisionHandle;
 
+
+   
     int worldWidth;
     int worldHeight;
+
+    // 背景视差专用相机位置。
+    // 它记录的是“真实摄像机左边界 gCamera.x”，
+    // 也就是最终画面实际发生滚动的依据。
+    // 当摄像机被世界边界限制住时，这个值不会继续变化，背景也不会继续移动。
+    double parallaxCameraX;
+
+    // 背景视差初始参考点。
+    // 用来计算摄像机从初始位置开始实际移动了多少。
+    double parallaxOriginX;
 
     // 以下历史状态缓存必须与 entitys.size() 同步，用于判断状态变化和重叠事件首次触发。
     vector<vector<bool>> lastOverlap;
@@ -3852,6 +3944,9 @@ public:
     // 功能：初始化关卡实体列表和默认世界尺寸。
     Level()
     {
+
+		controlTargerIndex = 0;
+
         // 预留当前测试关卡的实体数量，避免初始化期间 vector 扩容搬移 Entity。
         entitys.reserve(7);
 
@@ -3871,6 +3966,9 @@ public:
 
         worldWidth = WINDOW_WIDTH;
         worldHeight = WINDOW_HEIGHT;
+
+        parallaxCameraX = 0.0;
+        parallaxOriginX = 0.0;
     }
 
     // 功能：在资源加载完成后，为所有实体同步初始动画帧。
@@ -3892,6 +3990,15 @@ public:
         initEntityAnimations();
         initEntitySettings();
         initLastStates();
+
+        // 初始化相机位置，避免第一帧背景原点和真实相机位置不同。
+        if (!entitys.empty())
+        {
+            gCamera.followInstant(entitys[0].getX(), entitys[0].getY(), worldWidth, worldHeight);
+        }
+
+        parallaxCameraX = gCamera.x;
+        parallaxOriginX = gCamera.x;
     }
 
 
@@ -3922,13 +4029,16 @@ public:
 
         clearEntityFrameState();
 
-		updateEntities(input);
+        handleControlInput(input);
 
-		handleCameraInput(input);
-		handleUIInput(input);
-		handleRendererInput(input);
+        updateEntities(input);
 
-		updateCamera(input);
+        handleCameraInput(input);
+        handleUIInput(input);
+        handleRendererInput(input);
+
+        updateCamera(input);
+        updateParallaxCamera();
 
         updateDebugStates();
 
@@ -3938,13 +4048,15 @@ public:
     }
 
 	// 功能：委托 Renderer 绘制当前关卡画面。
-	void draw()
-	{
-		renderer.drawBackground(background);
-		renderer.drawTileMap(tileMap);
-		renderer.drawEntities(entitys);
-		//renderer.drawUI(listPanel);
-	}
+    void draw()
+    {
+        double parallaxOffsetX = parallaxCameraX - parallaxOriginX;
+
+        renderer.drawBackground(backgrounds, 4, parallaxOffsetX, gCamera.zoom);
+        renderer.drawTileMap(tileMap);
+        renderer.drawEntities(entitys);
+        //renderer.drawUI(listPanel);
+    }
 
 private:
 
@@ -3979,9 +4091,11 @@ private:
     // 功能：加载关卡背景图片。
     void initBackground()
     {
-        loadimage(&background, _T("assets\\tex\\maps\\background.jpg"));
+        loadimage(&backgrounds[0], _T("assets\\tex\\maps\\Clouds 2\\1.png"), WINDOW_WIDTH, WINDOW_HEIGHT, true);
+        loadimage(&backgrounds[1], _T("assets\\tex\\maps\\Clouds 2\\2.png"), WINDOW_WIDTH, WINDOW_HEIGHT, true);
+        loadimage(&backgrounds[2], _T("assets\\tex\\maps\\Clouds 2\\3.png"), WINDOW_WIDTH, WINDOW_HEIGHT, true);
+        loadimage(&backgrounds[3], _T("assets\\tex\\maps\\Clouds 2\\4.png"), WINDOW_WIDTH, WINDOW_HEIGHT, true);
     }
-
     // 功能：初始化测试 UI 面板。
     void initUI()
     {
@@ -4052,6 +4166,17 @@ private:
                 5. Entity 根据 intent 和 sprinting 等状态切换动画
                 6. 推进动画帧
         */
+
+        if (
+            controlTargerIndex < 0 ||
+            controlTargerIndex >= (int)entitys.size() ||
+            !entitys[controlTargerIndex].getIsAlive()
+            )
+        {
+            controlTargerIndex = 0;
+        }
+
+
         for (int i = 0; i < (int)entitys.size(); i++)
         {
             if (!entitys[i].getIsAlive())
@@ -4061,11 +4186,14 @@ private:
 
             BehaviorIntent intent;
 
-            if (i == 0)
+            if (
+                controlTargerIndex >= 0 &&
+                controlTargerIndex < (int)entitys.size() &&
+                i == controlTargerIndex
+                )
             {
                 intent = playerController.makeIntent(input, entitys[i].isGod());
             }
-
             movementHandle.update(
                 entitys[i],
                 intent,
@@ -4082,6 +4210,50 @@ private:
         }
     }
 
+    // 功能：切换当前由玩家输入控制的实体下标。
+    void setControlTarget(int newTargetIndex)
+    {
+        int entityCount = (int)entitys.size();
+
+        if (newTargetIndex < 0 || newTargetIndex >= entityCount)
+        {
+            return;
+        }
+
+        if (!entitys[newTargetIndex].getIsAlive())
+        {
+            return;
+        }
+
+        controlTargerIndex = newTargetIndex;
+
+        cout << "Control target changed to Entity "
+            << controlTargerIndex
+            << endl;
+    }
+    // 功能：处理玩家输入控制目标切换。
+    void handleControlInput(InputManager& input)
+    {
+        if (input.isKeyPressed('1'))
+        {
+            setControlTarget(0);
+        }
+
+        if (input.isKeyPressed('2'))
+        {
+            setControlTarget(1);
+        }
+
+        if (input.isKeyPressed('3'))
+        {
+            setControlTarget(2);
+        }
+
+        if (input.isKeyPressed('4'))
+        {
+            setControlTarget(3);
+        }
+    }
     // 功能：处理相机跟随目标切换输入。
     void handleCameraInput(InputManager& input)
     {
@@ -4157,6 +4329,15 @@ private:
             input.getMouseOffsetX(),
             input.getMouseOffsetY()
         );
+    }
+
+
+    // 功能：更新背景视差专用相机位置。
+    // 注意：这里记录的是摄像机最终实际位置，而不是角色位置。
+    // 因此当摄像机被世界边界限制住时，背景也会停止滚动。
+    void updateParallaxCamera()
+    {
+        parallaxCameraX = gCamera.x;
     }
 
     // 功能：检测实体状态变化并输出调试信息。
