@@ -91,10 +91,10 @@ main()
 // 当前工程使用“世界坐标”和“屏幕坐标”两套坐标：
 // - 世界坐标：逻辑坐标，原点在左下角，Entity 的 x/y 表示实体中心点。
 // - 屏幕坐标：EasyX 绘制坐标，原点在窗口左上角。
-// - Camera 记录当前视口在世界坐标中的左下角位置和缩放系数 zoom。
+// - Camera 使用 centerX/centerY 记录视口中心点，并用 zoom 表示世界到屏幕的缩放倍率。
 // 公式：
-//   screenX = (worldX - cameraX) * zoom
-//   screenY = WINDOW_HEIGHT - (worldY - cameraY) * zoom
+//   screenX = WINDOW_WIDTH / 2 + (worldX - centerX) * zoom
+//   screenY = WINDOW_HEIGHT / 2 - (worldY - centerY) * zoom
 //   screenSize = worldSize * zoom
 
 
@@ -112,57 +112,91 @@ enum EntityType
 
 // Camera：
  // 负责把“世界中的一个区域”映射到屏幕上。
- // x/y 表示摄像机左下角在世界坐标中的位置；zoom 表示缩放。
+ // centerX/centerY 表示摄像机视口中心点；zoom 表示世界到屏幕的缩放倍率。
  // followSmooth 使用 lerp 公式做平滑跟随：
  //   current += (target - current) * speed
  // 这个公式的效果是：距离目标越远移动越快，越接近目标越慢。
 struct Camera
 {
-    double x;
-    double y;
+
+    // 逻辑用：摄像机真正跟随和平滑的中心点。
+    // 视口边界由这个中心点和 zoom 临时推导，避免平滑缩放时左下角锚点漂移。
+    double centerX;
+    double centerY;
 
     double zoom;
 
-    double targetX;
-    double targetY;
+    // 逻辑目标中心点。
+    double targetCenterX;
+    double targetCenterY;
+
     double targetZoom;
 
     // 功能：初始化相机位置、目标位置和缩放参数。
     Camera()
     {
-        x = 0;
-        y = 0;
+        centerX = 0;
+        centerY = 0;
 
         zoom = 1.0;
 
-        targetX = 0;
-        targetY = 0;
+        targetCenterX = 0;
+        targetCenterY = 0;
+
         targetZoom = 1.0;
     }
 
-    // 功能：计算当前相机缩放下屏幕可见的世界宽度。
-    double getVisibleWorldWidth()
+    // 功能：计算当前 zoom 下屏幕横向覆盖的世界宽度。
+    double getVisibleWorldWidth() const
     {
-        // 用屏幕像素宽度除以 zoom，得到当前视口覆盖的世界宽度。
+        // 用固定窗口宽度除以缩放倍率，得到当前逻辑视口宽度。
         return WINDOW_WIDTH / zoom;
     }
 
-    // 功能：计算当前相机缩放下屏幕可见的世界高度。
-    double getVisibleWorldHeight()
+    // 功能：计算当前 zoom 下屏幕纵向覆盖的世界高度。
+    double getVisibleWorldHeight() const
     {
-        // 用屏幕像素高度除以 zoom，得到当前视口覆盖的世界高度。
+        // 用固定窗口高度除以缩放倍率，得到当前逻辑视口高度。
         return WINDOW_HEIGHT / zoom;
     }
+
+
+    // 功能：根据中心点和可见宽度推导当前视口左边界。
+    double getViewLeft() const
+    {
+        return centerX - getVisibleWorldWidth() / 2.0;
+    }
+
+    // 功能：根据中心点和可见宽度推导当前视口右边界。
+    double getViewRight() const
+    {
+        return centerX + getVisibleWorldWidth() / 2.0;
+    }
+
+    // 功能：根据中心点和可见高度推导当前视口下边界。
+    double getViewBottom() const
+    {
+        return centerY - getVisibleWorldHeight() / 2.0;
+    }
+
+    // 功能：根据中心点和可见高度推导当前视口上边界。
+    double getViewTop() const
+    {
+        return centerY + getVisibleWorldHeight() / 2.0;
+    }
+
+
+
+
 
     // 功能：让相机立即居中跟随目标点，并限制在世界范围内。
     void followInstant(double targetWorldX, double targetWorldY, int worldWidth, int worldHeight)
     {
-        double visibleW = getVisibleWorldWidth();
-        double visibleH = getVisibleWorldHeight();
+        centerX = targetWorldX;
+        centerY = targetWorldY;
 
-        // 用目标中心点减去半个可见范围，得到相机左下角坐标。
-        x = targetWorldX - visibleW / 2.0;
-        y = targetWorldY - visibleH / 2.0;
+        targetCenterX = centerX;
+        targetCenterY = centerY;
 
         limitInWorld(worldWidth, worldHeight);
     }
@@ -177,22 +211,20 @@ struct Camera
         double offsetWorldY
     )
     {
-        double visibleW = getVisibleWorldWidth();
-        double visibleH = getVisibleWorldHeight();
+        // 目标中心点 = 跟随实体位置 + 鼠标观察偏移。
+        // 注意：这里不再减 visibleW / 2，也不再减 visibleH / 2。
+        targetCenterX = targetWorldX + offsetWorldX;
+        targetCenterY = targetWorldY + offsetWorldY;
 
-        // 用目标中心点、半个视口和鼠标世界偏移，计算相机希望到达的左下角坐标。
-        targetX = targetWorldX - visibleW / 2.0 + offsetWorldX;
-        targetY = targetWorldY - visibleH / 2.0 + offsetWorldY;
-
-        // 数值越小越“拖”，越大越紧跟
         double followSpeed = 0.16;
 
-        // 用当前位置与目标位置的差值乘以跟随系数，得到本帧相机平滑位移。
-        x += (targetX - x) * followSpeed;
-        y += (targetY - y) * followSpeed;
+        // 用中心点与目标中心点的差值乘以跟随系数，得到本帧平滑位移。
+        centerX += (targetCenterX - centerX) * followSpeed;
+        centerY += (targetCenterY - centerY) * followSpeed;
 
         limitInWorld(worldWidth, worldHeight);
     }
+
 
     // 功能：设置相机目标缩放值，并限制缩放范围。
     void zoomTo(double newZoom)
@@ -219,61 +251,64 @@ struct Camera
     }
 
     // 将摄像机视口限制在世界范围内。
-    // 这里修正的是摄像机左下角 x/y，而不是实体坐标。
-    // 如果世界尺寸小于可见视口，就让摄像机居中显示这个世界。
-    // 功能：把相机可见范围限制在关卡世界边界内。
+    // 这里修正的是摄像机中心点，而不是旧的视口左下角。
+    // 如果世界尺寸小于可见视口，就让摄像机中心落在世界中心。
+    // 功能：把相机中心限制在关卡世界边界允许的可见范围内。
     void limitInWorld(int worldWidth, int worldHeight)
     {
         double visibleW = getVisibleWorldWidth();
         double visibleH = getVisibleWorldHeight();
 
+        double halfW = visibleW / 2.0;
+        double halfH = visibleH / 2.0;
+
         if (worldWidth <= visibleW)
         {
-            x = (worldWidth - visibleW) / 2.0;
+            centerX = worldWidth / 2.0;
         }
         else
         {
-            if (x < 0)
+            if (centerX < halfW)
             {
-                x = 0;
+                centerX = halfW;
             }
 
-            if (x > worldWidth - visibleW)
+            if (centerX > worldWidth - halfW)
             {
-                x = worldWidth - visibleW;
+                centerX = worldWidth - halfW;
             }
         }
 
         if (worldHeight <= visibleH)
         {
-            y = (worldHeight - visibleH) / 2.0;
+            centerY = worldHeight / 2.0;
         }
         else
         {
-            if (y < 0)
+            if (centerY < halfH)
             {
-                y = 0;
+                centerY = halfH;
             }
 
-            if (y > worldHeight - visibleH)
+            if (centerY > worldHeight - halfH)
             {
-                y = worldHeight - visibleH;
+                centerY = worldHeight - halfH;
             }
         }
     }
 
-    // 功能：把世界坐标 X 转换为屏幕坐标 X。
+    // 功能：把世界坐标 X 转换为 EasyX 屏幕坐标 X。
     int worldToScreenX(double worldX) const
     {
-        // 用世界坐标减去相机左边界，再乘 zoom，得到屏幕 X。
-        return (int)((worldX - x) * zoom);
+        // 以屏幕中心为锚点，把世界点相对摄像机中心的距离乘以 zoom。
+        return (int)(WINDOW_WIDTH / 2.0 + (worldX - centerX) * zoom);
     }
 
     // 功能：把世界坐标 Y 转换为 EasyX 屏幕坐标 Y。
     int worldToScreenY(double worldY) const
     {
-        // 用窗口高度减去相机相对 Y 偏移，完成世界左下原点到 EasyX 左上原点的翻转。
-        return (int)(WINDOW_HEIGHT - (worldY - y) * zoom);
+        // EasyX 的 Y 轴向下，所以世界相对摄像机中心的 Y 偏移需要取反。
+        return (int)(WINDOW_HEIGHT / 2.0 - (worldY - centerY) * zoom);
     }
 
     // 功能：把世界空间尺寸转换为当前缩放下的屏幕尺寸。
@@ -3522,7 +3557,7 @@ void setCameraFollowTarget(int newTargetIndex, vector<Entity>& entitys)
 
 // updateCameraFollow：
  // 每帧根据当前跟随实体位置、鼠标偏移和缩放输入更新全局 Camera。
- // 数据流：Level::updateCamera -> updateCameraFollow -> gCamera.followSmooth
+ // 数据流：Level::updateCamera -> updateCameraFollow -> updateZoom -> followSmooth
 // 功能：根据跟随目标、鼠标偏移和缩放输入更新相机。
 void updateCameraFollow(
     vector<Entity>& entitys,
@@ -3562,6 +3597,7 @@ void updateCameraFollow(
         gCamera.zoomTo(1.0);
     }
 
+    // 先更新 zoom，再用新的可见视口范围限制 camera center。
     gCamera.updateZoom();
 
     // 鼠标引导相机偏移强度
@@ -3713,12 +3749,10 @@ public:
 		showTileCollisionBox = !showTileCollisionBox;
 	}
 
-	// 功能：绘制当前关卡背景图。
-    // 功能：绘制当前关卡背景图（支持与相机平移和 Zoom 自然联动，防止黑边）
-// 功能：绘制当前关卡多层视差背景。
-// parallaxOffsetX 表示相机目标实体相对初始位置移动了多少。
-// cameraZoom 表示当前真实相机 zoom。
-// 注意：这里不直接读取 gCamera.x，因为 gCamera.x 混合了 zoom 修正、鼠标 look offset 和相机平滑。
+    // 功能：绘制当前关卡多层视差背景。
+    // parallaxOffsetX 表示相机中心相对初始中心的累计水平位移。
+    // cameraZoom 表示当前真实相机 zoom，用于让不同远近的背景层按不同强度响应缩放。
+    // 注意：这里不再读取旧的视口左边界；视差只使用 centerX 的真实位移，避免被 zoom 改变污染。
     void drawBackground(IMAGE backgroundLayers[], int layerCount, double parallaxOffsetX, double cameraZoom)
     {
         // 数值越大，越靠近前景，横向移动越明显。
@@ -3766,7 +3800,7 @@ public:
                 drawH = 1;
             }
 
-            // tile 层的屏幕移动速度约等于：-cameraMoveX * cameraZoom。
+            // tile 层的屏幕移动速度约等于 -cameraMoveX * cameraZoom。
             // 背景层在这个基础上乘 parallaxFactor，保证背景永远比 tile 慢。
             double screenOriginX =
                 -parallaxOffsetX * cameraZoom * parallaxFactors[i]
@@ -3796,7 +3830,9 @@ public:
                 }
             }
         }
-    }	// 功能：绘制 tile map，并根据开关绘制 tile 调试碰撞框。
+    }
+
+	// 功能：绘制 tile map，并根据开关绘制 tile 调试碰撞框。
 	void drawTileMap(TileMap& tileMap)
 	{
 		tileMap.draw();
@@ -3922,8 +3958,8 @@ private:
     int worldHeight;
 
     // 背景视差专用相机位置。
-    // 它记录的是“真实摄像机左边界 gCamera.x”，
-    // 也就是最终画面实际发生滚动的依据。
+    // 它记录的是真实摄像机中心 gCamera.centerX，
+    // 也就是背景层用于计算累计水平位移的稳定锚点。
     // 当摄像机被世界边界限制住时，这个值不会继续变化，背景也不会继续移动。
     double parallaxCameraX;
 
@@ -3997,8 +4033,8 @@ public:
             gCamera.followInstant(entitys[0].getX(), entitys[0].getY(), worldWidth, worldHeight);
         }
 
-        parallaxCameraX = gCamera.x;
-        parallaxOriginX = gCamera.x;
+        parallaxCameraX = gCamera.centerX;
+        parallaxOriginX = gCamera.centerX;
     }
 
 
@@ -4333,11 +4369,11 @@ private:
 
 
     // 功能：更新背景视差专用相机位置。
-    // 注意：这里记录的是摄像机最终实际位置，而不是角色位置。
+    // 注意：这里记录的是摄像机最终中心位置，而不是角色位置。
     // 因此当摄像机被世界边界限制住时，背景也会停止滚动。
     void updateParallaxCamera()
     {
-        parallaxCameraX = gCamera.x;
+        parallaxCameraX = gCamera.centerX;
     }
 
     // 功能：检测实体状态变化并输出调试信息。
