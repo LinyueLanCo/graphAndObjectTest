@@ -519,6 +519,17 @@ enum facingDirection
 };
 
 
+// 功能：注册项目内置字体，供 EasyX 文本绘制使用。
+void loadUIFont()
+{
+    AddFontResourceEx(
+        _T("Mojangles.ttf"),
+        FR_PRIVATE,
+        NULL
+    );
+}
+
+
 // putimage_alpha：
  // 使用 AlphaBlend 绘制带透明通道的 IMAGE，解决普通 putimage 透明通道不正确的问题。
 // 功能：按原图尺寸绘制带 Alpha 通道的图片。
@@ -1752,13 +1763,28 @@ struct UIBox
     int w;
     int h;
 };
-//基于锚点的放置ui盒子，锚点为视口的边
-// 功能：根据锚点和边距计算 UI 矩形在屏幕上的位置。
-UIBox makeUIBoxByAnchor(
+
+// 功能：获取当前窗口对应的顶层 UI 区域。
+UIBox makeViewportUIBox()
+{
+    UIBox box;
+
+    box.x = 0;
+    box.y = 0;
+    box.w = WINDOW_WIDTH;
+    box.h = WINDOW_HEIGHT;
+
+    return box;
+}
+
+
+// 功能：根据父级 UIBox、锚点和 margin 计算子 UI 的屏幕位置。
+UIBox makeUIBoxByParentAnchor(
+    UIBox parent,
     int w,
     int h,
     UIAnchor anchor,
-    int marginX,//定义marginX和marginY变量以控制与左上角边框的间距
+    int marginX,
     int marginY
 )
 {
@@ -1766,40 +1792,355 @@ UIBox makeUIBoxByAnchor(
 
     box.w = w;
     box.h = h;
-    //定义锚点：
-    //左上
+
     if (anchor == UI_TOP_LEFT)
     {
-        box.x = marginX;
-        box.y = marginY;
+        box.x = parent.x + marginX;
+        box.y = parent.y + marginY;
     }
-    //右上
     else if (anchor == UI_TOP_RIGHT)
     {
-        box.x = WINDOW_WIDTH - w - marginX;
-        box.y = marginY;
+        box.x = parent.x + parent.w - w - marginX;
+        box.y = parent.y + marginY;
     }
-    //左下
     else if (anchor == UI_BOTTOM_LEFT)
     {
-        box.x = marginX;
-        box.y = WINDOW_HEIGHT - h - marginY;
+        box.x = parent.x + marginX;
+        box.y = parent.y + parent.h - h - marginY;
     }
-    //右下
     else if (anchor == UI_BOTTOM_RIGHT)
     {
-        box.x = WINDOW_WIDTH - w - marginX;
-        box.y = WINDOW_HEIGHT - h - marginY;
+        box.x = parent.x + parent.w - w - marginX;
+        box.y = parent.y + parent.h - h - marginY;
     }
-    //居中
     else
     {
-        box.x = WINDOW_WIDTH / 2 - w / 2;
-        box.y = WINDOW_HEIGHT / 2 - h / 2;
+        box.x = parent.x + parent.w / 2 - w / 2 + marginX;
+        box.y = parent.y + parent.h / 2 - h / 2 + marginY;
     }
 
     return box;
 }
+
+
+
+// 功能：根据窗口锚点和 margin 计算顶层 UI 的屏幕位置。
+UIBox makeUIBoxByAnchor(
+    int w,
+    int h,
+    UIAnchor anchor,
+    int marginX,
+    int marginY
+)
+{
+    return makeUIBoxByParentAnchor(
+        makeViewportUIBox(),
+        w,
+        h,
+        anchor,
+        marginX,
+        marginY
+    );
+}
+
+// UIElementState：
+// UI 元素生命周期状态。用于区分隐藏、进入、显示和退出。
+enum UIElementState
+{
+    UI_HIDDEN,
+    UI_SHOWING,
+    UI_VISIBLE,
+    UI_HIDING
+};
+
+// UIElement：
+// 通用 UI 元素基础类。
+// 它只使用屏幕坐标 / 父级 UI 坐标，不依赖世界坐标和 Camera。
+class UIElement
+{
+private:
+    double x;
+    double y;
+
+    double targetX;
+    double targetY;
+
+    int w;
+    int h;
+
+    UIAnchor anchor;
+    int marginX;
+    int marginY;
+
+    int parentIndex;
+
+    bool active;
+    bool visible;
+    bool interactable;
+
+    double moveSpeed;
+
+    UIElementState state;
+
+public:
+    // 功能：初始化一个默认隐藏的 UI 元素。
+    UIElement()
+    {
+        x = 0;
+        y = 0;
+
+        targetX = 0;
+        targetY = 0;
+
+        w = 0;
+        h = 0;
+
+        anchor = UI_TOP_LEFT;
+        marginX = 0;
+        marginY = 0;
+
+        parentIndex = -1;
+
+        active = false;
+        visible = false;
+        interactable = false;
+
+        moveSpeed = 0.2;
+
+        state = UI_HIDDEN;
+    }
+
+    // 功能：立即把当前位置同步到目标位置。
+    void snapToTarget()
+    {
+        x = targetX;
+        y = targetY;
+    }
+
+    // 功能：设置当前 UI 元素的父级元素下标，-1 表示父级为窗口。
+    void setParentIndex(int newParentIndex)
+    {
+        parentIndex = newParentIndex;
+    }
+
+    // 功能：获取当前 UI 元素的父级元素下标。
+    int getParentIndex() const
+    {
+        return parentIndex;
+    }
+
+
+    // 功能：按窗口锚点初始化 UI 元素，并默认显示在目标位置。
+    void init(int newW, int newH, UIAnchor newAnchor, int newMarginX, int newMarginY)
+    {
+        w = newW;
+        h = newH;
+
+        anchor = newAnchor;
+        marginX = newMarginX;
+        marginY = newMarginY;
+
+        parentIndex = -1;
+
+        refreshTarget();
+
+        x = targetX;
+        y = targetY;
+
+        active = true;
+        visible = true;
+        interactable = true;
+
+        state = UI_VISIBLE;
+    }
+    // 功能：按窗口作为父级重新计算目标位置。
+    void refreshTarget()
+    {
+        refreshTargetByParentBox(makeViewportUIBox());
+    }
+    // 功能：切换 UI 锚点，并把新锚点位置作为移动目标。
+    void setAnchor(UIAnchor newAnchor)
+    {
+        anchor = newAnchor;
+        refreshTarget();
+    }
+
+    // 功能：根据指定父级 UIBox 重新计算目标位置。
+    void refreshTargetByParentBox(UIBox parentBox)
+    {
+        UIBox box = makeUIBoxByParentAnchor(
+            parentBox,
+            w,
+            h,
+            anchor,
+            marginX,
+            marginY
+        );
+
+        targetX = box.x;
+        targetY = box.y;
+    }
+
+
+    // 功能：显示 UI 元素。
+    void show()
+    {
+        active = true;
+        visible = true;
+
+        refreshTarget();
+
+        state = UI_SHOWING;
+    }
+
+    // 功能：隐藏 UI 元素。当前先直接关闭，后续再扩展滑出动画。
+    void hide()
+    {
+        active = false;
+        visible = false;
+        interactable = false;
+
+        state = UI_HIDDEN;
+    }
+
+    // 功能：平滑推进 UI 元素当前位置，使其靠近目标位置。
+    void update()
+    {
+        if (!active)
+        {
+            return;
+        }
+
+        x += (targetX - x) * moveSpeed;
+        y += (targetY - y) * moveSpeed;
+
+        if (fabs(targetX - x) < 0.1)
+        {
+            x = targetX;
+        }
+
+        if (fabs(targetY - y) < 0.1)
+        {
+            y = targetY;
+        }
+
+        if (state == UI_SHOWING && x == targetX && y == targetY)
+        {
+            interactable = true;
+            state = UI_VISIBLE;
+        }
+    }
+
+    // 功能：获取 UI 元素当前屏幕矩形。
+    UIBox getBox() const
+    {
+        UIBox box;
+
+        box.x = (int)x;
+        box.y = (int)y;
+        box.w = w;
+        box.h = h;
+
+        return box;
+    }
+
+    // 功能：判断 UI 元素是否参与 update。
+    bool isActive() const
+    {
+        return active;
+    }
+
+    // 功能：判断 UI 元素是否参与 render。
+    bool isVisible() const
+    {
+        return visible;
+    }
+
+    // 功能：判断 UI 元素是否允许交互。
+    bool isInteractable() const
+    {
+        return interactable;
+    }
+
+    // 功能：获取 UI 元素当前生命周期状态。
+    UIElementState getState() const
+    {
+        return state;
+    }
+};
+
+
+// UIManager：
+// 管理当前界面中的 UIElement。
+// 第一版只负责保存元素、根据父级关系刷新位置、统一 update，不处理自动布局。
+class UIManager
+{
+private:
+    vector<UIElement> elements;
+
+public:
+    // 功能：添加一个 UI 元素，返回它在 UIManager 中的下标。
+    int addElement(UIElement element)
+    {
+        elements.push_back(element);
+        return (int)elements.size() - 1;
+    }
+
+    // 功能：判断 UI 元素下标是否有效。
+    bool isValidIndex(int index) const
+    {
+        return index >= 0 && index < (int)elements.size();
+    }
+
+    // 功能：获取指定 UI 元素的可写引用。
+    UIElement& getElement(int index)
+    {
+        return elements[index];
+    }
+
+    // 功能：获取指定 UI 元素的只读引用。
+    const UIElement& getElement(int index) const
+    {
+        return elements[index];
+    }
+
+    // 功能：获取指定 UI 元素当前屏幕矩形。
+    UIBox getElementBox(int index) const
+    {
+        if (!isValidIndex(index))
+        {
+            return makeViewportUIBox();
+        }
+
+        return elements[index].getBox();
+    }
+
+    // 功能：统一更新所有 UI 元素的位置和状态。
+    void update()
+    {
+        for (int i = 0; i < (int)elements.size(); i++)
+        {
+            int parentIndex = elements[i].getParentIndex();
+
+            UIBox parentBox;
+
+            if (isValidIndex(parentIndex))
+            {
+                parentBox = elements[parentIndex].getBox();
+            }
+            else
+            {
+                parentBox = makeViewportUIBox();
+            }
+
+            elements[i].refreshTargetByParentBox(parentBox);
+            elements[i].update();
+        }
+    }
+};
+
+
+
 // SmoothUIPanel：
  // 一个临时 UI 面板结构，支持锚点切换和平滑移动。
  // 平滑移动公式：
@@ -3638,6 +3979,53 @@ void updateCameraFollow(
         offsetWorldY
     );
 }
+
+
+// DebugPanelData：
+// Debug 面板一帧要显示的数据快照。
+struct DebugPanelData
+{
+    int targetIndex;
+
+    double entityX;
+    double entityY;
+
+    int entityScreenX;
+    int entityScreenY;
+
+    double cameraCenterX;
+    double cameraCenterY;
+    double cameraZoom;
+
+    double viewLeft;
+    double viewRight;
+    double viewBottom;
+    double viewTop;
+
+    DebugPanelData()
+    {
+        targetIndex = -1;
+
+        entityX = 0;
+        entityY = 0;
+
+        entityScreenX = 0;
+        entityScreenY = 0;
+
+        cameraCenterX = 0;
+        cameraCenterY = 0;
+        cameraZoom = 1.0;
+
+        viewLeft = 0;
+        viewRight = 0;
+        viewBottom = 0;
+        viewTop = 0;
+    }
+};
+
+
+
+
 // Renderer：
  // 统一管理当前关卡中的可渲染对象。
  // 它负责把 sprite / tile / UI 等数据绘制到屏幕，并集中处理实体调试碰撞框绘制。
@@ -3800,10 +4188,10 @@ public:
                 drawH = 1;
             }
 
-            // tile 层的屏幕移动速度约等于 -cameraMoveX * cameraZoom。
-            // 背景层在这个基础上乘 parallaxFactor，保证背景永远比 tile 慢。
+            // 背景平移只使用相机中心的真实位移；layerZoom 只负责把该层自身缩放后的偏移换算成屏幕距离。
+            // 不直接乘全局 cameraZoom，避免角色不动但缩放时背景发生横向滑动。
             double screenOriginX =
-                -parallaxOffsetX * cameraZoom * parallaxFactors[i]
+                -parallaxOffsetX * parallaxFactors[i] * layerZoom
                 + WINDOW_WIDTH / 2.0
                 - drawW / 2.0;
 
@@ -3918,16 +4306,91 @@ public:
 		}
 	}
 
+    // 功能：绘制一个通用 UIElement 面板。
+    void drawUIElementPanel(const UIElement& element)
+    {
+        if (!element.isVisible())
+        {
+            return;
+        }
+
+        drawUIBox(
+            element.getBox(),
+            RGB(255, 255, 255),
+            RGB(180, 180, 180)
+        );
+    }
+
+
 	// 功能：绘制当前测试 UI 面板。
 	void drawUI(SmoothUIPanel& listPanel)
 	{
 		drawListPanel(listPanel.getBox());
 	}
+    // 功能：在指定 UI 内容区域逐行绘制 Debug 面板文本。
+    void drawDebugPanelText(const UIElement& content, DebugPanelData data)
+    {
+        if (!content.isVisible())
+        {
+            return;
+        }
+
+        UIBox box = content.getBox();
+
+        setbkmode(TRANSPARENT);
+        settextcolor(RGB(40, 40, 40));
+        settextstyle(18, 0, _T("Mojangles"));
+
+        int x = box.x;
+        int y = box.y;
+        int lineH = 22;
+
+        TCHAR text[128];
+
+        _stprintf_s(text, _T("Debug Target"));
+        outtextxy(x, y, text);
+        y += lineH;
+
+        _stprintf_s(text, _T("Entity Index: %d"), data.targetIndex);
+        outtextxy(x, y, text);
+        y += lineH;
+
+        _stprintf_s(text, _T("World Pos: %.1f, %.1f"), data.entityX, data.entityY);
+        outtextxy(x, y, text);
+        y += lineH;
+
+        _stprintf_s(text, _T("Screen Pos: %d, %d"), data.entityScreenX, data.entityScreenY);
+        outtextxy(x, y, text);
+        y += lineH;
+
+        y += 8;
+
+        _stprintf_s(text, _T("Camera"));
+        outtextxy(x, y, text);
+        y += lineH;
+
+        _stprintf_s(text, _T("Center: %.1f, %.1f"), data.cameraCenterX, data.cameraCenterY);
+        outtextxy(x, y, text);
+        y += lineH;
+
+        _stprintf_s(text, _T("Zoom: %.2f"), data.cameraZoom);
+        outtextxy(x, y, text);
+        y += lineH;
+
+        _stprintf_s(text, _T("View L/R: %.1f / %.1f"), data.viewLeft, data.viewRight);
+        outtextxy(x, y, text);
+        y += lineH;
+
+        _stprintf_s(text, _T("View B/T: %.1f / %.1f"), data.viewBottom, data.viewTop);
+        outtextxy(x, y, text);
+    }
+
+
 };
 
 // Level：
  // 当前关卡/场景管理器。
- // 它持有当前关卡的地图、背景、实体列表、UI面板和各种 Handle。
+ // 它持有当前关卡的地图、背景、实体列表、UI 面板和各种 Handle。
  // 它不应该亲自写复杂的移动/碰撞细节，而是负责“调度顺序”：
  //   init()   加载关卡内容
  //   update() 每帧按顺序调度输入、实体、相机、事件、UI
@@ -3944,6 +4407,14 @@ private:
     // 当前关卡实体列表。使用 vector 取代固定数组，为后续动态生成和清理实体做准备。
     vector<Entity> entitys;
     SmoothUIPanel listPanel;
+
+    // 当前关卡 UI 元素管理器，负责维护 UIElement 的父子关系和位置更新。
+    UIManager uiManager;
+
+    // Debug 面板父元素和文本内容区域在 UIManager 中的下标。
+    int debugPanelIndex;
+    int debugContentIndex;
+
     Renderer renderer;
 
     int controlTargerIndex;
@@ -3952,8 +4423,6 @@ private:
     MovementHandle movementHandle;
     CollisionHandle collisionHandle;
 
-
-   
     int worldWidth;
     int worldHeight;
 
@@ -3966,6 +4435,41 @@ private:
     // 背景视差初始参考点。
     // 用来计算摄像机从初始位置开始实际移动了多少。
     double parallaxOriginX;
+
+    // 功能：根据当前相机跟随目标生成 Debug 面板数据。
+    DebugPanelData buildDebugPanelData()
+    {
+        DebugPanelData data;
+
+        data.targetIndex = gCameraFollowTargetIndex;
+
+        if (
+            gCameraFollowTargetIndex >= 0 &&
+            gCameraFollowTargetIndex < (int)entitys.size()
+            )
+        {
+            Entity& target = entitys[gCameraFollowTargetIndex];
+
+            data.entityX = target.getX();
+            data.entityY = target.getY();
+
+            data.entityScreenX = gCamera.worldToScreenX(target.getX());
+            data.entityScreenY = gCamera.worldToScreenY(target.getY());
+        }
+
+        data.cameraCenterX = gCamera.centerX;
+        data.cameraCenterY = gCamera.centerY;
+        data.cameraZoom = gCamera.zoom;
+
+        data.viewLeft = gCamera.getViewLeft();
+        data.viewRight = gCamera.getViewRight();
+        data.viewBottom = gCamera.getViewBottom();
+        data.viewTop = gCamera.getViewTop();
+
+        return data;
+    }
+
+
 
     // 以下历史状态缓存必须与 entitys.size() 同步，用于判断状态变化和重叠事件首次触发。
     vector<vector<bool>> lastOverlap;
@@ -3981,7 +4485,12 @@ public:
     Level()
     {
 
-		controlTargerIndex = 0;
+        controlTargerIndex = 0;
+
+        // 初始化 UI 元素下标；-1 表示当前还没有创建对应元素。
+        debugPanelIndex = -1;
+        debugContentIndex = -1;
+
 
         // 预留当前测试关卡的实体数量，避免初始化期间 vector 扩容搬移 Entity。
         entitys.reserve(7);
@@ -4052,7 +4561,8 @@ public:
             6. updateCamera() 更新摄像机跟随
             7. updateDebugStates() 输出状态变化
             8. updateOverlapEvents() 处理重叠事件，如金币拾取
-            9. listPanel.update() 更新 UI 过渡
+            9. uiManager.update() 更新 UIElement 父子定位和过渡
+            10. listPanel.update() 更新旧测试 UI 过渡
         */
         if (input.isMouseLeftPressed())
         {
@@ -4080,6 +4590,8 @@ public:
 
         updateOverlapEvents();
 
+
+        uiManager.update();
         listPanel.update();
     }
 
@@ -4091,8 +4603,25 @@ public:
         renderer.drawBackground(backgrounds, 4, parallaxOffsetX, gCamera.zoom);
         renderer.drawTileMap(tileMap);
         renderer.drawEntities(entitys);
+
+        if (uiManager.isValidIndex(debugPanelIndex))
+        {
+            renderer.drawUIElementPanel(uiManager.getElement(debugPanelIndex));
+        }
+
+        if (uiManager.isValidIndex(debugContentIndex))
+        {
+            DebugPanelData data = buildDebugPanelData();
+
+            renderer.drawDebugPanelText(
+                uiManager.getElement(debugContentIndex),
+                data
+            );
+        }
+
         //renderer.drawUI(listPanel);
     }
+
 
 private:
 
@@ -4132,10 +4661,28 @@ private:
         loadimage(&backgrounds[2], _T("assets\\tex\\maps\\Clouds 2\\3.png"), WINDOW_WIDTH, WINDOW_HEIGHT, true);
         loadimage(&backgrounds[3], _T("assets\\tex\\maps\\Clouds 2\\4.png"), WINDOW_WIDTH, WINDOW_HEIGHT, true);
     }
-    // 功能：初始化测试 UI 面板。
+    // 功能：初始化测试 UI 面板和当前 Debug 面板。
     void initUI()
     {
         listPanel.init(480, 600, UI_TOP_LEFT, 32, 32);
+
+        // Debug 面板是顶层 UI，相对于窗口右上角定位。
+        UIElement debugPanel;
+        debugPanel.init(420, 520, UI_TOP_RIGHT, 24, 24);
+
+        debugPanelIndex = uiManager.addElement(debugPanel);
+
+        // 文本内容区是 Debug 面板的子 UI，相对于父面板左上角定位。
+        UIElement debugContent;
+        debugContent.init(388, 488, UI_TOP_LEFT, 16, 16);
+        debugContent.setParentIndex(debugPanelIndex);
+        debugContent.refreshTargetByParentBox(uiManager.getElement(debugPanelIndex).getBox());
+
+        // 子内容区不需要从窗口左上角滑入，初始化时直接贴到父面板内。
+        debugContent.snapToTarget();
+
+        debugContentIndex = uiManager.addElement(debugContent);
+
     }
 
     // 功能：设置实体 sprite 缩放、动画速度和碰撞盒缩放。
@@ -4561,6 +5108,11 @@ int main()
     */
     initgraph(WINDOW_WIDTH, WINDOW_HEIGHT);
     setbkcolor(BLACK);
+
+    // 加载全局字体，供 UI 和调试信息使用。
+    loadUIFont();
+
+
 
     InputManager input;
     Level level;
