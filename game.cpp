@@ -261,7 +261,7 @@ struct Camera
 
         double halfW = visibleW / 2.0;
         double halfH = visibleH / 2.0;
-
+		//如果世界宽度小于等于可见宽度，摄像机中心 X 固定在世界中心；否则限制在半屏范围内。
         if (worldWidth <= visibleW)
         {
             centerX = worldWidth / 2.0;
