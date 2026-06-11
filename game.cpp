@@ -91,10 +91,10 @@ main()
 // 当前工程使用“世界坐标”和“屏幕坐标”两套坐标：
 // - 世界坐标：逻辑坐标，原点在左下角，Entity 的 x/y 表示实体中心点。
 // - 屏幕坐标：EasyX 绘制坐标，原点在窗口左上角。
-// - Camera 记录当前视口在世界坐标中的左下角位置和缩放系数 zoom。
+// - Camera 使用 centerX/centerY 记录视口中心点，并用 zoom 表示世界到屏幕的缩放倍率。
 // 公式：
-//   screenX = (worldX - cameraX) * zoom
-//   screenY = WINDOW_HEIGHT - (worldY - cameraY) * zoom
+//   screenX = WINDOW_WIDTH / 2 + (worldX - centerX) * zoom
+//   screenY = WINDOW_HEIGHT / 2 - (worldY - centerY) * zoom
 //   screenSize = worldSize * zoom
 
 
@@ -112,57 +112,91 @@ enum EntityType
 
 // Camera：
  // 负责把“世界中的一个区域”映射到屏幕上。
- // x/y 表示摄像机左下角在世界坐标中的位置；zoom 表示缩放。
+ // centerX/centerY 表示摄像机视口中心点；zoom 表示世界到屏幕的缩放倍率。
  // followSmooth 使用 lerp 公式做平滑跟随：
  //   current += (target - current) * speed
  // 这个公式的效果是：距离目标越远移动越快，越接近目标越慢。
 struct Camera
 {
-    double x;
-    double y;
+
+    // 逻辑用：摄像机真正跟随和平滑的中心点。
+    // 视口边界由这个中心点和 zoom 临时推导，避免平滑缩放时左下角锚点漂移。
+    double centerX;
+    double centerY;
 
     double zoom;
 
-    double targetX;
-    double targetY;
+    // 逻辑目标中心点。
+    double targetCenterX;
+    double targetCenterY;
+
     double targetZoom;
 
     // 功能：初始化相机位置、目标位置和缩放参数。
     Camera()
     {
-        x = 0;
-        y = 0;
+        centerX = 0;
+        centerY = 0;
 
         zoom = 1.0;
 
-        targetX = 0;
-        targetY = 0;
+        targetCenterX = 0;
+        targetCenterY = 0;
+
         targetZoom = 1.0;
     }
 
-    // 功能：计算当前相机缩放下屏幕可见的世界宽度。
-    double getVisibleWorldWidth()
+    // 功能：计算当前 zoom 下屏幕横向覆盖的世界宽度。
+    double getVisibleWorldWidth() const
     {
-        // 用屏幕像素宽度除以 zoom，得到当前视口覆盖的世界宽度。
+        // 用固定窗口宽度除以缩放倍率，得到当前逻辑视口宽度。
         return WINDOW_WIDTH / zoom;
     }
 
-    // 功能：计算当前相机缩放下屏幕可见的世界高度。
-    double getVisibleWorldHeight()
+    // 功能：计算当前 zoom 下屏幕纵向覆盖的世界高度。
+    double getVisibleWorldHeight() const
     {
-        // 用屏幕像素高度除以 zoom，得到当前视口覆盖的世界高度。
+        // 用固定窗口高度除以缩放倍率，得到当前逻辑视口高度。
         return WINDOW_HEIGHT / zoom;
     }
+
+
+    // 功能：根据中心点和可见宽度推导当前视口左边界。
+    double getViewLeft() const
+    {
+        return centerX - getVisibleWorldWidth() / 2.0;
+    }
+
+    // 功能：根据中心点和可见宽度推导当前视口右边界。
+    double getViewRight() const
+    {
+        return centerX + getVisibleWorldWidth() / 2.0;
+    }
+
+    // 功能：根据中心点和可见高度推导当前视口下边界。
+    double getViewBottom() const
+    {
+        return centerY - getVisibleWorldHeight() / 2.0;
+    }
+
+    // 功能：根据中心点和可见高度推导当前视口上边界。
+    double getViewTop() const
+    {
+        return centerY + getVisibleWorldHeight() / 2.0;
+    }
+
+
+
+
 
     // 功能：让相机立即居中跟随目标点，并限制在世界范围内。
     void followInstant(double targetWorldX, double targetWorldY, int worldWidth, int worldHeight)
     {
-        double visibleW = getVisibleWorldWidth();
-        double visibleH = getVisibleWorldHeight();
+        centerX = targetWorldX;
+        centerY = targetWorldY;
 
-        // 用目标中心点减去半个可见范围，得到相机左下角坐标。
-        x = targetWorldX - visibleW / 2.0;
-        y = targetWorldY - visibleH / 2.0;
+        targetCenterX = centerX;
+        targetCenterY = centerY;
 
         limitInWorld(worldWidth, worldHeight);
     }
@@ -177,22 +211,20 @@ struct Camera
         double offsetWorldY
     )
     {
-        double visibleW = getVisibleWorldWidth();
-        double visibleH = getVisibleWorldHeight();
+        // 目标中心点 = 跟随实体位置 + 鼠标观察偏移。
+        // 注意：这里不再减 visibleW / 2，也不再减 visibleH / 2。
+        targetCenterX = targetWorldX + offsetWorldX;
+        targetCenterY = targetWorldY + offsetWorldY;
 
-        // 用目标中心点、半个视口和鼠标世界偏移，计算相机希望到达的左下角坐标。
-        targetX = targetWorldX - visibleW / 2.0 + offsetWorldX;
-        targetY = targetWorldY - visibleH / 2.0 + offsetWorldY;
-
-        // 数值越小越“拖”，越大越紧跟
         double followSpeed = 0.16;
 
-        // 用当前位置与目标位置的差值乘以跟随系数，得到本帧相机平滑位移。
-        x += (targetX - x) * followSpeed;
-        y += (targetY - y) * followSpeed;
+        // 用中心点与目标中心点的差值乘以跟随系数，得到本帧平滑位移。
+        centerX += (targetCenterX - centerX) * followSpeed;
+        centerY += (targetCenterY - centerY) * followSpeed;
 
         limitInWorld(worldWidth, worldHeight);
     }
+
 
     // 功能：设置相机目标缩放值，并限制缩放范围。
     void zoomTo(double newZoom)
@@ -219,61 +251,64 @@ struct Camera
     }
 
     // 将摄像机视口限制在世界范围内。
-    // 这里修正的是摄像机左下角 x/y，而不是实体坐标。
-    // 如果世界尺寸小于可见视口，就让摄像机居中显示这个世界。
-    // 功能：把相机可见范围限制在关卡世界边界内。
+    // 这里修正的是摄像机中心点，而不是旧的视口左下角。
+    // 如果世界尺寸小于可见视口，就让摄像机中心落在世界中心。
+    // 功能：把相机中心限制在关卡世界边界允许的可见范围内。
     void limitInWorld(int worldWidth, int worldHeight)
     {
         double visibleW = getVisibleWorldWidth();
         double visibleH = getVisibleWorldHeight();
 
+        double halfW = visibleW / 2.0;
+        double halfH = visibleH / 2.0;
+		//如果世界宽度小于等于可见宽度，摄像机中心 X 固定在世界中心；否则限制在半屏范围内。
         if (worldWidth <= visibleW)
         {
-            x = (worldWidth - visibleW) / 2.0;
+            centerX = worldWidth / 2.0;
         }
         else
         {
-            if (x < 0)
+            if (centerX < halfW)
             {
-                x = 0;
+                centerX = halfW;
             }
 
-            if (x > worldWidth - visibleW)
+            if (centerX > worldWidth - halfW)
             {
-                x = worldWidth - visibleW;
+                centerX = worldWidth - halfW;
             }
         }
 
         if (worldHeight <= visibleH)
         {
-            y = (worldHeight - visibleH) / 2.0;
+            centerY = worldHeight / 2.0;
         }
         else
         {
-            if (y < 0)
+            if (centerY < halfH)
             {
-                y = 0;
+                centerY = halfH;
             }
 
-            if (y > worldHeight - visibleH)
+            if (centerY > worldHeight - halfH)
             {
-                y = worldHeight - visibleH;
+                centerY = worldHeight - halfH;
             }
         }
     }
 
-    // 功能：把世界坐标 X 转换为屏幕坐标 X。
+    // 功能：把世界坐标 X 转换为 EasyX 屏幕坐标 X。
     int worldToScreenX(double worldX) const
     {
-        // 用世界坐标减去相机左边界，再乘 zoom，得到屏幕 X。
-        return (int)((worldX - x) * zoom);
+        // 以屏幕中心为锚点，把世界点相对摄像机中心的距离乘以 zoom。
+        return (int)(WINDOW_WIDTH / 2.0 + (worldX - centerX) * zoom);
     }
 
     // 功能：把世界坐标 Y 转换为 EasyX 屏幕坐标 Y。
     int worldToScreenY(double worldY) const
     {
-        // 用窗口高度减去相机相对 Y 偏移，完成世界左下原点到 EasyX 左上原点的翻转。
-        return (int)(WINDOW_HEIGHT - (worldY - y) * zoom);
+        // EasyX 的 Y 轴向下，所以世界相对摄像机中心的 Y 偏移需要取反。
+        return (int)(WINDOW_HEIGHT / 2.0 - (worldY - centerY) * zoom);
     }
 
     // 功能：把世界空间尺寸转换为当前缩放下的屏幕尺寸。
@@ -1366,6 +1401,7 @@ public:
         case 101:
         case 102:
         case 103:
+        case 104:
         case 106:
         case 107:
         case 108:
@@ -3521,7 +3557,7 @@ void setCameraFollowTarget(int newTargetIndex, vector<Entity>& entitys)
 
 // updateCameraFollow：
  // 每帧根据当前跟随实体位置、鼠标偏移和缩放输入更新全局 Camera。
- // 数据流：Level::updateCamera -> updateCameraFollow -> gCamera.followSmooth
+ // 数据流：Level::updateCamera -> updateCameraFollow -> updateZoom -> followSmooth
 // 功能：根据跟随目标、鼠标偏移和缩放输入更新相机。
 void updateCameraFollow(
     vector<Entity>& entitys,
@@ -3561,6 +3597,7 @@ void updateCameraFollow(
         gCamera.zoomTo(1.0);
     }
 
+    // 先更新 zoom，再用新的可见视口范围限制 camera center。
     gCamera.updateZoom();
 
     // 鼠标引导相机偏移强度
@@ -3712,11 +3749,88 @@ public:
 		showTileCollisionBox = !showTileCollisionBox;
 	}
 
-	// 功能：绘制当前关卡背景图。
-	void drawBackground(IMAGE& background)
-	{
-		putimage(0, 0, &background);
-	}
+    // 功能：绘制当前关卡多层视差背景。
+    // parallaxOffsetX 表示相机中心相对初始中心的累计水平位移。
+    // cameraZoom 表示当前真实相机 zoom，用于让不同远近的背景层按不同强度响应缩放。
+    // 注意：这里不再读取旧的视口左边界；视差只使用 centerX 的真实位移，避免被 zoom 改变污染。
+    void drawBackground(IMAGE backgroundLayers[], int layerCount, double parallaxOffsetX, double cameraZoom)
+    {
+        // 数值越大，越靠近前景，横向移动越明显。
+        double parallaxFactors[4] = { 0.0, 0.04, 0.12, 0.25 };
+        // 数值越大，这一层越明显地响应 camera zoom。
+        // 最远天空层通常不明显缩放；近景层更接近场景元素。
+        double zoomFactors[4] = { 0.0, 0.25, 0.55, 0.85 };
+
+        if (layerCount > 4)
+        {
+            layerCount = 4;
+        }
+
+        for (int i = 0; i < layerCount; i++)
+        {
+            int imageW = backgroundLayers[i].getwidth();
+            int imageH = backgroundLayers[i].getheight();
+
+            if (imageW <= 0 || imageH <= 0)
+            {
+                continue;
+            }
+
+            // 计算这一层自己的 zoom。
+            // 不是所有背景层都必须 100% 跟随 camera zoom。
+            double layerZoom = 1.0 + (cameraZoom - 1.0) * zoomFactors[i];
+
+            // 防止 zoom out 时背景缩小露出黑边。
+            // 如果你想让背景完全像世界物体一样缩小，可以删掉这个 if。
+            if (layerZoom < 1.0)
+            {
+                layerZoom = 1.0;
+            }
+
+            int drawW = (int)(imageW * layerZoom);
+            int drawH = (int)(imageH * layerZoom);
+
+            if (drawW < 1)
+            {
+                drawW = 1;
+            }
+
+            if (drawH < 1)
+            {
+                drawH = 1;
+            }
+
+            // tile 层的屏幕移动速度约等于 -cameraMoveX * cameraZoom。
+            // 背景层在这个基础上乘 parallaxFactor，保证背景永远比 tile 慢。
+            double screenOriginX =
+                -parallaxOffsetX * cameraZoom * parallaxFactors[i]
+                + WINDOW_WIDTH / 2.0
+                - drawW / 2.0;
+
+            int baseX = (int)fmod(screenOriginX, (double)drawW);
+
+            if (baseX > 0)
+            {
+                baseX -= drawW;
+            }
+
+            // 纵向先保持屏幕中心缩放。
+            // 这样 zoom in 时背景从屏幕中心向外放大。
+            int drawY = (WINDOW_HEIGHT - drawH) / 2;
+
+            for (int drawX = baseX; drawX < WINDOW_WIDTH; drawX += drawW)
+            {
+                if (i == 0)
+                {
+                    putimage(drawX, drawY, drawW, drawH, &backgroundLayers[i], 0, 0);
+                }
+                else
+                {
+                    putimage_alpha(drawX, drawY, drawW, drawH, &backgroundLayers[i]);
+                }
+            }
+        }
+    }
 
 	// 功能：绘制 tile map，并根据开关绘制 tile 调试碰撞框。
 	void drawTileMap(TileMap& tileMap)
@@ -3825,19 +3939,33 @@ private:
     ResourceManager resources;
 
     TileMap tileMap;
-    IMAGE background;
+    IMAGE backgrounds[4];
 
     // 当前关卡实体列表。使用 vector 取代固定数组，为后续动态生成和清理实体做准备。
     vector<Entity> entitys;
     SmoothUIPanel listPanel;
     Renderer renderer;
 
+    int controlTargerIndex;
+
     PlayerController playerController;
     MovementHandle movementHandle;
     CollisionHandle collisionHandle;
 
+
+   
     int worldWidth;
     int worldHeight;
+
+    // 背景视差专用相机位置。
+    // 它记录的是真实摄像机中心 gCamera.centerX，
+    // 也就是背景层用于计算累计水平位移的稳定锚点。
+    // 当摄像机被世界边界限制住时，这个值不会继续变化，背景也不会继续移动。
+    double parallaxCameraX;
+
+    // 背景视差初始参考点。
+    // 用来计算摄像机从初始位置开始实际移动了多少。
+    double parallaxOriginX;
 
     // 以下历史状态缓存必须与 entitys.size() 同步，用于判断状态变化和重叠事件首次触发。
     vector<vector<bool>> lastOverlap;
@@ -3852,6 +3980,9 @@ public:
     // 功能：初始化关卡实体列表和默认世界尺寸。
     Level()
     {
+
+		controlTargerIndex = 0;
+
         // 预留当前测试关卡的实体数量，避免初始化期间 vector 扩容搬移 Entity。
         entitys.reserve(7);
 
@@ -3871,6 +4002,9 @@ public:
 
         worldWidth = WINDOW_WIDTH;
         worldHeight = WINDOW_HEIGHT;
+
+        parallaxCameraX = 0.0;
+        parallaxOriginX = 0.0;
     }
 
     // 功能：在资源加载完成后，为所有实体同步初始动画帧。
@@ -3892,6 +4026,15 @@ public:
         initEntityAnimations();
         initEntitySettings();
         initLastStates();
+
+        // 初始化相机位置，避免第一帧背景原点和真实相机位置不同。
+        if (!entitys.empty())
+        {
+            gCamera.followInstant(entitys[0].getX(), entitys[0].getY(), worldWidth, worldHeight);
+        }
+
+        parallaxCameraX = gCamera.centerX;
+        parallaxOriginX = gCamera.centerX;
     }
 
 
@@ -3922,13 +4065,16 @@ public:
 
         clearEntityFrameState();
 
-		updateEntities(input);
+        handleControlInput(input);
 
-		handleCameraInput(input);
-		handleUIInput(input);
-		handleRendererInput(input);
+        updateEntities(input);
 
-		updateCamera(input);
+        handleCameraInput(input);
+        handleUIInput(input);
+        handleRendererInput(input);
+
+        updateCamera(input);
+        updateParallaxCamera();
 
         updateDebugStates();
 
@@ -3938,13 +4084,15 @@ public:
     }
 
 	// 功能：委托 Renderer 绘制当前关卡画面。
-	void draw()
-	{
-		renderer.drawBackground(background);
-		renderer.drawTileMap(tileMap);
-		renderer.drawEntities(entitys);
-		//renderer.drawUI(listPanel);
-	}
+    void draw()
+    {
+        double parallaxOffsetX = parallaxCameraX - parallaxOriginX;
+
+        renderer.drawBackground(backgrounds, 4, parallaxOffsetX, gCamera.zoom);
+        renderer.drawTileMap(tileMap);
+        renderer.drawEntities(entitys);
+        //renderer.drawUI(listPanel);
+    }
 
 private:
 
@@ -3979,9 +4127,11 @@ private:
     // 功能：加载关卡背景图片。
     void initBackground()
     {
-        loadimage(&background, _T("assets\\tex\\maps\\background.jpg"));
+        loadimage(&backgrounds[0], _T("assets\\tex\\maps\\Clouds 2\\1.png"), WINDOW_WIDTH, WINDOW_HEIGHT, true);
+        loadimage(&backgrounds[1], _T("assets\\tex\\maps\\Clouds 2\\2.png"), WINDOW_WIDTH, WINDOW_HEIGHT, true);
+        loadimage(&backgrounds[2], _T("assets\\tex\\maps\\Clouds 2\\3.png"), WINDOW_WIDTH, WINDOW_HEIGHT, true);
+        loadimage(&backgrounds[3], _T("assets\\tex\\maps\\Clouds 2\\4.png"), WINDOW_WIDTH, WINDOW_HEIGHT, true);
     }
-
     // 功能：初始化测试 UI 面板。
     void initUI()
     {
@@ -4052,6 +4202,17 @@ private:
                 5. Entity 根据 intent 和 sprinting 等状态切换动画
                 6. 推进动画帧
         */
+
+        if (
+            controlTargerIndex < 0 ||
+            controlTargerIndex >= (int)entitys.size() ||
+            !entitys[controlTargerIndex].getIsAlive()
+            )
+        {
+            controlTargerIndex = 0;
+        }
+
+
         for (int i = 0; i < (int)entitys.size(); i++)
         {
             if (!entitys[i].getIsAlive())
@@ -4061,11 +4222,14 @@ private:
 
             BehaviorIntent intent;
 
-            if (i == 0)
+            if (
+                controlTargerIndex >= 0 &&
+                controlTargerIndex < (int)entitys.size() &&
+                i == controlTargerIndex
+                )
             {
                 intent = playerController.makeIntent(input, entitys[i].isGod());
             }
-
             movementHandle.update(
                 entitys[i],
                 intent,
@@ -4082,6 +4246,50 @@ private:
         }
     }
 
+    // 功能：切换当前由玩家输入控制的实体下标。
+    void setControlTarget(int newTargetIndex)
+    {
+        int entityCount = (int)entitys.size();
+
+        if (newTargetIndex < 0 || newTargetIndex >= entityCount)
+        {
+            return;
+        }
+
+        if (!entitys[newTargetIndex].getIsAlive())
+        {
+            return;
+        }
+
+        controlTargerIndex = newTargetIndex;
+
+        cout << "Control target changed to Entity "
+            << controlTargerIndex
+            << endl;
+    }
+    // 功能：处理玩家输入控制目标切换。
+    void handleControlInput(InputManager& input)
+    {
+        if (input.isKeyPressed('1'))
+        {
+            setControlTarget(0);
+        }
+
+        if (input.isKeyPressed('2'))
+        {
+            setControlTarget(1);
+        }
+
+        if (input.isKeyPressed('3'))
+        {
+            setControlTarget(2);
+        }
+
+        if (input.isKeyPressed('4'))
+        {
+            setControlTarget(3);
+        }
+    }
     // 功能：处理相机跟随目标切换输入。
     void handleCameraInput(InputManager& input)
     {
@@ -4157,6 +4365,15 @@ private:
             input.getMouseOffsetX(),
             input.getMouseOffsetY()
         );
+    }
+
+
+    // 功能：更新背景视差专用相机位置。
+    // 注意：这里记录的是摄像机最终中心位置，而不是角色位置。
+    // 因此当摄像机被世界边界限制住时，背景也会停止滚动。
+    void updateParallaxCamera()
+    {
+        parallaxCameraX = gCamera.centerX;
     }
 
     // 功能：检测实体状态变化并输出调试信息。
