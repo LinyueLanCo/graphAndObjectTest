@@ -584,38 +584,6 @@ inline void putimage_alpha(int x, int y, int drawW, int drawH, IMAGE* img)
         blend
     );
 }
-// putimage_alpha_tile：
- // 从 tileset 或 sprite sheet 中截取一块源矩形，并绘制到目标屏幕矩形。
- // TileMap 和 animatedSprite 都依赖这个函数完成局部贴图绘制。
-// 功能：从图集中裁剪指定区域并以 Alpha 混合绘制到屏幕。
-inline void putimage_alpha_tile(
-    int x,
-    int y,
-    int drawW,
-    int drawH,
-    IMAGE* img,
-    int srcX,
-    int srcY,
-    int srcW,
-    int srcH
-)
-{
-    BLENDFUNCTION blend;
-    blend.BlendOp = AC_SRC_OVER;
-    blend.BlendFlags = 0;
-    blend.SourceConstantAlpha = 255;
-    blend.AlphaFormat = AC_SRC_ALPHA;
-
-    AlphaBlend
-    (
-        GetImageHDC(NULL),
-        x, y, drawW, drawH,
-        GetImageHDC(img),
-        srcX, srcY, srcW, srcH,
-        blend
-	);
-}
-
 // 功能：把动画表现状态转换为玩家动画资源 ID。
 AnimationId getPlayerAnimationId(AnimationState state)
 {
@@ -1245,10 +1213,45 @@ enum TileCollisionType
 };
 
 
+// TileInstance：
+// 地图中一个实际摆放出来的 tile 实例。
+// tileId 表示它引用 tileset 中哪个图块；row/col 和 world 坐标表示它被摆在哪里。
+struct TileInstance
+{
+    int tileId;
+
+    int row;
+    int col;
+
+    double worldLeft;
+    double worldBottom;
+
+    int layer;
+
+    bool visible;
+
+    TileInstance()
+    {
+        tileId = TILE_EMPTY;
+
+        row = 0;
+        col = 0;
+
+        worldLeft = 0;
+        worldBottom = 0;
+
+        layer = 0;
+
+        visible = true;
+    }
+};
+
+
+
 // TileMap：
- // 负责加载 tileset 和地图文本数据，并把 tile 绘制到世界坐标中。
- // 当前地图只负责显示，实体阻挡暂时主要来自 Entity 的 blocking 碰撞盒。
- // 后续可以扩展为：tile 碰撞、地图触发器、地图层级、视口剔除等。
+ // 负责加载 tileset 和地图文本数据，并维护地图中的 tile 实例与碰撞层数据。
+ // 实际绘制由 Renderer 读取 TileInstance 后统一完成，TileMap 不再直接调用 EasyX 绘图函数。
+ // 后续可以扩展为：地图触发器、地图层级、视口剔除、编辑器放置数据等。
 class TileMap
 {
 private:
@@ -1270,6 +1273,10 @@ private:
 
     // 碰撞 tile 二维数组，存放 TileCollisionType 对应的编号。
     int** collisionTiles;
+
+    // 地图上所有非空 tile 的实例列表。
+    // 当前仍由二维数组生成，后续可以扩展为编辑器直接维护的场景元素列表。
+    vector<TileInstance> tileInstances;
 
     // 整张地图在世界坐标里的偏移
     double offsetX;
@@ -1311,6 +1318,56 @@ public:
 	{
 		return cols;
 	}
+
+
+    // 功能：获取当前地图中的 tile 实例数量。
+    int getTileInstanceCount() const
+    {
+        return (int)tileInstances.size();
+    }
+
+    // 功能：获取指定下标的 tile 实例。
+    const TileInstance& getTileInstance(int index) const
+    {
+        return tileInstances[index];
+    }
+
+    // 功能：获取当前地图的 tile 实例列表。
+    const vector<TileInstance>& getTileInstances() const
+    {
+        return tileInstances;
+    }
+
+
+    // 功能：获取当前地图使用的 tileset 图片。
+    IMAGE* getTilesetImage()
+    {
+        return &tileset;
+    }
+
+    // 功能：获取 tileset 中单个 tile 的原始宽度。
+    int getSourceTileWidth() const
+    {
+        return sourceTileWidth;
+    }
+
+    // 功能：获取 tileset 中单个 tile 的原始高度。
+    int getSourceTileHeight() const
+    {
+        return sourceTileHeight;
+    }
+
+    // 功能：获取 tile 绘制到世界坐标后的宽度。
+    int getDrawTileWidth() const
+    {
+        return drawTileWidth;
+    }
+
+    // 功能：获取 tile 绘制到世界坐标后的高度。
+    int getDrawTileHeight() const
+    {
+        return drawTileHeight;
+    }
 
 
     // 功能：释放并清空当前地图碰撞层二维数组。
@@ -1508,6 +1565,45 @@ public:
     }
 
 
+    // 功能：根据当前 tiles 二维数组重建 tile 实例列表。
+    void rebuildTileInstances()
+    {
+        tileInstances.clear();
+
+        if (tiles == NULL)
+        {
+            return;
+        }
+
+        for (int row = 0; row < rows; row++)
+        {
+            for (int col = 0; col < cols; col++)
+            {
+                int tileId = tiles[row][col];
+
+                if (tileId == TILE_EMPTY)
+                {
+                    continue;
+                }
+
+                TileInstance instance;
+
+                instance.tileId = tileId;
+                instance.row = row;
+                instance.col = col;
+
+                // 用地图偏移、列号和反向行号，计算这个 tile 实例的世界左下角。
+                instance.worldLeft = offsetX + col * drawTileWidth;
+                instance.worldBottom = offsetY + (rows - 1 - row) * drawTileHeight;
+
+                instance.layer = 0;
+                instance.visible = true;
+
+                tileInstances.push_back(instance);
+            }
+        }
+    }
+
 
     // 功能：从文本文件读取地图行列数和 tile id 数据。
     bool loadFromFile(const char* mapPath)
@@ -1546,77 +1642,11 @@ public:
 
         generateDefaultCollisionFromTiles();
 
+		rebuildTileInstances();
+
+
         return true;
     }
-
-    // 功能：遍历并绘制整张 tile map。
-    void draw()
-    {
-        for (int row = 0; row < rows; row++)
-        {
-            for (int col = 0; col < cols; col++)
-            {
-                drawTile(row, col);
-            }
-        }
-    }
-
-    // 功能：绘制指定行列的单个 tile。
-    void drawTile(int row, int col)
-    {
-        int tileId = tiles[row][col];
-
-        if (tileId == TILE_EMPTY)
-        {
-            return;
-        }
-
-        int realTileIndex = tileId - 1;
-
-        int tilesetCols = tileset.getwidth() / sourceTileWidth;
-
-        // 用 tile id 在 tileset 中的序号换算列和行，得到源图裁剪坐标。
-        int srcX = (realTileIndex % tilesetCols) * sourceTileWidth;
-        int srcY = (realTileIndex / tilesetCols) * sourceTileHeight;
-
-        // 用地图偏移、列号和行号计算 tile 在世界坐标中的矩形位置。
-        double worldLeft = offsetX + col * drawTileWidth;
-        double worldBottom = offsetY + (rows - 1 - row) * drawTileHeight;
-        double worldRight = worldLeft + drawTileWidth;
-        double worldTop = worldBottom + drawTileHeight;
-
-        int screenLeft = worldToScreenX(worldLeft);
-        int screenRight = worldToScreenX(worldRight);
-        int screenTop = worldToScreenY(worldTop);
-        int screenBottom = worldToScreenY(worldBottom);
-
-        // 用屏幕左右/上下边界相减，得到最终绘制到屏幕上的 tile 尺寸。
-        int screenTileW = screenRight - screenLeft;
-        int screenTileH = screenBottom - screenTop;
-
-        if (screenTileW < 1)
-        {
-            screenTileW = 1;
-        }
-
-        if (screenTileH < 1)
-        {
-            screenTileH = 1;
-        }
-
-        putimage_alpha_tile(
-            screenLeft,
-            screenTop,
-            screenTileW,
-            screenTileH,
-            &tileset,
-            srcX,
-            srcY,
-            sourceTileWidth,
-            sourceTileHeight
-        );
-    }
-
 
     // 功能：获取指定行列的 tile 碰撞类型。
     TileCollisionType getTileCollisionType(int row, int col)
@@ -4144,14 +4174,14 @@ public:
     void drawBackground(IMAGE backgroundLayers[], int layerCount, double parallaxOffsetX, double cameraZoom)
     {
         // 数值越大，越靠近前景，横向移动越明显。
-        double parallaxFactors[4] = { 0.0, 0.04, 0.12, 0.25 };
+        double parallaxFactors[5] = { 0.0, 0.04, 0.12, 0.25, 0.4 };
         // 数值越大，这一层越明显地响应 camera zoom。
         // 最远天空层通常不明显缩放；近景层更接近场景元素。
-        double zoomFactors[4] = { 0.0, 0.25, 0.55, 0.85 };
+        double zoomFactors[5] = { 0.0, 0.25, 0.55, 0.85, 1.0 };
 
-        if (layerCount > 4)
+        if (layerCount > 5)
         {
-            layerCount = 4;
+            layerCount = 5;
         }
 
         for (int i = 0; i < layerCount; i++)
@@ -4220,16 +4250,101 @@ public:
         }
     }
 
-	// 功能：绘制 tile map，并根据开关绘制 tile 调试碰撞框。
-	void drawTileMap(TileMap& tileMap)
-	{
-		tileMap.draw();
+    // 功能：根据 TileInstance 数据绘制单个地图 tile。
+    void drawTileInstance(TileMap& tileMap, const TileInstance& tile)
+    {
+        if (!tile.visible)
+        {
+            return;
+        }
 
-		if (showTileCollisionBox)
-		{
-			tileMap.drawDebugCollisionBoxes();
-		}
-	}
+        if (tile.tileId == TILE_EMPTY)
+        {
+            return;
+        }
+
+        IMAGE* tileset = tileMap.getTilesetImage();
+
+        if (tileset == NULL)
+        {
+            return;
+        }
+
+        int sourceTileWidth = tileMap.getSourceTileWidth();
+        int sourceTileHeight = tileMap.getSourceTileHeight();
+
+        if (sourceTileWidth <= 0 || sourceTileHeight <= 0)
+        {
+            return;
+        }
+
+        int tilesetCols = tileset->getwidth() / sourceTileWidth;
+
+        if (tilesetCols <= 0)
+        {
+            return;
+        }
+
+        int realTileIndex = tile.tileId - 1;
+
+        // 用 tileId 在 tileset 中的线性序号换算源图裁剪坐标。
+        int srcX = (realTileIndex % tilesetCols) * sourceTileWidth;
+        int srcY = (realTileIndex / tilesetCols) * sourceTileHeight;
+
+        double worldLeft = tile.worldLeft;
+        double worldBottom = tile.worldBottom;
+        double worldRight = worldLeft + tileMap.getDrawTileWidth();
+        double worldTop = worldBottom + tileMap.getDrawTileHeight();
+
+        int screenLeft = gCamera.worldToScreenX(worldLeft);
+        int screenRight = gCamera.worldToScreenX(worldRight);
+        int screenTop = gCamera.worldToScreenY(worldTop);
+        int screenBottom = gCamera.worldToScreenY(worldBottom);
+
+        // 用屏幕左右/上下边界相减，得到最终绘制到屏幕上的 tile 尺寸。
+        int screenTileW = screenRight - screenLeft;
+        int screenTileH = screenBottom - screenTop;
+
+        if (screenTileW < 1)
+        {
+            screenTileW = 1;
+        }
+
+        if (screenTileH < 1)
+        {
+            screenTileH = 1;
+        }
+
+        drawImageTileAlpha(
+            screenLeft,
+            screenTop,
+            screenTileW,
+            screenTileH,
+            tileset,
+            srcX,
+            srcY,
+            sourceTileWidth,
+            sourceTileHeight
+        );
+    }
+
+
+
+    // 功能：逐个绘制当前地图中的 tile 实例，并根据开关绘制 tile 调试碰撞框。
+    void drawTileMap(TileMap& tileMap)
+    {
+        const vector<TileInstance>& tileInstances = tileMap.getTileInstances();
+
+        for (int i = 0; i < (int)tileInstances.size(); i++)
+        {
+            drawTileInstance(tileMap, tileInstances[i]);
+        }
+
+        if (showTileCollisionBox)
+        {
+            tileMap.drawDebugCollisionBoxes();
+        }
+    }
 
 	// 功能：根据实体中心点和 sprite 数据绘制单帧图像。
 	void drawSprite(const sprite& targetSprite, double ownerX, double ownerY)
@@ -4402,7 +4517,7 @@ private:
     ResourceManager resources;
 
     TileMap tileMap;
-    IMAGE backgrounds[4];
+    IMAGE backgrounds[5];
 
     // 当前关卡实体列表。使用 vector 取代固定数组，为后续动态生成和清理实体做准备。
     vector<Entity> entitys;
@@ -4493,7 +4608,7 @@ public:
 
 
         // 预留当前测试关卡的实体数量，避免初始化期间 vector 扩容搬移 Entity。
-        entitys.reserve(7);
+        entitys.reserve(20);
 
         entitys.emplace_back(200, 700, true, true, true, false, PLAYER, ANIM_SET_PLAYER1, 1);
 
@@ -4508,6 +4623,17 @@ public:
         entitys.emplace_back(_T("assets\\tex\\entities\\items\\MonedaP.png"), 256 + 48 + 16, 256, false, true, false, true, COIN, 5, 1);
 
         entitys.emplace_back(_T("assets\\tex\\entities\\items\\MonedaR.png"), 256 + (48 * 2) + (16 * 2), 256, false, true, false, true, COIN, 5, 1);
+
+        entitys.emplace_back(_T("assets\\tex\\entities\\items\\MonedaD.png"), 5662, 1312, false, true, false, true, COIN, 5, 1);
+
+        entitys.emplace_back(_T("assets\\tex\\entities\\items\\MonedaD.png"), 5662, 1312 + 64 + 16, false, true, false, true, COIN, 5, 1);
+
+        entitys.emplace_back(_T("assets\\tex\\entities\\items\\MonedaD.png"), 5662, 1312 + 64 + 16 + 64 + 16, false, true, false, true, COIN, 5, 1);
+
+
+
+
+
 
         worldWidth = WINDOW_WIDTH;
         worldHeight = WINDOW_HEIGHT;
@@ -4600,7 +4726,7 @@ public:
     {
         double parallaxOffsetX = parallaxCameraX - parallaxOriginX;
 
-        renderer.drawBackground(backgrounds, 4, parallaxOffsetX, gCamera.zoom);
+        renderer.drawBackground(backgrounds, 5, parallaxOffsetX, gCamera.zoom);
         renderer.drawTileMap(tileMap);
         renderer.drawEntities(entitys);
 
@@ -4656,10 +4782,11 @@ private:
     // 功能：加载关卡背景图片。
     void initBackground()
     {
-        loadimage(&backgrounds[0], _T("assets\\tex\\maps\\Clouds 2\\1.png"), WINDOW_WIDTH, WINDOW_HEIGHT, true);
-        loadimage(&backgrounds[1], _T("assets\\tex\\maps\\Clouds 2\\2.png"), WINDOW_WIDTH, WINDOW_HEIGHT, true);
-        loadimage(&backgrounds[2], _T("assets\\tex\\maps\\Clouds 2\\3.png"), WINDOW_WIDTH, WINDOW_HEIGHT, true);
-        loadimage(&backgrounds[3], _T("assets\\tex\\maps\\Clouds 2\\4.png"), WINDOW_WIDTH, WINDOW_HEIGHT, true);
+        loadimage(&backgrounds[0], _T("assets\\tex\\maps\\Clouds 5\\1.png"), WINDOW_WIDTH, WINDOW_HEIGHT, true);
+        loadimage(&backgrounds[1], _T("assets\\tex\\maps\\Clouds 5\\2.png"), WINDOW_WIDTH, WINDOW_HEIGHT, true);
+        loadimage(&backgrounds[2], _T("assets\\tex\\maps\\Clouds 5\\3.png"), WINDOW_WIDTH, WINDOW_HEIGHT, true);
+        loadimage(&backgrounds[3], _T("assets\\tex\\maps\\Clouds 5\\4.png"), WINDOW_WIDTH, WINDOW_HEIGHT, true);
+        loadimage(&backgrounds[4], _T("assets\\tex\\maps\\Clouds 5\\5.png"), WINDOW_WIDTH, WINDOW_HEIGHT, true);
     }
     // 功能：初始化测试 UI 面板和当前 Debug 面板。
     void initUI()
@@ -4695,6 +4822,11 @@ private:
         entitys[4].setSpriteTransform(4.0, 4.0, 0, 0);
         entitys[5].setSpriteTransform(4.0, 4.0, 0, 0);
         entitys[6].setSpriteTransform(4.0, 4.0, 0, 0);
+        entitys[7].setSpriteTransform(4.0, 4.0, 0, 0);
+        entitys[8].setSpriteTransform(4.0, 4.0, 0, 0);
+        entitys[9].setSpriteTransform(4.0, 4.0, 0, 0);
+
+
 
         entitys[0].setAnimationSpeed(3);
         entitys[4].setAnimationSpeed(3);
@@ -4909,8 +5041,9 @@ private:
             entitys,
             worldWidth,
             worldHeight,
-            input.getMouseOffsetX(),
-            input.getMouseOffsetY()
+            //input.getMouseOffsetX(),
+            //input.getMouseOffsetY()
+            0,0
         );
     }
 
