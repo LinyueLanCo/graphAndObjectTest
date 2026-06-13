@@ -1223,8 +1223,17 @@ struct TileInstance
     int row;
     int col;
 
-    double worldLeft;
-    double worldBottom;
+    // tile 实例的世界中心点。row/col 只负责生成默认位置，真正绘制以中心点为锚点。
+    double centerX;
+    double centerY;
+
+    // tile 实例的绘制偏移，单位是世界坐标。
+    double offsetX;
+    double offsetY;
+
+    // tile 实例的绘制缩放，默认 1 表示使用 TileMap 的默认绘制大小。
+    double scaleX;
+    double scaleY;
 
     int layer;
 
@@ -1237,15 +1246,20 @@ struct TileInstance
         row = 0;
         col = 0;
 
-        worldLeft = 0;
-        worldBottom = 0;
+        centerX = 0;
+        centerY = 0;
+
+        offsetX = 0;
+        offsetY = 0;
+
+        scaleX = 1.0;
+        scaleY = 1.0;
 
         layer = 0;
 
         visible = true;
     }
 };
-
 
 
 // TileMap：
@@ -1336,6 +1350,95 @@ public:
     const vector<TileInstance>& getTileInstances() const
     {
         return tileInstances;
+    }
+
+
+    // 功能：设置指定 tile 实例的绘制偏移。
+    void setTileInstanceOffset(int index, double newOffsetX, double newOffsetY)
+    {
+        if (index < 0 || index >= (int)tileInstances.size())
+        {
+            return;
+        }
+
+        tileInstances[index].offsetX = newOffsetX;
+        tileInstances[index].offsetY = newOffsetY;
+    }
+
+    // 功能：设置指定 tile 实例的绘制缩放。
+    void setTileInstanceScale(int index, double newScaleX, double newScaleY)
+    {
+        if (index < 0 || index >= (int)tileInstances.size())
+        {
+            return;
+        }
+
+        if (newScaleX <= 0 || newScaleY <= 0)
+        {
+            return;
+        }
+
+        tileInstances[index].scaleX = newScaleX;
+        tileInstances[index].scaleY = newScaleY;
+    }
+
+    // 功能：同时设置指定 tile 实例的绘制偏移和缩放。
+    void setTileInstanceTransform(
+        int index,
+        double newOffsetX,
+        double newOffsetY,
+        double newScaleX,
+        double newScaleY
+    )
+    {
+        setTileInstanceOffset(index, newOffsetX, newOffsetY);
+        setTileInstanceScale(index, newScaleX, newScaleY);
+    }
+
+
+    // 功能：根据地图行列号查找对应的 tile 实例下标。
+    int findTileInstanceIndexByGrid(int targetRow, int targetCol) const
+    {
+        for (int i = 0; i < (int)tileInstances.size(); i++)
+        {
+            if (
+                tileInstances[i].row == targetRow &&
+                tileInstances[i].col == targetCol
+                )
+            {
+                return i;
+            }
+        }
+
+        return -1;
+    }
+
+
+    // 功能：根据地图行列号设置 tile 实例的绘制偏移和缩放。
+    // 如果目标格子是空 tile，则不会存在对应实例，函数会直接跳过。
+    void setTileInstanceTransformByGrid(
+        int targetRow,
+        int targetCol,
+        double newOffsetX,
+        double newOffsetY,
+        double newScaleX,
+        double newScaleY
+    )
+    {
+        int index = findTileInstanceIndexByGrid(targetRow, targetCol);
+
+        if (index < 0)
+        {
+            return;
+        }
+
+        setTileInstanceTransform(
+            index,
+            newOffsetX,
+            newOffsetY,
+            newScaleX,
+            newScaleY
+        );
     }
 
 
@@ -1592,13 +1695,24 @@ public:
                 instance.row = row;
                 instance.col = col;
 
-                // 用地图偏移、列号和反向行号，计算这个 tile 实例的世界左下角。
-                instance.worldLeft = offsetX + col * drawTileWidth;
-                instance.worldBottom = offsetY + (rows - 1 - row) * drawTileHeight;
+                // 先用地图偏移、列号和反向行号，计算这个 tile 默认所在网格的世界左下角。
+                // 当前 drawTileWidth / drawTileHeight 暂时同时承担“网格单元大小”和“默认绘制大小”。
+                double gridWorldLeft = offsetX + col * drawTileWidth;
+                double gridWorldBottom = offsetY + (rows - 1 - row) * drawTileHeight;
+
+                // 用网格左下角加半个单元格，得到 tile 实例的默认世界中心点。
+                // 后续 Renderer 会以 centerX / centerY 为锚点计算最终绘制矩形。
+                instance.centerX = gridWorldLeft + drawTileWidth / 2.0;
+                instance.centerY = gridWorldBottom + drawTileHeight / 2.0;
+
+                instance.offsetX = 0;
+                instance.offsetY = 0;
+
+                instance.scaleX = 1.0;
+                instance.scaleY = 1.0;
 
                 instance.layer = 0;
                 instance.visible = true;
-
                 tileInstances.push_back(instance);
             }
         }
@@ -4063,8 +4177,15 @@ struct DebugPanelData
 class Renderer
 {
 private:
+
+	// 是否显示实体逻辑碰撞盒。
 	bool showCollisionBox;
+
+	// 是否显示 tile 逻辑碰撞盒。
 	bool showTileCollisionBox;
+
+    // 是否显示所有可绘制对象的屏幕绘制边界。
+    bool showRenderBounds;
 
 
     // 功能：从图集中裁剪指定区域，并以 Alpha 混合绘制到屏幕目标矩形。
@@ -4134,6 +4255,24 @@ private:
         rectangle(screenLeft, screenTop, screenRight, screenBottom);
     }
 
+    // 功能：在屏幕坐标中绘制渲染对象的实际绘制边界。
+    // 这个矩形表示图像最终画到屏幕上的范围，不等同于逻辑碰撞盒。
+    void drawRenderBounds(int x, int y, int w, int h, COLORREF color)
+    {
+        if (!showRenderBounds)
+        {
+            return;
+        }
+
+        if (w <= 0 || h <= 0)
+        {
+            return;
+        }
+
+        setlinecolor(color);
+        rectangle(x, y, x + w, y + h);
+    }
+
 
 public:
 	// 功能：初始化渲染器的调试绘制开关。
@@ -4141,6 +4280,7 @@ public:
 	{
 		showCollisionBox = true;
 		showTileCollisionBox = false;
+		showRenderBounds = false;
 	}
 
 	// 功能：设置是否绘制实体碰撞框。
@@ -4166,6 +4306,12 @@ public:
 	{
 		showTileCollisionBox = !showTileCollisionBox;
 	}
+
+    // 功能：切换可绘制对象的绘制边界框显示状态。
+    void toggleRenderBounds()
+    {
+        showRenderBounds = !showRenderBounds;
+    }
 
     // 功能：绘制当前关卡多层视差背景。
     // parallaxOffsetX 表示相机中心相对初始中心的累计水平位移。
@@ -4246,6 +4392,15 @@ public:
                 {
                     putimage_alpha(drawX, drawY, drawW, drawH, &backgroundLayers[i]);
                 }
+
+                // 背景层可能会横向平铺；这里显示的是每一块平铺图片的实际绘制范围。
+                drawRenderBounds(
+                    drawX,
+                    drawY,
+                    drawW,
+                    drawH,
+                    RGB(120, 160, 255)
+                );
             }
         }
     }
@@ -4291,10 +4446,19 @@ public:
         int srcX = (realTileIndex % tilesetCols) * sourceTileWidth;
         int srcY = (realTileIndex / tilesetCols) * sourceTileHeight;
 
-        double worldLeft = tile.worldLeft;
-        double worldBottom = tile.worldBottom;
-        double worldRight = worldLeft + tileMap.getDrawTileWidth();
-        double worldTop = worldBottom + tileMap.getDrawTileHeight();
+        // 用默认 tile 世界尺寸乘实例缩放，得到这个 tile 本帧实际绘制尺寸。
+        double worldDrawW = tileMap.getDrawTileWidth() * tile.scaleX;
+        double worldDrawH = tileMap.getDrawTileHeight() * tile.scaleY;
+
+        // 用实例中心点加偏移，得到这个 tile 本帧实际绘制中心点。
+        double drawCenterX = tile.centerX + tile.offsetX;
+        double drawCenterY = tile.centerY + tile.offsetY;
+
+        // 以中心点为锚点，计算世界坐标中的绘制矩形。
+        double worldLeft = drawCenterX - worldDrawW / 2.0;
+        double worldRight = drawCenterX + worldDrawW / 2.0;
+        double worldBottom = drawCenterY - worldDrawH / 2.0;
+        double worldTop = drawCenterY + worldDrawH / 2.0;
 
         int screenLeft = gCamera.worldToScreenX(worldLeft);
         int screenRight = gCamera.worldToScreenX(worldRight);
@@ -4326,6 +4490,16 @@ public:
             sourceTileWidth,
             sourceTileHeight
         );
+
+        // tile 绘制边界来自 TileInstance 的中心点、偏移和缩放，可能与 tile 碰撞盒不同。
+        drawRenderBounds(
+            screenLeft,
+            screenTop,
+            screenTileW,
+            screenTileH,
+            RGB(255, 220, 0)
+        );
+
     }
 
 
@@ -4395,6 +4569,16 @@ public:
             targetSprite.srcY,
             targetSprite.srcW,
             targetSprite.srcH
+        );
+
+
+        // sprite 绘制边界来自 sprite 的源帧尺寸、缩放和偏移，通常不等同于实体碰撞盒。
+        drawRenderBounds(
+            drawX,
+            drawY,
+            screenDrawW,
+            screenDrawH,
+            RGB(0, 220, 255)
         );
 
     }
@@ -5032,6 +5216,11 @@ private:
 			cout << "Toggle map tile edge." << endl;
 
 		}
+        if (input.isKeyPressed(VK_F7))
+        {
+            renderer.toggleRenderBounds();
+            cout << "Toggle render bounds." << endl;
+        }
 	}
 
     // 功能：根据输入状态更新相机跟随。
