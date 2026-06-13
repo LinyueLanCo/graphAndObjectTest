@@ -2074,6 +2074,32 @@ public:
     }
 
 
+    // 功能：直接设置 UI 元素当前位置。
+    void setPosition(double newX, double newY)
+    {
+        x = newX;
+        y = newY;
+    }
+
+    // 功能：直接设置 UI 元素目标位置。
+    void setTargetPosition(double newTargetX, double newTargetY)
+    {
+        targetX = newTargetX;
+        targetY = newTargetY;
+    }
+
+    // 功能：获取 UI 元素当前目标 X。
+    double getTargetX() const
+    {
+        return targetX;
+    }
+
+    // 功能：获取 UI 元素当前目标 Y。
+    double getTargetY() const
+    {
+        return targetY;
+    }
+
     // 功能：按窗口锚点初始化 UI 元素，并默认显示在目标位置。
     void init(int newW, int newH, UIAnchor newAnchor, int newMarginX, int newMarginY)
     {
@@ -2126,18 +2152,33 @@ public:
     }
 
 
-    // 功能：显示 UI 元素。
-    void show()
+    // 功能：立即显示 UI 元素，不播放进入动画。
+    void showInstant()
     {
         active = true;
         visible = true;
+        interactable = true;
 
-        refreshTarget();
+        state = UI_VISIBLE;
+    }
+
+    // 功能：显示 UI 元素，并进入过渡动画状态。
+    void showAnimated()
+    {
+        active = true;
+        visible = true;
+        interactable = false;
 
         state = UI_SHOWING;
     }
 
-    // 功能：隐藏 UI 元素。当前先直接关闭，后续再扩展滑出动画。
+    // 功能：兼容旧调用，默认使用动画显示；目标位置由 UIManager 按父级关系刷新。
+    void show()
+    {
+        showAnimated();
+    }
+
+    // 功能：立即隐藏 UI 元素，不播放退出动画。
     void hide()
     {
         active = false;
@@ -2145,6 +2186,16 @@ public:
         interactable = false;
 
         state = UI_HIDDEN;
+    }
+
+    // 功能：进入隐藏动画状态，动画结束后才真正隐藏。
+    void hideAnimated()
+    {
+        active = true;
+        visible = true;
+        interactable = false;
+
+        state = UI_HIDING;
     }
 
     // 功能：平滑推进 UI 元素当前位置，使其靠近目标位置。
@@ -2172,6 +2223,14 @@ public:
         {
             interactable = true;
             state = UI_VISIBLE;
+        }
+
+        if (state == UI_HIDING && x == targetX && y == targetY)
+        {
+            active = false;
+            visible = false;
+            interactable = false;
+            state = UI_HIDDEN;
         }
     }
 
@@ -2236,6 +2295,31 @@ public:
         return index >= 0 && index < (int)elements.size();
     }
 
+    // 功能：判断 UI 元素在父级链路影响下最终是否可见。
+    bool isElementEffectivelyVisible(int index) const
+    {
+        if (!isValidIndex(index))
+        {
+            return false;
+        }
+
+        const UIElement& element = elements[index];
+
+        if (!element.isVisible())
+        {
+            return false;
+        }
+
+        int parentIndex = element.getParentIndex();
+
+        if (parentIndex < 0)
+        {
+            return true;
+        }
+
+        return isElementEffectivelyVisible(parentIndex);
+    }
+
     // 功能：获取指定 UI 元素的可写引用。
     UIElement& getElement(int index)
     {
@@ -2259,6 +2343,100 @@ public:
         return elements[index].getBox();
     }
 
+    // 功能：根据父级关系刷新指定 UI 元素的目标位置。
+    void refreshElementTarget(int index)
+    {
+        if (!isValidIndex(index))
+        {
+            return;
+        }
+
+        int parentIndex = elements[index].getParentIndex();
+
+        UIBox parentBox;
+
+        if (isValidIndex(parentIndex))
+        {
+            parentBox = elements[parentIndex].getBox();
+        }
+        else
+        {
+            parentBox = makeViewportUIBox();
+        }
+
+        elements[index].refreshTargetByParentBox(parentBox);
+    }
+
+    // 功能：按父级关系刷新位置后立即显示指定 UI 元素。
+    void showElementInstant(int index)
+    {
+        if (!isValidIndex(index))
+        {
+            return;
+        }
+
+        refreshElementTarget(index);
+        elements[index].showInstant();
+        elements[index].snapToTarget();
+    }
+
+    // 功能：按父级关系刷新位置后以动画方式显示指定 UI 元素。
+    void showElementAnimated(int index)
+    {
+        if (!isValidIndex(index))
+        {
+            return;
+        }
+
+        refreshElementTarget(index);
+        elements[index].showAnimated();
+    }
+
+    // 功能：按父级关系刷新目标位置后，从指定偏移位置滑入。
+    void showElementAnimatedFromOffset(int index, double offsetX, double offsetY)
+    {
+        if (!isValidIndex(index))
+        {
+            return;
+        }
+
+        refreshElementTarget(index);
+
+        double targetX = elements[index].getTargetX();
+        double targetY = elements[index].getTargetY();
+
+        elements[index].setPosition(targetX + offsetX, targetY + offsetY);
+        elements[index].showAnimated();
+    }
+
+    // 功能：按父级关系取得正常目标位置，再把目标改为偏移位置并播放隐藏动画。
+    void hideElementAnimatedToOffset(int index, double offsetX, double offsetY)
+    {
+        if (!isValidIndex(index))
+        {
+            return;
+        }
+
+        refreshElementTarget(index);
+
+        double targetX = elements[index].getTargetX();
+        double targetY = elements[index].getTargetY();
+
+        elements[index].setTargetPosition(targetX + offsetX, targetY + offsetY);
+        elements[index].hideAnimated();
+    }
+
+    // 功能：立即隐藏指定 UI 元素。
+    void hideElementInstant(int index)
+    {
+        if (!isValidIndex(index))
+        {
+            return;
+        }
+
+        elements[index].hide();
+    }
+
     // 功能：统一更新所有 UI 元素的位置和状态。
     void update()
     {
@@ -2277,121 +2455,19 @@ public:
                 parentBox = makeViewportUIBox();
             }
 
-            elements[i].refreshTargetByParentBox(parentBox);
+            // UI_HIDING 使用 hideElementAnimatedToOffset() 指定的离场目标，
+            // 不能每帧刷新回父级位置，否则隐藏动画会被覆盖。
+            if (elements[i].getState() != UI_HIDING)
+            {
+                elements[i].refreshTargetByParentBox(parentBox);
+            }
+
             elements[i].update();
         }
     }
 };
 
 
-
-// SmoothUIPanel：
- // 一个临时 UI 面板结构，支持锚点切换和平滑移动。
- // 平滑移动公式：
- //   x += (targetX - x) * moveSpeed
- //   y += (targetY - y) * moveSpeed
- // 这和 Camera 的平滑跟随是同类 lerp 思想。
-struct SmoothUIPanel
-{
-    double x;
-    double y;
-
-    double targetX;
-    double targetY;
-
-    int w;
-    int h;
-
-    int marginX;
-    int marginY;
-
-    UIAnchor targetAnchor;
-
-    double moveSpeed;
-
-    // 功能：初始化平滑 UI 面板的默认状态。
-    SmoothUIPanel()
-    {
-        x = 0;
-        y = 0;
-
-        targetX = 0;
-        targetY = 0;
-
-        w = 0;
-        h = 0;
-
-        marginX = 0;
-        marginY = 0;
-
-        targetAnchor = UI_TOP_LEFT;
-
-        moveSpeed = 0.2;
-    }
-
-    // 功能：设置 UI 面板尺寸、锚点和初始位置。
-    void init(int newW, int newH, UIAnchor startAnchor, int newMarginX, int newMarginY)
-    {
-        w = newW;
-        h = newH;
-
-        marginX = newMarginX;
-        marginY = newMarginY;
-
-        targetAnchor = startAnchor;
-
-        UIBox startBox = makeUIBoxByAnchor(w, h, startAnchor, marginX, marginY);
-
-        x = startBox.x;
-        y = startBox.y;
-
-        targetX = startBox.x;
-        targetY = startBox.y;
-    }
-
-    // 功能：切换 UI 面板目标锚点。
-    void setAnchor(UIAnchor newAnchor)
-    {
-        targetAnchor = newAnchor;
-
-        UIBox targetBox = makeUIBoxByAnchor(w, h, targetAnchor, marginX, marginY);
-
-        targetX = targetBox.x;
-        targetY = targetBox.y;
-    }
-
-    // 功能：平滑推进 UI 面板当前位置，使其靠近目标位置。
-    void update()
-    {
-        // 用当前位置和目标位置的差值乘移动系数，得到本帧 UI 面板平滑位移。
-        x += (targetX - x) * moveSpeed;
-        y += (targetY - y) * moveSpeed;
-
-        // 防止最后因为小数无限接近但不到达
-        if (fabs(targetX - x) < 0.1)
-        {
-            x = targetX;
-        }
-
-        if (fabs(targetY - y) < 0.1)
-        {
-            y = targetY;
-        }
-    }
-
-    // 功能：获取当前 UI 面板的屏幕矩形。
-    UIBox getBox()
-    {
-        UIBox box;
-
-        box.x = (int)x;
-        box.y = (int)y;
-        box.w = w;
-        box.h = h;
-
-        return box;
-    }
-};
 
 // drawUIBox：
  // 绘制一个圆角 UI 矩形。当前用于调试面板和面板内的临时条目。
@@ -2410,46 +2486,6 @@ void drawUIBox(UIBox box, COLORREF fillColor, COLORREF borderColor)
         30
     );
 }
-// drawListPanel：
- // 临时绘制一个列表面板，用于测试 UI 锚点、平滑移动和简单层级绘制。
-// 功能：绘制当前用于测试的列表面板 UI。
-void drawListPanel(UIBox panel)
-{
-    drawUIBox(panel, RGB(255, 255, 255), WHITE);
-
-    int padding = 16;
-    int itemH = 36;
-    int gap = 8;
-
-    for (int i = 0; i < 7; i++)
-    {
-        UIBox item;
-
-        item.x = panel.x + padding;
-        item.y = panel.y + padding + i * (itemH + gap);
-        item.w = 4 * itemH;
-        item.h = itemH;
-
-        drawUIBox(item, RGB(255, 0, 0), RGB(180, 180, 180));
-    }
-
-    UIBox button1;
-    button1.x = panel.x + padding;
-    button1.y = panel.y + panel.h - padding - 40;
-    button1.w = 120;
-    button1.h = 40;
-
-    drawUIBox(button1, RGB(90, 90, 90), WHITE);
-
-    UIBox button2;
-    button2.x = button1.x + button1.w + 12;
-    button2.y = button1.y;
-    button2.w = 120;
-    button2.h = 40;
-
-    drawUIBox(button2, RGB(90, 90, 90), WHITE);
-}
-
 // InputManager：
  // 统一采集键盘和鼠标输入。
  // keyNow 表示当前帧是否按下；keyLast 表示上一帧是否按下。
@@ -4137,6 +4173,9 @@ struct DebugPanelData
     int entityScreenX;
     int entityScreenY;
 
+    int renderEntityCount;
+    int renderTileCount;
+
     double cameraCenterX;
     double cameraCenterY;
     double cameraZoom;
@@ -4155,6 +4194,9 @@ struct DebugPanelData
 
         entityScreenX = 0;
         entityScreenY = 0;
+
+        renderEntityCount = 0;
+        renderTileCount = 0;
 
         cameraCenterX = 0;
         cameraCenterY = 0;
@@ -4620,14 +4662,8 @@ public:
         );
     }
 
-
-	// 功能：绘制当前测试 UI 面板。
-	void drawUI(SmoothUIPanel& listPanel)
-	{
-		drawListPanel(listPanel.getBox());
-	}
-    // 功能：在指定 UI 内容区域逐行绘制 Debug 面板文本。
-    void drawDebugPanelText(const UIElement& content, DebugPanelData data)
+    // 功能：绘制 Debug 面板中的实体数据区。
+    void drawDebugEntitySectionText(const UIElement& content, DebugPanelData data)
     {
         if (!content.isVisible())
         {
@@ -4660,9 +4696,59 @@ public:
 
         _stprintf_s(text, _T("Screen Pos: %d, %d"), data.entityScreenX, data.entityScreenY);
         outtextxy(x, y, text);
+    }
+
+    // 功能：绘制 Debug 面板中的渲染数据区。
+    void drawDebugRenderSectionText(const UIElement& content, DebugPanelData data)
+    {
+        if (!content.isVisible())
+        {
+            return;
+        }
+
+        UIBox box = content.getBox();
+
+        setbkmode(TRANSPARENT);
+        settextcolor(RGB(40, 40, 40));
+        settextstyle(18, 0, _T("Mojangles"));
+
+        int x = box.x;
+        int y = box.y;
+        int lineH = 22;
+
+        TCHAR text[128];
+
+        _stprintf_s(text, _T("Render"));
+        outtextxy(x, y, text);
         y += lineH;
 
-        y += 8;
+        _stprintf_s(text, _T("Entities: %d"), data.renderEntityCount);
+        outtextxy(x, y, text);
+        y += lineH;
+
+        _stprintf_s(text, _T("Tiles: %d"), data.renderTileCount);
+        outtextxy(x, y, text);
+    }
+
+    // 功能：绘制 Debug 面板中的相机数据区。
+    void drawDebugCameraSectionText(const UIElement& content, DebugPanelData data)
+    {
+        if (!content.isVisible())
+        {
+            return;
+        }
+
+        UIBox box = content.getBox();
+
+        setbkmode(TRANSPARENT);
+        settextcolor(RGB(40, 40, 40));
+        settextstyle(18, 0, _T("Mojangles"));
+
+        int x = box.x;
+        int y = box.y;
+        int lineH = 22;
+
+        TCHAR text[128];
 
         _stprintf_s(text, _T("Camera"));
         outtextxy(x, y, text);
@@ -4683,8 +4769,6 @@ public:
         _stprintf_s(text, _T("View B/T: %.1f / %.1f"), data.viewBottom, data.viewTop);
         outtextxy(x, y, text);
     }
-
-
 };
 
 // Level：
@@ -4705,14 +4789,17 @@ private:
 
     // 当前关卡实体列表。使用 vector 取代固定数组，为后续动态生成和清理实体做准备。
     vector<Entity> entitys;
-    SmoothUIPanel listPanel;
 
     // 当前关卡 UI 元素管理器，负责维护 UIElement 的父子关系和位置更新。
     UIManager uiManager;
 
-    // Debug 面板父元素和文本内容区域在 UIManager 中的下标。
+    // Debug 面板父元素在 UIManager 中的下标。
     int debugPanelIndex;
-    int debugContentIndex;
+
+    // Debug 面板下的三个逻辑子区域；它们共享父级面板，但可以独立控制显示状态。
+    int debugEntitySectionIndex;
+    int debugRenderSectionIndex;
+    int debugCameraSectionIndex;
 
     Renderer renderer;
 
@@ -4756,6 +4843,9 @@ private:
             data.entityScreenY = gCamera.worldToScreenY(target.getY());
         }
 
+        data.renderEntityCount = countRenderableEntities();
+        data.renderTileCount = tileMap.getTileInstanceCount();
+
         data.cameraCenterX = gCamera.centerX;
         data.cameraCenterY = gCamera.centerY;
         data.cameraZoom = gCamera.zoom;
@@ -4768,7 +4858,24 @@ private:
         return data;
     }
 
+    // 功能：统计当前场景中存活且可参与绘制的实体数量。
+    // 当前第一版只按 isAlive 统计，后续可进一步过滤 sprite visible / 视口裁切结果。
+    int countRenderableEntities()
+    {
+        int count = 0;
 
+        for (int i = 0; i < (int)entitys.size(); i++)
+        {
+            if (!entitys[i].getIsAlive())
+            {
+                continue;
+            }
+
+            count++;
+        }
+
+        return count;
+    }
 
     // 以下历史状态缓存必须与 entitys.size() 同步，用于判断状态变化和重叠事件首次触发。
     vector<vector<bool>> lastOverlap;
@@ -4788,8 +4895,10 @@ public:
 
         // 初始化 UI 元素下标；-1 表示当前还没有创建对应元素。
         debugPanelIndex = -1;
-        debugContentIndex = -1;
 
+        debugEntitySectionIndex = -1;
+        debugRenderSectionIndex = -1;
+        debugCameraSectionIndex = -1;
 
         // 预留当前测试关卡的实体数量，避免初始化期间 vector 扩容搬移 Entity。
         entitys.reserve(20);
@@ -4867,12 +4976,11 @@ public:
             2. clearEntityFrameState() 清理上一帧临时状态
             3. updateEntities() 生成 intent，并调用 MovementHandle / CollisionHandle
             4. handleCameraInput() 处理 F1-F4 跟随目标切换
-            5. handleUIInput() 处理 UI 锚点切换
+            5. handleUIInput() 处理 Debug UI 临时显隐输入
             6. updateCamera() 更新摄像机跟随
             7. updateDebugStates() 输出状态变化
             8. updateOverlapEvents() 处理重叠事件，如金币拾取
             9. uiManager.update() 更新 UIElement 父子定位和过渡
-            10. listPanel.update() 更新旧测试 UI 过渡
         */
         if (input.isMouseLeftPressed())
         {
@@ -4899,10 +5007,7 @@ public:
         updateDebugStates();
 
         updateOverlapEvents();
-
-
         uiManager.update();
-        listPanel.update();
     }
 
 	// 功能：委托 Renderer 绘制当前关卡画面。
@@ -4914,22 +5019,38 @@ public:
         renderer.drawTileMap(tileMap);
         renderer.drawEntities(entitys);
 
-        if (uiManager.isValidIndex(debugPanelIndex))
+        // Debug 面板父级负责整体背景；子 section 的最终可见性由 UIManager 按父级链路判断。
+        if (uiManager.isElementEffectivelyVisible(debugPanelIndex))
         {
             renderer.drawUIElementPanel(uiManager.getElement(debugPanelIndex));
         }
 
-        if (uiManager.isValidIndex(debugContentIndex))
-        {
-            DebugPanelData data = buildDebugPanelData();
+        DebugPanelData data = buildDebugPanelData();
 
-            renderer.drawDebugPanelText(
-                uiManager.getElement(debugContentIndex),
+        if (uiManager.isElementEffectivelyVisible(debugEntitySectionIndex))
+        {
+            renderer.drawDebugEntitySectionText(
+                uiManager.getElement(debugEntitySectionIndex),
                 data
             );
         }
 
-        //renderer.drawUI(listPanel);
+        if (uiManager.isElementEffectivelyVisible(debugRenderSectionIndex))
+        {
+            renderer.drawDebugRenderSectionText(
+                uiManager.getElement(debugRenderSectionIndex),
+                data
+            );
+        }
+
+        if (uiManager.isElementEffectivelyVisible(debugCameraSectionIndex))
+        {
+            renderer.drawDebugCameraSectionText(
+                uiManager.getElement(debugCameraSectionIndex),
+                data
+            );
+        }
+
     }
 
 
@@ -4972,28 +5093,38 @@ private:
         loadimage(&backgrounds[3], _T("assets\\tex\\maps\\Clouds 5\\4.png"), WINDOW_WIDTH, WINDOW_HEIGHT, true);
         loadimage(&backgrounds[4], _T("assets\\tex\\maps\\Clouds 5\\5.png"), WINDOW_WIDTH, WINDOW_HEIGHT, true);
     }
-    // 功能：初始化测试 UI 面板和当前 Debug 面板。
+    // 功能：初始化当前关卡使用的 Debug UI 面板。
     void initUI()
     {
-        listPanel.init(480, 600, UI_TOP_LEFT, 32, 32);
-
         // Debug 面板是顶层 UI，相对于窗口右上角定位。
         UIElement debugPanel;
         debugPanel.init(420, 520, UI_TOP_RIGHT, 24, 24);
 
         debugPanelIndex = uiManager.addElement(debugPanel);
 
-        // 文本内容区是 Debug 面板的子 UI，相对于父面板左上角定位。
-        UIElement debugContent;
-        debugContent.init(388, 488, UI_TOP_LEFT, 16, 16);
-        debugContent.setParentIndex(debugPanelIndex);
-        debugContent.refreshTargetByParentBox(uiManager.getElement(debugPanelIndex).getBox());
+        // Debug Entity 区域：显示当前相机跟随目标实体的数据。
+        UIElement debugEntitySection;
+        debugEntitySection.init(388, 110, UI_TOP_LEFT, 16, 16);
+        debugEntitySection.setParentIndex(debugPanelIndex);
+        debugEntitySection.refreshTargetByParentBox(uiManager.getElement(debugPanelIndex).getBox());
+        debugEntitySection.snapToTarget();
+        debugEntitySectionIndex = uiManager.addElement(debugEntitySection);
 
-        // 子内容区不需要从窗口左上角滑入，初始化时直接贴到父面板内。
-        debugContent.snapToTarget();
+        // Debug Render 区域：显示当前渲染相关数据。
+        UIElement debugRenderSection;
+        debugRenderSection.init(388, 90, UI_TOP_LEFT, 16, 140);
+        debugRenderSection.setParentIndex(debugPanelIndex);
+        debugRenderSection.refreshTargetByParentBox(uiManager.getElement(debugPanelIndex).getBox());
+        debugRenderSection.snapToTarget();
+        debugRenderSectionIndex = uiManager.addElement(debugRenderSection);
 
-        debugContentIndex = uiManager.addElement(debugContent);
-
+        // Debug Camera 区域：显示当前相机和视口数据。
+        UIElement debugCameraSection;
+        debugCameraSection.init(388, 180, UI_TOP_LEFT, 16, 250);
+        debugCameraSection.setParentIndex(debugPanelIndex);
+        debugCameraSection.refreshTargetByParentBox(uiManager.getElement(debugPanelIndex).getBox());
+        debugCameraSection.snapToTarget();
+        debugCameraSectionIndex = uiManager.addElement(debugCameraSection);
     }
 
     // 功能：设置实体 sprite 缩放、动画速度和碰撞盒缩放。
@@ -5177,27 +5308,106 @@ private:
         }
     }
 
-    // 功能：处理 UI 面板锚点切换输入。
+    // 功能：处理 Debug UI 临时显隐控制输入。
     void handleUIInput(InputManager& input)
     {
-        if (input.isKeyPressed('W'))
+        // 以下 F8-F11 仅用于当前阶段验证 Debug UI 层级、显隐状态和 section 动画。
+        // 后续正式 UI 交互应改由按钮、配置面板或 Debug 菜单自身控制。
+        if (input.isKeyPressed(VK_F8))
         {
-            listPanel.setAnchor(UI_TOP_LEFT);
+            toggleDebugPanelVisible();
+            cout << "Toggle debug panel." << endl;
         }
 
-        if (input.isKeyPressed('S'))
+        if (input.isKeyPressed(VK_F9))
         {
-            listPanel.setAnchor(UI_TOP_RIGHT);
+            toggleDebugEntitySectionVisible();
+            cout << "Toggle debug entity section." << endl;
         }
 
-        if (input.isKeyPressed('A'))
+        if (input.isKeyPressed(VK_F10))
         {
-            listPanel.setAnchor(UI_BOTTOM_LEFT);
+            toggleDebugRenderSectionVisible();
+            cout << "Toggle debug render section." << endl;
         }
 
-        if (input.isKeyPressed('D'))
+        if (input.isKeyPressed(VK_F11))
         {
-            listPanel.setAnchor(UI_BOTTOM_RIGHT);
+            toggleDebugCameraSectionVisible();
+            cout << "Toggle debug camera section." << endl;
+        }
+
+    }
+
+    // 功能：切换整个 Debug 面板的显示状态。
+    void toggleDebugPanelVisible()
+    {
+        toggleUIElementVisible(debugPanelIndex);
+    }
+
+    // 功能：切换 Debug 实体信息区。显示时从左侧滑入，隐藏时向右侧滑出。
+    void toggleDebugEntitySectionVisible()
+    {
+        UIElement& element = uiManager.getElement(debugEntitySectionIndex);
+
+        if (element.isVisible())
+        {
+            uiManager.hideElementAnimatedToOffset(debugEntitySectionIndex, 40, 0);
+        }
+        else
+        {
+            uiManager.showElementAnimatedFromOffset(debugEntitySectionIndex, -40, 0);
+        }
+    }
+
+    // 功能：切换 Debug 渲染信息区。显示时从右侧滑入，隐藏时向左侧滑出。
+    void toggleDebugRenderSectionVisible()
+    {
+        UIElement& element = uiManager.getElement(debugRenderSectionIndex);
+
+        if (element.isVisible())
+        {
+            uiManager.hideElementAnimatedToOffset(debugRenderSectionIndex, -40, 0);
+        }
+        else
+        {
+            uiManager.showElementAnimatedFromOffset(debugRenderSectionIndex, 40, 0);
+        }
+    }
+
+    // 功能：切换 Debug 相机信息区。显示时从下方滑入，隐藏时向上方滑出。
+    void toggleDebugCameraSectionVisible()
+    {
+        UIElement& element = uiManager.getElement(debugCameraSectionIndex);
+
+        if (element.isVisible())
+        {
+            uiManager.hideElementAnimatedToOffset(debugCameraSectionIndex, 0, -40);
+        }
+        else
+        {
+            uiManager.showElementAnimatedFromOffset(debugCameraSectionIndex, 0, 40);
+        }
+    }
+
+    // 功能：切换指定 UI 元素自身的显示状态。
+    // 这个函数只改变当前元素，不递归修改子元素；父级覆盖由 isElementEffectivelyVisible() 处理。
+    void toggleUIElementVisible(int elementIndex)
+    {
+        if (!uiManager.isValidIndex(elementIndex))
+        {
+            return;
+        }
+
+        UIElement& element = uiManager.getElement(elementIndex);
+
+        if (element.isVisible())
+        {
+            element.hide();
+        }
+        else
+        {
+            uiManager.showElementInstant(elementIndex);
         }
     }
 
