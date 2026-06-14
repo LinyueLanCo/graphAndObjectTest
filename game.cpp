@@ -973,6 +973,21 @@ struct BackgroundLayer
 
         return backgroundSprite;
     }
+
+    // 功能：用指定世界中心点生成背景 sprite，常用于跟随 Camera 中心的背景。
+    sprite buildSpriteAt(double newCenterX, double newCenterY)
+    {
+        sprite backgroundSprite = buildSprite();
+
+        backgroundSprite.setWorldDrawData(
+            newCenterX,
+            newCenterY,
+            backgroundSprite.worldDrawW,
+            backgroundSprite.worldDrawH
+        );
+
+        return backgroundSprite;
+    }
 };
 
 
@@ -4677,37 +4692,14 @@ public:
 
             if (layer.drawMode == BACKGROUND_FIXED_CAMERA)
             {
-                int imageW = layer.image.getwidth();
-                int imageH = layer.image.getheight();
+                sprite backgroundSprite = layer.buildSpriteAt(
+                    gCamera.centerX,
+                    gCamera.centerY
+                );
 
-                if (imageW <= 0 || imageH <= 0)
-                {
-                    continue;
-                }
-
-                // fixed 背景固定在视口中心，不跟随世界坐标移动。
-                int drawW = (int)layer.drawW;
-                int drawH = (int)layer.drawH;
-
-                if (drawW <= 0)
-                {
-                    drawW = imageW;
-                }
-
-                if (drawH <= 0)
-                {
-                    drawH = imageH;
-                }
-
-                int drawX = WINDOW_WIDTH / 2 - drawW / 2;
-                int drawY = WINDOW_HEIGHT / 2 - drawH / 2;
-
-                drawBackgroundImageOnScreen(
-                    layer,
-                    drawX,
-                    drawY,
-                    drawW,
-                    drawH
+                drawSprite(
+                    backgroundSprite,
+                    RGB(120, 160, 255)
                 );
 
                 continue;
