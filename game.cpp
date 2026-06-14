@@ -4445,6 +4445,34 @@ void updateCameraFollow(
     );
 }
 
+// RenderFrameStats：
+// 记录当前帧真实通过 Renderer 绘制成功的 sprite 数量。
+struct RenderFrameStats
+{
+    int backgroundSpriteCount;
+    int tileSpriteCount;
+    int entitySpriteCount;
+    int totalSpriteCount;
+
+    // 功能：初始化当前帧渲染统计数据。
+    RenderFrameStats()
+    {
+        backgroundSpriteCount = 0;
+        tileSpriteCount = 0;
+        entitySpriteCount = 0;
+        totalSpriteCount = 0;
+    }
+
+    // 功能：根据各类型 sprite 数量重新计算总绘制数量。
+    void refreshTotal()
+    {
+        totalSpriteCount =
+            backgroundSpriteCount +
+            tileSpriteCount +
+            entitySpriteCount;
+    }
+};
+
 
 // DebugPanelData：
 // Debug 面板一帧要显示的数据快照。
@@ -4678,8 +4706,11 @@ public:
     // parallaxOffsetX 表示相机中心相对初始中心的累计水平位移。
     // cameraZoom 表示当前真实相机 zoom，用于让不同远近的背景层按不同强度响应缩放。
     // 当前阶段只处理 BACKGROUND_REPEAT_X；其他模式后续再接入。
-    void drawBackground(BackgroundManager& backgroundManager, double parallaxOffsetX, double cameraZoom)
+    int drawBackground(BackgroundManager& backgroundManager, double parallaxOffsetX, double cameraZoom)
     {
+        
+        int renderedBackgroundCount = 0;
+
         vector<BackgroundLayer>& backgroundLayers = backgroundManager.getLayers();
         for (int i = 0; i < (int)backgroundLayers.size(); i++)
         {
@@ -4697,10 +4728,10 @@ public:
                     gCamera.centerY
                 );
 
-                drawSprite(
-                    backgroundSprite,
-                    RGB(120, 160, 255)
-                );
+                if (drawSprite(backgroundSprite, RGB(120, 160, 255)))
+                {
+                    renderedBackgroundCount++;
+                }
 
                 continue;
             }
@@ -4709,10 +4740,10 @@ public:
             {
                 sprite backgroundSprite = layer.buildSprite();
 
-                drawSprite(
-                    backgroundSprite,
-                    RGB(120, 160, 255)
-                );
+                if (drawSprite(backgroundSprite, RGB(120, 160, 255)))
+                {
+                    renderedBackgroundCount++;
+                }
 
                 continue;
             }
@@ -4788,12 +4819,13 @@ public:
                     renderCenterY
                 );
 
-                drawSprite(
-                    backgroundSprite,
-                    RGB(120, 160, 255)
-                );
+                if (drawSprite(backgroundSprite, RGB(120, 160, 255)))
+                {
+                    renderedBackgroundCount++;
+                }
             }
         }
+		return renderedBackgroundCount;
     }
     // 功能：根据 TileInstance 生成通用 sprite，并交给统一 sprite 绘制接口。
     bool drawTileInstance(TileMap& tileMap, const TileInstance& tile)
@@ -5079,6 +5111,8 @@ private:
     int debugRenderSectionIndex;
     int debugCameraSectionIndex;
 
+    RenderFrameStats renderFrameStats;
+
     Renderer renderer;
 
     int controlTargerIndex;
@@ -5293,9 +5327,16 @@ public:
     {
         double parallaxOffsetX = parallaxCameraX - parallaxOriginX;
 
-        renderer.drawBackground(backgroundManager, parallaxOffsetX, gCamera.zoom);   
-        renderer.drawTileMap(tileMap);
-        renderer.drawEntities(entitys);
+        renderFrameStats.backgroundSpriteCount =
+            renderer.drawBackground(backgroundManager, parallaxOffsetX, gCamera.zoom);
+
+        renderFrameStats.tileSpriteCount =
+            renderer.drawTileMap(tileMap);
+
+        renderFrameStats.entitySpriteCount =
+            renderer.drawEntities(entitys);
+
+        renderFrameStats.refreshTotal();
 
         // Debug 面板父级负责整体背景；子 section 的最终可见性由 UIManager 按父级链路判断。
         if (uiManager.isElementEffectivelyVisible(debugPanelIndex))
