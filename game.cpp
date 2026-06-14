@@ -5,6 +5,9 @@
 #include <iostream>
 #include<fstream>
 #include <vector>
+#include <algorithm>
+
+
 // 后续会继续接入 JSON 配置读取。
 using namespace std;
 
@@ -783,6 +786,12 @@ struct sprite
 	double offsetX;
 	double offsetY;
 
+	double worldCenterX;
+	double worldCenterY;
+
+    double worldDrawW;
+	double worldDrawH;
+
 	// 功能：初始化一个空精灵，默认没有图、帧矩形和变换。
     sprite() : imageSource(NULL),
     srcX(0),
@@ -793,6 +802,10 @@ struct sprite
     scaleY(1.0),
     offsetX(0.0),
     offsetY(0.0),
+    worldCenterX(0.0),
+    worldCenterY(0.0),
+    worldDrawW(0.0),
+    worldDrawH(0.0),
     visible(true)
 	{
 	}
@@ -814,6 +827,275 @@ struct sprite
 		offsetX = newOffsetX;
 		offsetY = newOffsetY;
 	}
+
+    // 功能：设置 sprite 在世界坐标中的最终绘制中心点和绘制尺寸。
+    void setWorldDrawData(double newCenterX, double newCenterY, double newDrawW, double newDrawH)
+    {
+        worldCenterX = newCenterX;
+        worldCenterY = newCenterY;
+        worldDrawW = newDrawW;
+        worldDrawH = newDrawH;
+    }
+};
+
+
+// BackgroundDrawMode：
+// 背景对象的绘制/跟随规则。
+enum BackgroundDrawMode
+{
+    BACKGROUND_REPEAT_X,
+    BACKGROUND_SINGLE_WORLD,
+    BACKGROUND_FIXED_CAMERA
+};
+
+
+// BackgroundLayer：
+// 单个背景层的数据对象。
+// 它保存图片、视差系数、缩放响应系数和绘制开关。
+struct BackgroundLayer
+{
+    IMAGE image;
+
+    int renderOrder;
+
+    double parallaxFactor;
+    double zoomFactor;
+
+    bool visible;
+    
+    BackgroundDrawMode drawMode;
+    
+    double centerX;
+    double centerY;
+
+    // 本帧实际用于生成 sprite 的逻辑中心点。
+    // centerX / centerY 是设计时基础位置，runtimeCenterX / runtimeCenterY 是经过视差/fixed 等规则后的当前位置。
+    double runtimeCenterX;
+    double runtimeCenterY;
+
+    double drawW;
+    double drawH;
+    
+    bool useAlphaBlend;
+
+    // 功能：初始化背景层默认数据。
+    BackgroundLayer()
+    {
+        renderOrder = 0;
+
+        parallaxFactor = 0.0;
+        zoomFactor = 0.0;
+
+        visible = true;
+
+        drawMode = BACKGROUND_REPEAT_X;
+
+        centerX = 0.0;
+        centerY = 0.0;
+
+        runtimeCenterX = centerX;
+        runtimeCenterY = centerY;
+
+        drawW = WINDOW_WIDTH;
+        drawH = WINDOW_HEIGHT;   
+        useAlphaBlend = true;
+    }
+
+    // 功能：加载背景层图片并设置基础绘制参数。
+    void load(
+        const TCHAR* imagePath,
+        int newRenderOrder,
+        double newParallaxFactor,
+        double newZoomFactor,
+        bool newUseAlphaBlend,
+        BackgroundDrawMode newDrawMode
+    )
+    {
+        loadimage(&image, imagePath, WINDOW_WIDTH, WINDOW_HEIGHT, true);
+
+        renderOrder = newRenderOrder;
+        parallaxFactor = newParallaxFactor;
+        zoomFactor = newZoomFactor;
+        useAlphaBlend = newUseAlphaBlend;
+        drawMode = newDrawMode;
+    }
+
+    // 功能：设置背景对象在世界/逻辑空间中的中心点和绘制尺寸。
+    void setDrawData(double newCenterX, double newCenterY, double newDrawW, double newDrawH)
+    {
+        centerX = newCenterX;
+        centerY = newCenterY;
+
+        runtimeCenterX = centerX;
+        runtimeCenterY = centerY;
+
+        drawW = newDrawW;
+        drawH = newDrawH;
+    }
+
+    // 功能：根据背景模式更新本帧用于生成 sprite 的逻辑中心点。
+    void updateRuntimeTransform(double parallaxOffsetX)
+    {
+        if (drawMode == BACKGROUND_FIXED_CAMERA)
+        {
+            // fixed 背景直接把运行时中心锁到真实 Camera 中心，使 sprite 看起来固定在视口中。
+            runtimeCenterX = gCamera.centerX;
+            runtimeCenterY = gCamera.centerY;
+            return;
+        }
+
+        if (drawMode == BACKGROUND_SINGLE_WORLD)
+        {
+            // 单张世界背景不响应视差，运行时中心保持设计时基础位置。
+            runtimeCenterX = centerX;
+            runtimeCenterY = centerY;
+            return;
+        }
+
+        if (drawMode == BACKGROUND_REPEAT_X)
+        {
+            // 用基础中心点减去视差偏移，得到本帧背景层自己的逻辑中心点。
+            runtimeCenterX = centerX - parallaxOffsetX * parallaxFactor;
+            runtimeCenterY = centerY;
+            return;
+        }
+
+        runtimeCenterX = centerX;
+        runtimeCenterY = centerY;
+    }
+
+    // 功能：把当前背景对象转换成世界空间 sprite 数据。
+    sprite buildSprite()
+    {
+        sprite backgroundSprite;
+
+        backgroundSprite.visible = visible;
+
+        if (!visible)
+        {
+            return backgroundSprite;
+        }
+
+        int imageW = image.getwidth();
+        int imageH = image.getheight();
+
+        if (imageW <= 0 || imageH <= 0)
+        {
+            backgroundSprite.visible = false;
+            return backgroundSprite;
+        }
+
+        backgroundSprite.setSource(
+            &image,
+            0,
+            0,
+            imageW,
+            imageH
+        );
+
+        double finalDrawW = drawW;
+        double finalDrawH = drawH;
+
+        if (finalDrawW <= 0)
+        {
+            finalDrawW = imageW;
+        }
+
+        if (finalDrawH <= 0)
+        {
+            finalDrawH = imageH;
+        }
+
+        backgroundSprite.setWorldDrawData(
+            runtimeCenterX,
+            runtimeCenterY,
+            finalDrawW,
+            finalDrawH
+        );
+
+        return backgroundSprite;
+    }
+
+    // 功能：用指定世界中心点生成背景 sprite，常用于跟随 Camera 中心的背景。
+    sprite buildSpriteAt(double newCenterX, double newCenterY)
+    {
+        sprite backgroundSprite = buildSprite();
+
+        backgroundSprite.setWorldDrawData(
+            newCenterX,
+            newCenterY,
+            backgroundSprite.worldDrawW,
+            backgroundSprite.worldDrawH
+        );
+
+        return backgroundSprite;
+    }
+};
+
+
+
+// BackgroundManager：
+// 管理当前关卡中的所有背景层。
+// 它负责保存背景对象，并按 renderOrder 维护背景绘制顺序。
+class BackgroundManager
+{
+private:
+    vector<BackgroundLayer> layers;
+
+public:
+
+    // 功能：按照 renderOrder 从小到大排序背景层，数值越小越先绘制。
+    void sortLayersByRenderOrder()
+    {
+        sort(
+            layers.begin(),
+            layers.end(),
+            [](const BackgroundLayer& a, const BackgroundLayer& b)
+            {
+                return a.renderOrder < b.renderOrder;
+            }
+        );
+    }
+
+    // 功能：清空所有背景层。
+    void clear()
+    {
+        layers.clear();
+    }
+
+    // 功能：添加一个背景层，并按 renderOrder 维护绘制顺序。
+    void addLayer(const BackgroundLayer& layer)
+    {
+        layers.push_back(layer);
+        sortLayersByRenderOrder();
+    }
+
+    // 功能：更新所有背景层本帧用于生成 sprite 的逻辑变换。
+    void updateRuntimeTransforms(double parallaxOffsetX)
+    {
+        for (int i = 0; i < (int)layers.size(); i++)
+        {
+            layers[i].updateRuntimeTransform(parallaxOffsetX);
+        }
+    }
+
+    // 功能：获取背景层数量。
+    int getLayerCount() const
+    {
+        return (int)layers.size();
+    }
+
+    // 功能：获取背景层可写列表。
+    vector<BackgroundLayer>& getLayers()
+    {
+        return layers;
+    }
+
+    // 功能：获取背景层只读列表。
+    const vector<BackgroundLayer>& getLayers() const
+    {
+        return layers;
+    }
 };
 
 
@@ -1442,36 +1724,69 @@ public:
     }
 
 
-    // 功能：获取当前地图使用的 tileset 图片。
-    IMAGE* getTilesetImage()
+    // 功能：把一个 TileInstance 转换为通用 sprite 数据，供 Renderer 绘制使用。  
+     sprite buildSpriteFromTileInstance(const TileInstance& tile)
     {
-        return &tileset;
-    }
+		sprite tileSprite;
 
-    // 功能：获取 tileset 中单个 tile 的原始宽度。
-    int getSourceTileWidth() const
-    {
-        return sourceTileWidth;
-    }
+		tileSprite.visible = tile.visible;
 
-    // 功能：获取 tileset 中单个 tile 的原始高度。
-    int getSourceTileHeight() const
-    {
-        return sourceTileHeight;
-    }
+        if(!tile.visible)
+        {
+            return tileSprite;
+        }
 
-    // 功能：获取 tile 绘制到世界坐标后的宽度。
-    int getDrawTileWidth() const
-    {
-        return drawTileWidth;
-    }
+        if(tile.tileId==TILE_EMPTY)
+        {
+			tileSprite.visible = false;
+            return tileSprite;
+        }
 
-    // 功能：获取 tile 绘制到世界坐标后的高度。
-    int getDrawTileHeight() const
-    {
-        return drawTileHeight;
-    }
+        if (sourceTileWidth <= 0 || sourceTileHeight <= 0)
+        {
+            tileSprite.visible = false;
+            return tileSprite;
+        }
 
+		int tilesetCols = tileset.getwidth() / sourceTileWidth;
+
+        if(tilesetCols <= 0)
+        {
+            tileSprite.visible = false;
+            return tileSprite;
+        }
+
+		int realTileIndex = tile.tileId - 1;
+
+        //用tileId在tileset中的线性序号换算出原图的裁剪坐标
+
+        int srcX = (realTileIndex % tilesetCols) * sourceTileWidth;
+        int srcY = (realTileIndex / tilesetCols) * sourceTileHeight;
+
+        // 设置 sprite 的纹理坐标等信息
+		tileSprite.setSource(
+			&tileset,
+			srcX,
+			srcY,
+			sourceTileWidth,
+			sourceTileHeight
+		);
+
+		//用默认tile世界尺寸乘以实例缩放，得到本帧最终绘制尺寸
+		double worldDrawW = drawTileWidth * tile.scaleX;
+		double worldDrawH = drawTileHeight * tile.scaleY;
+
+        double worldCenterX = tile.centerX + tile.offsetX;
+        double worldCenterY = tile.centerY + tile.offsetY;
+
+		tileSprite.setWorldDrawData(
+			worldCenterX,
+			worldCenterY,
+			worldDrawW,
+			worldDrawH
+		);
+        return tileSprite;
+    }
 
     // 功能：释放并清空当前地图碰撞层二维数组。
     void releaseCollisionTiles()
@@ -3142,11 +3457,31 @@ public:
 		collisionBox.setScale(scaleX, scaleY);
 	}
 
+    // 功能：根据实体当前位置和 sprite 自身变换，补全当前帧的世界绘制数据。
+    void syncRenderSpriteWorldDrawData()
+    {
+        // 用源帧尺寸乘 sprite 缩放，得到当前帧在世界坐标里的绘制宽高。
+        double worldDrawW = renderSprite.srcW * renderSprite.scaleX;
+        double worldDrawH = renderSprite.srcH * renderSprite.scaleY;
+
+        // 用实体中心点加 sprite 偏移，得到 sprite 本帧的世界中心点。
+        double worldCenterX = x + renderSprite.offsetX;
+        double worldCenterY = y + renderSprite.offsetY;
+
+        renderSprite.setWorldDrawData(
+            worldCenterX,
+            worldCenterY,
+            worldDrawW,
+            worldDrawH
+        );
+    }
+
     // 功能：推进实体当前动画播放器，并把当前帧同步写入 renderSprite。
     void updateAnimatedSprite()
     {
         animation.update();
-		animation.writeCurrentFrameTo(renderSprite);
+        animation.writeCurrentFrameTo(renderSprite);
+        syncRenderSpriteWorldDrawData();
     }
 
 
@@ -3154,6 +3489,7 @@ public:
     void setSpriteTransform(double scaleX, double scaleY, double offsetX, double offsetY)
     {
         renderSprite.setTransform(scaleX, scaleY, offsetX, offsetY);
+        syncRenderSpriteWorldDrawData();
     }
     // 功能：设置实体动画播放速度。
     void setAnimationSpeed(int speed)
@@ -3167,7 +3503,7 @@ public:
         animator.initAnimation(*this, resources);
 
         animation.writeCurrentFrameTo(renderSprite);
-
+        syncRenderSpriteWorldDrawData();
         if (animation.getFrameWidth() > 0 && animation.getFrameHeight() > 0)
         {
             collisionBox.setBaseSize(
@@ -4160,9 +4496,37 @@ void updateCameraFollow(
     );
 }
 
+// RenderFrameStats：
+// 记录当前帧真实通过 Renderer::drawSprite 绘制成功的 sprite 数量。
+struct RenderFrameStats
+{
+    int backgroundSpriteCount;
+    int tileSpriteCount;
+    int entitySpriteCount;
+    int totalSpriteCount;
+
+    // 功能：初始化当前帧渲染统计数据。
+    RenderFrameStats()
+    {
+        backgroundSpriteCount = 0;
+        tileSpriteCount = 0;
+        entitySpriteCount = 0;
+        totalSpriteCount = 0;
+    }
+
+    // 功能：根据各类型 sprite 数量重新计算总绘制数量。
+    void refreshTotal()
+    {
+        totalSpriteCount =
+            backgroundSpriteCount +
+            tileSpriteCount +
+            entitySpriteCount;
+    }
+};
+
 
 // DebugPanelData：
-// Debug 面板一帧要显示的数据快照。
+// Debug 面板一帧要显示的数据快照，数据由 Level 在当前帧收集后交给 Renderer 显示。
 struct DebugPanelData
 {
     int targetIndex;
@@ -4173,8 +4537,10 @@ struct DebugPanelData
     int entityScreenX;
     int entityScreenY;
 
-    int renderEntityCount;
-    int renderTileCount;
+    int renderedBackgroundSprites;
+    int renderedTileSprites;
+    int renderedEntitySprites;
+    int renderedTotalSprites;
 
     double cameraCenterX;
     double cameraCenterY;
@@ -4195,8 +4561,10 @@ struct DebugPanelData
         entityScreenX = 0;
         entityScreenY = 0;
 
-        renderEntityCount = 0;
-        renderTileCount = 0;
+        renderedBackgroundSprites = 0;
+        renderedTileSprites = 0;
+        renderedEntitySprites = 0;
+        renderedTotalSprites = 0;
 
         cameraCenterX = 0;
         cameraCenterY = 0;
@@ -4355,250 +4723,201 @@ public:
         showRenderBounds = !showRenderBounds;
     }
 
-    // 功能：绘制当前关卡多层视差背景。
-    // parallaxOffsetX 表示相机中心相对初始中心的累计水平位移。
-    // cameraZoom 表示当前真实相机 zoom，用于让不同远近的背景层按不同强度响应缩放。
-    // 注意：这里不再读取旧的视口左边界；视差只使用 centerX 的真实位移，避免被 zoom 改变污染。
-    void drawBackground(IMAGE backgroundLayers[], int layerCount, double parallaxOffsetX, double cameraZoom)
+    // 功能：绘制当前关卡背景层，并返回真实绘制成功的 background sprite 数量。
+    // 背景层的视差/fixed 等逻辑位置已在 BackgroundManager 更新阶段写入 runtime 坐标。
+    // BACKGROUND_REPEAT_X 会以背景对象的 runtime 中心点为基准，在当前视口横向生成多个 sprite。
+    int drawBackground(BackgroundManager& backgroundManager)
     {
-        // 数值越大，越靠近前景，横向移动越明显。
-        double parallaxFactors[5] = { 0.0, 0.04, 0.12, 0.25, 0.4 };
-        // 数值越大，这一层越明显地响应 camera zoom。
-        // 最远天空层通常不明显缩放；近景层更接近场景元素。
-        double zoomFactors[5] = { 0.0, 0.25, 0.55, 0.85, 1.0 };
+        int renderedBackgroundCount = 0;
 
-        if (layerCount > 5)
+        vector<BackgroundLayer>& backgroundLayers = backgroundManager.getLayers();
+        for (int i = 0; i < (int)backgroundLayers.size(); i++)
         {
-            layerCount = 5;
-        }
+            BackgroundLayer& layer = backgroundLayers[i];
 
-        for (int i = 0; i < layerCount; i++)
-        {
-            int imageW = backgroundLayers[i].getwidth();
-            int imageH = backgroundLayers[i].getheight();
+            if (!layer.visible)
+            {
+                continue;
+            }
+
+            if (layer.drawMode == BACKGROUND_FIXED_CAMERA)
+            {
+                sprite backgroundSprite = layer.buildSprite();
+
+                if (drawSprite(backgroundSprite, RGB(120, 160, 255)))
+                {
+                    renderedBackgroundCount++;
+                }
+
+                continue;
+            }
+
+            if (layer.drawMode == BACKGROUND_SINGLE_WORLD)
+            {
+                sprite backgroundSprite = layer.buildSprite();
+
+                if (drawSprite(backgroundSprite, RGB(120, 160, 255)))
+                {
+                    renderedBackgroundCount++;
+                }
+
+                continue;
+            }
+
+
+            if (layer.drawMode != BACKGROUND_REPEAT_X)
+            {
+                continue;
+            }
+
+            int imageW = layer.image.getwidth();
+            int imageH = layer.image.getheight();
 
             if (imageW <= 0 || imageH <= 0)
             {
                 continue;
             }
 
-            // 计算这一层自己的 zoom。
-            // 不是所有背景层都必须 100% 跟随 camera zoom。
-            double layerZoom = 1.0 + (cameraZoom - 1.0) * zoomFactors[i];
+            // repeat 背景以 background 本帧 runtime 中心点为基准，只在横向生成额外 sprite 覆盖视口。
+            double repeatDrawW = layer.drawW;
+            double repeatDrawH = layer.drawH;
 
-            // 防止 zoom out 时背景缩小露出黑边。
-            // 如果你想让背景完全像世界物体一样缩小，可以删掉这个 if。
-            if (layerZoom < 1.0)
+            if (repeatDrawW <= 0)
             {
-                layerZoom = 1.0;
+                repeatDrawW = layer.image.getwidth();
             }
 
-            int drawW = (int)(imageW * layerZoom);
-            int drawH = (int)(imageH * layerZoom);
-
-            if (drawW < 1)
+            if (repeatDrawH <= 0)
             {
-                drawW = 1;
+                repeatDrawH = layer.image.getheight();
             }
 
-            if (drawH < 1)
+            if (repeatDrawW <= 0 || repeatDrawH <= 0)
             {
-                drawH = 1;
+                continue;
             }
 
-            // 背景平移只使用相机中心的真实位移；layerZoom 只负责把该层自身缩放后的偏移换算成屏幕距离。
-            // 不直接乘全局 cameraZoom，避免角色不动但缩放时背景发生横向滑动。
-            double screenOriginX =
-                -parallaxOffsetX * parallaxFactors[i] * layerZoom
-                + WINDOW_WIDTH / 2.0
-                - drawW / 2.0;
+            // 读取逻辑层预先算好的 runtime 中心点，Renderer 不再负责计算视差偏移。
+            double renderCenterX = layer.runtimeCenterX;
+            double renderCenterY = layer.runtimeCenterY;
 
-            int baseX = (int)fmod(screenOriginX, (double)drawW);
+            // 从视口左侧外面开始找第一张需要绘制的背景 sprite。
+            double startCenterX = renderCenterX;
 
-            if (baseX > 0)
+            while (startCenterX - repeatDrawW / 2.0 > gCamera.getViewLeft())
             {
-                baseX -= drawW;
+                startCenterX -= repeatDrawW;
             }
 
-            // 纵向先保持屏幕中心缩放。
-            // 这样 zoom in 时背景从屏幕中心向外放大。
-            int drawY = (WINDOW_HEIGHT - drawH) / 2;
-
-            for (int drawX = baseX; drawX < WINDOW_WIDTH; drawX += drawW)
+            while (startCenterX + repeatDrawW / 2.0 < gCamera.getViewLeft())
             {
-                if (i == 0)
-                {
-                    putimage(drawX, drawY, drawW, drawH, &backgroundLayers[i], 0, 0);
-                }
-                else
-                {
-                    putimage_alpha(drawX, drawY, drawW, drawH, &backgroundLayers[i]);
-                }
+                startCenterX += repeatDrawW;
+            }
 
-                // 背景层可能会横向平铺；这里显示的是每一块平铺图片的实际绘制范围。
-                drawRenderBounds(
-                    drawX,
-                    drawY,
-                    drawW,
-                    drawH,
-                    RGB(120, 160, 255)
+            // 从左到右生成多个背景 sprite，直到覆盖当前视口。
+            for (
+                double currentCenterX = startCenterX;
+                currentCenterX - repeatDrawW / 2.0 < gCamera.getViewRight();
+                currentCenterX += repeatDrawW
+                )
+            {
+                sprite backgroundSprite = layer.buildSpriteAt(
+                    currentCenterX,
+                    renderCenterY
                 );
+
+                if (drawSprite(backgroundSprite, RGB(120, 160, 255)))
+                {
+                    renderedBackgroundCount++;
+                }
             }
         }
+        return renderedBackgroundCount;
     }
 
-    // 功能：根据 TileInstance 数据绘制单个地图 tile。
-    void drawTileInstance(TileMap& tileMap, const TileInstance& tile)
+    // 功能：根据 TileInstance 生成通用 sprite，并交给统一 sprite 绘制接口。
+    bool drawTileInstance(TileMap& tileMap, const TileInstance& tile)
     {
-        if (!tile.visible)
-        {
-            return;
-        }
+        sprite tileSprite = tileMap.buildSpriteFromTileInstance(tile);
 
-        if (tile.tileId == TILE_EMPTY)
-        {
-            return;
-        }
-
-        IMAGE* tileset = tileMap.getTilesetImage();
-
-        if (tileset == NULL)
-        {
-            return;
-        }
-
-        int sourceTileWidth = tileMap.getSourceTileWidth();
-        int sourceTileHeight = tileMap.getSourceTileHeight();
-
-        if (sourceTileWidth <= 0 || sourceTileHeight <= 0)
-        {
-            return;
-        }
-
-        int tilesetCols = tileset->getwidth() / sourceTileWidth;
-
-        if (tilesetCols <= 0)
-        {
-            return;
-        }
-
-        int realTileIndex = tile.tileId - 1;
-
-        // 用 tileId 在 tileset 中的线性序号换算源图裁剪坐标。
-        int srcX = (realTileIndex % tilesetCols) * sourceTileWidth;
-        int srcY = (realTileIndex / tilesetCols) * sourceTileHeight;
-
-        // 用默认 tile 世界尺寸乘实例缩放，得到这个 tile 本帧实际绘制尺寸。
-        double worldDrawW = tileMap.getDrawTileWidth() * tile.scaleX;
-        double worldDrawH = tileMap.getDrawTileHeight() * tile.scaleY;
-
-        // 用实例中心点加偏移，得到这个 tile 本帧实际绘制中心点。
-        double drawCenterX = tile.centerX + tile.offsetX;
-        double drawCenterY = tile.centerY + tile.offsetY;
-
-        // 以中心点为锚点，计算世界坐标中的绘制矩形。
-        double worldLeft = drawCenterX - worldDrawW / 2.0;
-        double worldRight = drawCenterX + worldDrawW / 2.0;
-        double worldBottom = drawCenterY - worldDrawH / 2.0;
-        double worldTop = drawCenterY + worldDrawH / 2.0;
-
-        int screenLeft = gCamera.worldToScreenX(worldLeft);
-        int screenRight = gCamera.worldToScreenX(worldRight);
-        int screenTop = gCamera.worldToScreenY(worldTop);
-        int screenBottom = gCamera.worldToScreenY(worldBottom);
-
-        // 用屏幕左右/上下边界相减，得到最终绘制到屏幕上的 tile 尺寸。
-        int screenTileW = screenRight - screenLeft;
-        int screenTileH = screenBottom - screenTop;
-
-        if (screenTileW < 1)
-        {
-            screenTileW = 1;
-        }
-
-        if (screenTileH < 1)
-        {
-            screenTileH = 1;
-        }
-
-        drawImageTileAlpha(
-            screenLeft,
-            screenTop,
-            screenTileW,
-            screenTileH,
-            tileset,
-            srcX,
-            srcY,
-            sourceTileWidth,
-            sourceTileHeight
-        );
-
-        // tile 绘制边界来自 TileInstance 的中心点、偏移和缩放，可能与 tile 碰撞盒不同。
-        drawRenderBounds(
-            screenLeft,
-            screenTop,
-            screenTileW,
-            screenTileH,
+        return drawSprite(
+            tileSprite,
             RGB(255, 220, 0)
         );
-
     }
 
 
-
-    // 功能：逐个绘制当前地图中的 tile 实例，并根据开关绘制 tile 调试碰撞框。
-    void drawTileMap(TileMap& tileMap)
+    // 功能：逐个绘制当前地图中的 tile 实例，并返回真实绘制成功的 tile sprite 数量。
+    int drawTileMap(TileMap& tileMap)
     {
+        int renderedTileCount = 0;
+
         const vector<TileInstance>& tileInstances = tileMap.getTileInstances();
 
         for (int i = 0; i < (int)tileInstances.size(); i++)
         {
-            drawTileInstance(tileMap, tileInstances[i]);
+            if (drawTileInstance(tileMap, tileInstances[i]))
+            {
+                renderedTileCount++;
+            }
         }
 
         if (showTileCollisionBox)
         {
             tileMap.drawDebugCollisionBoxes();
         }
+
+        return renderedTileCount;
     }
 
-	// 功能：根据实体中心点和 sprite 数据绘制单帧图像。
-	void drawSprite(const sprite& targetSprite, double ownerX, double ownerY)
-	{
-        if(!targetSprite.visible)
+    // 功能：根据 sprite 自身保存的世界绘制数据绘制单帧图像。
+    // 返回 true 表示本次通过数据校验并实际调用了图像绘制逻辑。
+    bool drawSprite(const sprite& targetSprite, COLORREF renderBoundsColor = RGB(0, 220, 255))
+    {
+        if (!targetSprite.visible)
         {
-            return;
-
+            return false;
         }
 
         if (targetSprite.imageSource == NULL)
         {
-            return;
+            return false;
         }
 
-        if(targetSprite.srcW <= 0 || targetSprite.srcH <= 0)
+        if (targetSprite.srcW <= 0 || targetSprite.srcH <= 0)
         {
-            return;
-		}
-		// 计算世界坐标系下的绘制尺寸,绘制位置以实体中心点为基准，并加上 sprite 的偏移
-        // 用源帧尺寸乘 sprite 缩放，得到当前帧在世界坐标里的绘制宽高。
-		double worldDrawW = targetSprite.srcW * targetSprite.scaleX;
-		double worldDrawH = targetSprite.srcH * targetSprite.scaleY;
+            return false;
+        }
 
-        // 用实体中心点加 sprite 偏移，得到 sprite 自己的世界中心点。
-		double spriteCenterX = ownerX + targetSprite.offsetX;
-		double spriteCenterY = ownerY + targetSprite.offsetY;
+        if (targetSprite.worldDrawW <= 0 || targetSprite.worldDrawH <= 0)
+        {
+            return false;
+        }
 
-        // 用 sprite 世界中心点减半宽、加半高，得到世界绘制矩形左上角。
-		double worldDrawLeft = spriteCenterX - worldDrawW / 2.0;
-		double worldDrawTop = spriteCenterY + worldDrawH / 2.0;
+        // 用 sprite 世界中心点和世界绘制尺寸，计算世界绘制矩形。
+        double worldLeft = targetSprite.worldCenterX - targetSprite.worldDrawW / 2.0;
+        double worldRight = targetSprite.worldCenterX + targetSprite.worldDrawW / 2.0;
+        double worldTop = targetSprite.worldCenterY + targetSprite.worldDrawH / 2.0;
+        double worldBottom = targetSprite.worldCenterY - targetSprite.worldDrawH / 2.0;
 
-		//再经历一次世界坐标 -> 屏幕坐标的转换，得到最终的绘制位置
-		int drawX = gCamera.worldToScreenX(worldDrawLeft);
-		int drawY = gCamera.worldToScreenY(worldDrawTop);
-		// 世界尺寸 -> 屏幕尺寸的转换，得到最终的绘制尺寸,这个过程会经历camera的zoom
-		int screenDrawW = gCamera.worldSizeToScreen(worldDrawW);
-		int screenDrawH = gCamera.worldSizeToScreen(worldDrawH);
+        int drawX = gCamera.worldToScreenX(worldLeft);
+        int drawY = gCamera.worldToScreenY(worldTop);
+
+        int drawRight = gCamera.worldToScreenX(worldRight);
+        int drawBottom = gCamera.worldToScreenY(worldBottom);
+
+        int screenDrawW = drawRight - drawX;
+        int screenDrawH = drawBottom - drawY;
+
+        if (screenDrawW < 1)
+        {
+            screenDrawW = 1;
+        }
+
+        if (screenDrawH < 1)
+        {
+            screenDrawH = 1;
+        }
 
         // 根据源图裁剪矩形和屏幕目标矩形完成 Alpha 混合绘制。
         drawImageTileAlpha(
@@ -4613,40 +4932,44 @@ public:
             targetSprite.srcH
         );
 
-
-        // sprite 绘制边界来自 sprite 的源帧尺寸、缩放和偏移，通常不等同于实体碰撞盒。
+        // sprite 绘制边界来自 sprite 自身的世界绘制数据。
         drawRenderBounds(
             drawX,
             drawY,
             screenDrawW,
             screenDrawH,
-            RGB(0, 220, 255)
+            renderBoundsColor
         );
 
+        return true;
     }
 
-	// 功能：绘制实体列表中的所有存活实体，并根据开关绘制实体调试碰撞框。
-	void drawEntities(vector<Entity>& entitys)
-	{
-		for (int i = 0; i < (int)entitys.size(); i++)
-		{
-			if (!entitys[i].getIsAlive())
-			{
-				continue;
-			}
 
-            drawSprite(
-                entitys[i].getSprite(),
-                entitys[i].getX(),
-                entitys[i].getY()
-            );
-			if (showCollisionBox)
-			{
+	// 功能：绘制实体列表中的所有存活实体，并返回真实绘制成功的 entity sprite 数量。
+    int drawEntities(vector<Entity>& entitys)
+    {
+        int renderedEntityCount = 0;
+
+        for (int i = 0; i < (int)entitys.size(); i++)
+        {
+            if (!entitys[i].getIsAlive())
+            {
+                continue;
+            }
+
+            if (drawSprite(entitys[i].getSprite()))
+            {
+                renderedEntityCount++;
+            }
+
+            if (showCollisionBox)
+            {
                 drawEntityCollisionBox(entitys[i]);
-			}
-		}
-	}
+            }
+        }
 
+        return renderedEntityCount;
+    }
     // 功能：绘制一个通用 UIElement 面板。
     void drawUIElementPanel(const UIElement& element)
     {
@@ -4722,11 +5045,19 @@ public:
         outtextxy(x, y, text);
         y += lineH;
 
-        _stprintf_s(text, _T("Entities: %d"), data.renderEntityCount);
+        _stprintf_s(text, _T("Bg Sprites: %d"), data.renderedBackgroundSprites);
         outtextxy(x, y, text);
         y += lineH;
 
-        _stprintf_s(text, _T("Tiles: %d"), data.renderTileCount);
+        _stprintf_s(text, _T("Tile Sprites: %d"), data.renderedTileSprites);
+        outtextxy(x, y, text);
+        y += lineH;
+
+        _stprintf_s(text, _T("Entity Sprites: %d"), data.renderedEntitySprites);
+        outtextxy(x, y, text);
+        y += lineH;
+
+        _stprintf_s(text, _T("Total Sprites: %d"), data.renderedTotalSprites);
         outtextxy(x, y, text);
     }
 
@@ -4785,7 +5116,7 @@ private:
     ResourceManager resources;
 
     TileMap tileMap;
-    IMAGE backgrounds[5];
+    BackgroundManager backgroundManager;
 
     // 当前关卡实体列表。使用 vector 取代固定数组，为后续动态生成和清理实体做准备。
     vector<Entity> entitys;
@@ -4800,6 +5131,8 @@ private:
     int debugEntitySectionIndex;
     int debugRenderSectionIndex;
     int debugCameraSectionIndex;
+
+    RenderFrameStats renderFrameStats;
 
     Renderer renderer;
 
@@ -4843,8 +5176,10 @@ private:
             data.entityScreenY = gCamera.worldToScreenY(target.getY());
         }
 
-        data.renderEntityCount = countRenderableEntities();
-        data.renderTileCount = tileMap.getTileInstanceCount();
+        data.renderedBackgroundSprites = renderFrameStats.backgroundSpriteCount;
+        data.renderedTileSprites = renderFrameStats.tileSpriteCount;
+        data.renderedEntitySprites = renderFrameStats.entitySpriteCount;
+        data.renderedTotalSprites = renderFrameStats.totalSpriteCount;
 
         data.cameraCenterX = gCamera.centerX;
         data.cameraCenterY = gCamera.centerY;
@@ -4856,25 +5191,6 @@ private:
         data.viewTop = gCamera.getViewTop();
 
         return data;
-    }
-
-    // 功能：统计当前场景中存活且可参与绘制的实体数量。
-    // 当前第一版只按 isAlive 统计，后续可进一步过滤 sprite visible / 视口裁切结果。
-    int countRenderableEntities()
-    {
-        int count = 0;
-
-        for (int i = 0; i < (int)entitys.size(); i++)
-        {
-            if (!entitys[i].getIsAlive())
-            {
-                continue;
-            }
-
-            count++;
-        }
-
-        return count;
     }
 
     // 以下历史状态缓存必须与 entitys.size() 同步，用于判断状态变化和重叠事件首次触发。
@@ -4961,8 +5277,8 @@ public:
             gCamera.followInstant(entitys[0].getX(), entitys[0].getY(), worldWidth, worldHeight);
         }
 
-        parallaxCameraX = gCamera.centerX;
-        parallaxOriginX = gCamera.centerX;
+        parallaxCameraX = getParallaxCameraCenterX();
+        parallaxOriginX = parallaxCameraX;
     }
 
 
@@ -5004,6 +5320,9 @@ public:
         updateCamera(input);
         updateParallaxCamera();
 
+        double parallaxOffsetX = parallaxCameraX - parallaxOriginX;
+        backgroundManager.updateRuntimeTransforms(parallaxOffsetX);
+
         updateDebugStates();
 
         updateOverlapEvents();
@@ -5013,11 +5332,16 @@ public:
 	// 功能：委托 Renderer 绘制当前关卡画面。
     void draw()
     {
-        double parallaxOffsetX = parallaxCameraX - parallaxOriginX;
+        renderFrameStats.backgroundSpriteCount =
+            renderer.drawBackground(backgroundManager);
 
-        renderer.drawBackground(backgrounds, 5, parallaxOffsetX, gCamera.zoom);
-        renderer.drawTileMap(tileMap);
-        renderer.drawEntities(entitys);
+        renderFrameStats.tileSpriteCount =
+            renderer.drawTileMap(tileMap);
+
+        renderFrameStats.entitySpriteCount =
+            renderer.drawEntities(entitys);
+
+        renderFrameStats.refreshTotal();
 
         // Debug 面板父级负责整体背景；子 section 的最终可见性由 UIManager 按父级链路判断。
         if (uiManager.isElementEffectivelyVisible(debugPanelIndex))
@@ -5087,11 +5411,69 @@ private:
     // 功能：加载关卡背景图片。
     void initBackground()
     {
-        loadimage(&backgrounds[0], _T("assets\\tex\\maps\\Clouds 5\\1.png"), WINDOW_WIDTH, WINDOW_HEIGHT, true);
-        loadimage(&backgrounds[1], _T("assets\\tex\\maps\\Clouds 5\\2.png"), WINDOW_WIDTH, WINDOW_HEIGHT, true);
-        loadimage(&backgrounds[2], _T("assets\\tex\\maps\\Clouds 5\\3.png"), WINDOW_WIDTH, WINDOW_HEIGHT, true);
-        loadimage(&backgrounds[3], _T("assets\\tex\\maps\\Clouds 5\\4.png"), WINDOW_WIDTH, WINDOW_HEIGHT, true);
-        loadimage(&backgrounds[4], _T("assets\\tex\\maps\\Clouds 5\\5.png"), WINDOW_WIDTH, WINDOW_HEIGHT, true);
+        backgroundManager.clear();
+
+        BackgroundLayer layer0;
+        layer0.load(
+            _T("assets\\tex\\maps\\Clouds 5\\1.png"),
+            0,
+            0.0,
+            0.0,
+            false,
+            BACKGROUND_REPEAT_X
+        );
+        layer0.setDrawData(800, 450, WINDOW_WIDTH, WINDOW_HEIGHT);
+        backgroundManager.addLayer(layer0);
+
+        BackgroundLayer layer1;
+        layer1.load(
+            _T("assets\\tex\\maps\\Clouds 5\\2.png"),
+            1,
+            0.04,
+            0.25,
+            true,
+            BACKGROUND_REPEAT_X
+        );
+        layer1.setDrawData(800, 450, WINDOW_WIDTH, WINDOW_HEIGHT);
+        backgroundManager.addLayer(layer1);
+
+        BackgroundLayer layer2;
+        layer2.load(
+            _T("assets\\tex\\maps\\Clouds 5\\3.png"),
+            2,
+            0.12,
+            0.55,
+            true,
+            BACKGROUND_REPEAT_X
+        );
+        layer2.setDrawData(800, 450, WINDOW_WIDTH, WINDOW_HEIGHT);
+        backgroundManager.addLayer(layer2);
+
+        BackgroundLayer layer3;
+        layer3.load(
+            _T("assets\\tex\\maps\\Clouds 5\\4.png"),
+            3,
+            0.25,
+            0.85,
+            true,
+            BACKGROUND_REPEAT_X
+        );
+        layer3.setDrawData(800, 450, WINDOW_WIDTH, WINDOW_HEIGHT);
+        backgroundManager.addLayer(layer3);
+
+        BackgroundLayer layer4;
+        layer4.load(
+            _T("assets\\tex\\maps\\Clouds 5\\5.png"),
+            4,
+            0.4,
+            1.0,
+            true,
+            BACKGROUND_REPEAT_X
+        );
+        layer4.setDrawData(800, 450, WINDOW_WIDTH, WINDOW_HEIGHT);
+
+        backgroundManager.addLayer(layer4);
+
     }
     // 功能：初始化当前关卡使用的 Debug UI 面板。
     void initUI()
@@ -5112,7 +5494,7 @@ private:
 
         // Debug Render 区域：显示当前渲染相关数据。
         UIElement debugRenderSection;
-        debugRenderSection.init(388, 90, UI_TOP_LEFT, 16, 140);
+        debugRenderSection.init(388, 130, UI_TOP_LEFT, 16, 140);
         debugRenderSection.setParentIndex(debugPanelIndex);
         debugRenderSection.refreshTargetByParentBox(uiManager.getElement(debugPanelIndex).getBox());
         debugRenderSection.snapToTarget();
@@ -5120,7 +5502,7 @@ private:
 
         // Debug Camera 区域：显示当前相机和视口数据。
         UIElement debugCameraSection;
-        debugCameraSection.init(388, 180, UI_TOP_LEFT, 16, 250);
+        debugCameraSection.init(388, 180, UI_TOP_LEFT, 16, 300);
         debugCameraSection.setParentIndex(debugPanelIndex);
         debugCameraSection.refreshTargetByParentBox(uiManager.getElement(debugPanelIndex).getBox());
         debugCameraSection.snapToTarget();
@@ -5446,13 +5828,48 @@ private:
         );
     }
 
+    // 功能：按固定参考视口宽度计算背景视差使用的横向相机中心。
+    // 这个值不使用当前 gCamera.zoom，因此不会因为缩放改变可见宽度而产生额外视差位移。
+    double getParallaxCameraCenterX()
+    {
+        if (
+            gCameraFollowTargetIndex < 0 ||
+            gCameraFollowTargetIndex >= (int)entitys.size()
+            )
+        {
+            return parallaxCameraX;
+        }
+
+        double targetX = entitys[gCameraFollowTargetIndex].getX();
+
+        // 视差背景的横向锚点使用 zoom = 1 时的窗口宽度作为参考视口。
+        double referenceVisibleW = WINDOW_WIDTH;
+        double referenceHalfW = referenceVisibleW / 2.0;
+
+        if (worldWidth <= referenceVisibleW)
+        {
+            return worldWidth / 2.0;
+        }
+
+        if (targetX < referenceHalfW)
+        {
+            return referenceHalfW;
+        }
+
+        if (targetX > worldWidth - referenceHalfW)
+        {
+            return worldWidth - referenceHalfW;
+        }
+
+        return targetX;
+    }
+
 
     // 功能：更新背景视差专用相机位置。
-    // 注意：这里记录的是摄像机最终中心位置，而不是角色位置。
-    // 因此当摄像机被世界边界限制住时，背景也会停止滚动。
+    // 它使用固定参考视口计算横向锚点，避免真实 Camera 贴边缩放时污染背景视差。
     void updateParallaxCamera()
     {
-        parallaxCameraX = gCamera.centerX;
+        parallaxCameraX = getParallaxCameraCenterX();
     }
 
     // 功能：检测实体状态变化并输出调试信息。
