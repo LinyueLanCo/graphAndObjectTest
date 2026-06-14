@@ -1490,7 +1490,70 @@ public:
     {
         return drawTileHeight;
     }
+	//功能： 把一个tileinstance转换为通用的sprite数据，供Renderer绘制使用。
+    sprite buildSpriteFromTileInstance(const TileInstance& tile)
+    {
+		sprite tileSprite;
 
+		tileSprite.visible = tile.visible;
+
+        if(!tile.visible)
+        {
+            return tileSprite;
+        }
+
+        if(tile.tileId==TILE_EMPTY)
+        {
+			tileSprite.visible = false;
+            return tileSprite;
+        }
+
+        if (sourceTileWidth <= 0 || sourceTileHeight <= 0)
+        {
+            tileSprite.visible = false;
+            return tileSprite;
+        }
+
+		int tilesetCols = tileset.getwidth() / sourceTileWidth;
+
+        if(tilesetCols <= 0)
+        {
+            tileSprite.visible = false;
+            return tileSprite;
+        }
+
+		int realTileIndex = tile.tileId - 1;
+
+        //用tileId在tileset中的线性序号换算出原图的裁剪坐标
+
+        int srcX = (realTileIndex % tilesetCols) * sourceTileWidth;
+        int srcY = (realTileIndex / tilesetCols) * sourceTileHeight;
+
+        // 设置 sprite 的纹理坐标等信息
+		tileSprite.setSource(
+			&tileset,
+			srcX,
+			srcY,
+			sourceTileWidth,
+			sourceTileHeight
+		);
+
+		//用默认tile世界尺寸乘以实例缩放，得到本帧最终绘制尺寸
+		double worldDrawW = drawTileWidth * tile.scaleX;
+		double worldDrawH = drawTileHeight * tile.scaleY;
+
+		double worldCenterX = tile.centerX + offsetX;
+		double worldCenterY = tile.centerY + offsetY;
+
+
+		tileSprite.setWorldDrawData(
+			worldCenterX,
+			worldCenterY,
+			worldDrawW,
+			worldDrawH
+		);
+        return tileSprite;
+    }
 
     // 功能：释放并清空当前地图碰撞层二维数组。
     void releaseCollisionTiles()
