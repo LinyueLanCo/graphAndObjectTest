@@ -519,6 +519,17 @@ enum facingDirection
 };
 
 
+// 功能：注册项目内置字体，供 EasyX 文本绘制使用。
+void loadUIFont()
+{
+    AddFontResourceEx(
+        _T("Mojangles.ttf"),
+        FR_PRIVATE,
+        NULL
+    );
+}
+
+
 // putimage_alpha：
  // 使用 AlphaBlend 绘制带透明通道的 IMAGE，解决普通 putimage 透明通道不正确的问题。
 // 功能：按原图尺寸绘制带 Alpha 通道的图片。
@@ -573,38 +584,6 @@ inline void putimage_alpha(int x, int y, int drawW, int drawH, IMAGE* img)
         blend
     );
 }
-// putimage_alpha_tile：
- // 从 tileset 或 sprite sheet 中截取一块源矩形，并绘制到目标屏幕矩形。
- // TileMap 和 animatedSprite 都依赖这个函数完成局部贴图绘制。
-// 功能：从图集中裁剪指定区域并以 Alpha 混合绘制到屏幕。
-inline void putimage_alpha_tile(
-    int x,
-    int y,
-    int drawW,
-    int drawH,
-    IMAGE* img,
-    int srcX,
-    int srcY,
-    int srcW,
-    int srcH
-)
-{
-    BLENDFUNCTION blend;
-    blend.BlendOp = AC_SRC_OVER;
-    blend.BlendFlags = 0;
-    blend.SourceConstantAlpha = 255;
-    blend.AlphaFormat = AC_SRC_ALPHA;
-
-    AlphaBlend
-    (
-        GetImageHDC(NULL),
-        x, y, drawW, drawH,
-        GetImageHDC(img),
-        srcX, srcY, srcW, srcH,
-        blend
-	);
-}
-
 // 功能：把动画表现状态转换为玩家动画资源 ID。
 AnimationId getPlayerAnimationId(AnimationState state)
 {
@@ -1234,10 +1213,59 @@ enum TileCollisionType
 };
 
 
+// TileInstance：
+// 地图中一个实际摆放出来的 tile 实例。
+// tileId 表示它引用 tileset 中哪个图块；row/col 和 world 坐标表示它被摆在哪里。
+struct TileInstance
+{
+    int tileId;
+
+    int row;
+    int col;
+
+    // tile 实例的世界中心点。row/col 只负责生成默认位置，真正绘制以中心点为锚点。
+    double centerX;
+    double centerY;
+
+    // tile 实例的绘制偏移，单位是世界坐标。
+    double offsetX;
+    double offsetY;
+
+    // tile 实例的绘制缩放，默认 1 表示使用 TileMap 的默认绘制大小。
+    double scaleX;
+    double scaleY;
+
+    int layer;
+
+    bool visible;
+
+    TileInstance()
+    {
+        tileId = TILE_EMPTY;
+
+        row = 0;
+        col = 0;
+
+        centerX = 0;
+        centerY = 0;
+
+        offsetX = 0;
+        offsetY = 0;
+
+        scaleX = 1.0;
+        scaleY = 1.0;
+
+        layer = 0;
+
+        visible = true;
+    }
+};
+
+
 // TileMap：
- // 负责加载 tileset 和地图文本数据，并把 tile 绘制到世界坐标中。
- // 当前地图只负责显示，实体阻挡暂时主要来自 Entity 的 blocking 碰撞盒。
- // 后续可以扩展为：tile 碰撞、地图触发器、地图层级、视口剔除等。
+ // 负责加载 tileset 和地图文本数据，并维护地图中的 tile 实例与碰撞层数据。
+ // 实际绘制由 Renderer 读取 TileInstance 后统一完成，TileMap 不再直接调用 EasyX 绘图函数。
+ // 后续可以扩展为：地图触发器、地图层级、视口剔除、编辑器放置数据等。
 class TileMap
 {
 private:
@@ -1259,6 +1287,10 @@ private:
 
     // 碰撞 tile 二维数组，存放 TileCollisionType 对应的编号。
     int** collisionTiles;
+
+    // 地图上所有非空 tile 的实例列表。
+    // 当前仍由二维数组生成，后续可以扩展为编辑器直接维护的场景元素列表。
+    vector<TileInstance> tileInstances;
 
     // 整张地图在世界坐标里的偏移
     double offsetX;
@@ -1300,6 +1332,145 @@ public:
 	{
 		return cols;
 	}
+
+
+    // 功能：获取当前地图中的 tile 实例数量。
+    int getTileInstanceCount() const
+    {
+        return (int)tileInstances.size();
+    }
+
+    // 功能：获取指定下标的 tile 实例。
+    const TileInstance& getTileInstance(int index) const
+    {
+        return tileInstances[index];
+    }
+
+    // 功能：获取当前地图的 tile 实例列表。
+    const vector<TileInstance>& getTileInstances() const
+    {
+        return tileInstances;
+    }
+
+
+    // 功能：设置指定 tile 实例的绘制偏移。
+    void setTileInstanceOffset(int index, double newOffsetX, double newOffsetY)
+    {
+        if (index < 0 || index >= (int)tileInstances.size())
+        {
+            return;
+        }
+
+        tileInstances[index].offsetX = newOffsetX;
+        tileInstances[index].offsetY = newOffsetY;
+    }
+
+    // 功能：设置指定 tile 实例的绘制缩放。
+    void setTileInstanceScale(int index, double newScaleX, double newScaleY)
+    {
+        if (index < 0 || index >= (int)tileInstances.size())
+        {
+            return;
+        }
+
+        if (newScaleX <= 0 || newScaleY <= 0)
+        {
+            return;
+        }
+
+        tileInstances[index].scaleX = newScaleX;
+        tileInstances[index].scaleY = newScaleY;
+    }
+
+    // 功能：同时设置指定 tile 实例的绘制偏移和缩放。
+    void setTileInstanceTransform(
+        int index,
+        double newOffsetX,
+        double newOffsetY,
+        double newScaleX,
+        double newScaleY
+    )
+    {
+        setTileInstanceOffset(index, newOffsetX, newOffsetY);
+        setTileInstanceScale(index, newScaleX, newScaleY);
+    }
+
+
+    // 功能：根据地图行列号查找对应的 tile 实例下标。
+    int findTileInstanceIndexByGrid(int targetRow, int targetCol) const
+    {
+        for (int i = 0; i < (int)tileInstances.size(); i++)
+        {
+            if (
+                tileInstances[i].row == targetRow &&
+                tileInstances[i].col == targetCol
+                )
+            {
+                return i;
+            }
+        }
+
+        return -1;
+    }
+
+
+    // 功能：根据地图行列号设置 tile 实例的绘制偏移和缩放。
+    // 如果目标格子是空 tile，则不会存在对应实例，函数会直接跳过。
+    void setTileInstanceTransformByGrid(
+        int targetRow,
+        int targetCol,
+        double newOffsetX,
+        double newOffsetY,
+        double newScaleX,
+        double newScaleY
+    )
+    {
+        int index = findTileInstanceIndexByGrid(targetRow, targetCol);
+
+        if (index < 0)
+        {
+            return;
+        }
+
+        setTileInstanceTransform(
+            index,
+            newOffsetX,
+            newOffsetY,
+            newScaleX,
+            newScaleY
+        );
+    }
+
+
+    // 功能：获取当前地图使用的 tileset 图片。
+    IMAGE* getTilesetImage()
+    {
+        return &tileset;
+    }
+
+    // 功能：获取 tileset 中单个 tile 的原始宽度。
+    int getSourceTileWidth() const
+    {
+        return sourceTileWidth;
+    }
+
+    // 功能：获取 tileset 中单个 tile 的原始高度。
+    int getSourceTileHeight() const
+    {
+        return sourceTileHeight;
+    }
+
+    // 功能：获取 tile 绘制到世界坐标后的宽度。
+    int getDrawTileWidth() const
+    {
+        return drawTileWidth;
+    }
+
+    // 功能：获取 tile 绘制到世界坐标后的高度。
+    int getDrawTileHeight() const
+    {
+        return drawTileHeight;
+    }
 
 
     // 功能：释放并清空当前地图碰撞层二维数组。
@@ -1497,6 +1668,56 @@ public:
     }
 
 
+    // 功能：根据当前 tiles 二维数组重建 tile 实例列表。
+    void rebuildTileInstances()
+    {
+        tileInstances.clear();
+
+        if (tiles == NULL)
+        {
+            return;
+        }
+
+        for (int row = 0; row < rows; row++)
+        {
+            for (int col = 0; col < cols; col++)
+            {
+                int tileId = tiles[row][col];
+
+                if (tileId == TILE_EMPTY)
+                {
+                    continue;
+                }
+
+                TileInstance instance;
+
+                instance.tileId = tileId;
+                instance.row = row;
+                instance.col = col;
+
+                // 先用地图偏移、列号和反向行号，计算这个 tile 默认所在网格的世界左下角。
+                // 当前 drawTileWidth / drawTileHeight 暂时同时承担“网格单元大小”和“默认绘制大小”。
+                double gridWorldLeft = offsetX + col * drawTileWidth;
+                double gridWorldBottom = offsetY + (rows - 1 - row) * drawTileHeight;
+
+                // 用网格左下角加半个单元格，得到 tile 实例的默认世界中心点。
+                // 后续 Renderer 会以 centerX / centerY 为锚点计算最终绘制矩形。
+                instance.centerX = gridWorldLeft + drawTileWidth / 2.0;
+                instance.centerY = gridWorldBottom + drawTileHeight / 2.0;
+
+                instance.offsetX = 0;
+                instance.offsetY = 0;
+
+                instance.scaleX = 1.0;
+                instance.scaleY = 1.0;
+
+                instance.layer = 0;
+                instance.visible = true;
+                tileInstances.push_back(instance);
+            }
+        }
+    }
+
 
     // 功能：从文本文件读取地图行列数和 tile id 数据。
     bool loadFromFile(const char* mapPath)
@@ -1535,77 +1756,11 @@ public:
 
         generateDefaultCollisionFromTiles();
 
+		rebuildTileInstances();
+
+
         return true;
     }
-
-    // 功能：遍历并绘制整张 tile map。
-    void draw()
-    {
-        for (int row = 0; row < rows; row++)
-        {
-            for (int col = 0; col < cols; col++)
-            {
-                drawTile(row, col);
-            }
-        }
-    }
-
-    // 功能：绘制指定行列的单个 tile。
-    void drawTile(int row, int col)
-    {
-        int tileId = tiles[row][col];
-
-        if (tileId == TILE_EMPTY)
-        {
-            return;
-        }
-
-        int realTileIndex = tileId - 1;
-
-        int tilesetCols = tileset.getwidth() / sourceTileWidth;
-
-        // 用 tile id 在 tileset 中的序号换算列和行，得到源图裁剪坐标。
-        int srcX = (realTileIndex % tilesetCols) * sourceTileWidth;
-        int srcY = (realTileIndex / tilesetCols) * sourceTileHeight;
-
-        // 用地图偏移、列号和行号计算 tile 在世界坐标中的矩形位置。
-        double worldLeft = offsetX + col * drawTileWidth;
-        double worldBottom = offsetY + (rows - 1 - row) * drawTileHeight;
-        double worldRight = worldLeft + drawTileWidth;
-        double worldTop = worldBottom + drawTileHeight;
-
-        int screenLeft = worldToScreenX(worldLeft);
-        int screenRight = worldToScreenX(worldRight);
-        int screenTop = worldToScreenY(worldTop);
-        int screenBottom = worldToScreenY(worldBottom);
-
-        // 用屏幕左右/上下边界相减，得到最终绘制到屏幕上的 tile 尺寸。
-        int screenTileW = screenRight - screenLeft;
-        int screenTileH = screenBottom - screenTop;
-
-        if (screenTileW < 1)
-        {
-            screenTileW = 1;
-        }
-
-        if (screenTileH < 1)
-        {
-            screenTileH = 1;
-        }
-
-        putimage_alpha_tile(
-            screenLeft,
-            screenTop,
-            screenTileW,
-            screenTileH,
-            &tileset,
-            srcX,
-            srcY,
-            sourceTileWidth,
-            sourceTileHeight
-        );
-    }
-
 
     // 功能：获取指定行列的 tile 碰撞类型。
     TileCollisionType getTileCollisionType(int row, int col)
@@ -1752,13 +1907,28 @@ struct UIBox
     int w;
     int h;
 };
-//基于锚点的放置ui盒子，锚点为视口的边
-// 功能：根据锚点和边距计算 UI 矩形在屏幕上的位置。
-UIBox makeUIBoxByAnchor(
+
+// 功能：获取当前窗口对应的顶层 UI 区域。
+UIBox makeViewportUIBox()
+{
+    UIBox box;
+
+    box.x = 0;
+    box.y = 0;
+    box.w = WINDOW_WIDTH;
+    box.h = WINDOW_HEIGHT;
+
+    return box;
+}
+
+
+// 功能：根据父级 UIBox、锚点和 margin 计算子 UI 的屏幕位置。
+UIBox makeUIBoxByParentAnchor(
+    UIBox parent,
     int w,
     int h,
     UIAnchor anchor,
-    int marginX,//定义marginX和marginY变量以控制与左上角边框的间距
+    int marginX,
     int marginY
 )
 {
@@ -1766,48 +1936,73 @@ UIBox makeUIBoxByAnchor(
 
     box.w = w;
     box.h = h;
-    //定义锚点：
-    //左上
+
     if (anchor == UI_TOP_LEFT)
     {
-        box.x = marginX;
-        box.y = marginY;
+        box.x = parent.x + marginX;
+        box.y = parent.y + marginY;
     }
-    //右上
     else if (anchor == UI_TOP_RIGHT)
     {
-        box.x = WINDOW_WIDTH - w - marginX;
-        box.y = marginY;
+        box.x = parent.x + parent.w - w - marginX;
+        box.y = parent.y + marginY;
     }
-    //左下
     else if (anchor == UI_BOTTOM_LEFT)
     {
-        box.x = marginX;
-        box.y = WINDOW_HEIGHT - h - marginY;
+        box.x = parent.x + marginX;
+        box.y = parent.y + parent.h - h - marginY;
     }
-    //右下
     else if (anchor == UI_BOTTOM_RIGHT)
     {
-        box.x = WINDOW_WIDTH - w - marginX;
-        box.y = WINDOW_HEIGHT - h - marginY;
+        box.x = parent.x + parent.w - w - marginX;
+        box.y = parent.y + parent.h - h - marginY;
     }
-    //居中
     else
     {
-        box.x = WINDOW_WIDTH / 2 - w / 2;
-        box.y = WINDOW_HEIGHT / 2 - h / 2;
+        box.x = parent.x + parent.w / 2 - w / 2 + marginX;
+        box.y = parent.y + parent.h / 2 - h / 2 + marginY;
     }
 
     return box;
 }
-// SmoothUIPanel：
- // 一个临时 UI 面板结构，支持锚点切换和平滑移动。
- // 平滑移动公式：
- //   x += (targetX - x) * moveSpeed
- //   y += (targetY - y) * moveSpeed
- // 这和 Camera 的平滑跟随是同类 lerp 思想。
-struct SmoothUIPanel
+
+
+
+// 功能：根据窗口锚点和 margin 计算顶层 UI 的屏幕位置。
+UIBox makeUIBoxByAnchor(
+    int w,
+    int h,
+    UIAnchor anchor,
+    int marginX,
+    int marginY
+)
 {
+    return makeUIBoxByParentAnchor(
+        makeViewportUIBox(),
+        w,
+        h,
+        anchor,
+        marginX,
+        marginY
+    );
+}
+
+// UIElementState：
+// UI 元素生命周期状态。用于区分隐藏、进入、显示和退出。
+enum UIElementState
+{
+    UI_HIDDEN,
+    UI_SHOWING,
+    UI_VISIBLE,
+    UI_HIDING
+};
+
+// UIElement：
+// 通用 UI 元素基础类。
+// 它只使用屏幕坐标 / 父级 UI 坐标，不依赖世界坐标和 Camera。
+class UIElement
+{
+private:
     double x;
     double y;
 
@@ -1817,15 +2012,23 @@ struct SmoothUIPanel
     int w;
     int h;
 
+    UIAnchor anchor;
     int marginX;
     int marginY;
 
-    UIAnchor targetAnchor;
+    int parentIndex;
+
+    bool active;
+    bool visible;
+    bool interactable;
 
     double moveSpeed;
 
-    // 功能：初始化平滑 UI 面板的默认状态。
-    SmoothUIPanel()
+    UIElementState state;
+
+public:
+    // 功能：初始化一个默认隐藏的 UI 元素。
+    UIElement()
     {
         x = 0;
         y = 0;
@@ -1836,53 +2039,176 @@ struct SmoothUIPanel
         w = 0;
         h = 0;
 
+        anchor = UI_TOP_LEFT;
         marginX = 0;
         marginY = 0;
 
-        targetAnchor = UI_TOP_LEFT;
+        parentIndex = -1;
+
+        active = false;
+        visible = false;
+        interactable = false;
 
         moveSpeed = 0.2;
+
+        state = UI_HIDDEN;
     }
 
-    // 功能：设置 UI 面板尺寸、锚点和初始位置。
-    void init(int newW, int newH, UIAnchor startAnchor, int newMarginX, int newMarginY)
+    // 功能：立即把当前位置同步到目标位置。
+    void snapToTarget()
+    {
+        x = targetX;
+        y = targetY;
+    }
+
+    // 功能：设置当前 UI 元素的父级元素下标，-1 表示父级为窗口。
+    void setParentIndex(int newParentIndex)
+    {
+        parentIndex = newParentIndex;
+    }
+
+    // 功能：获取当前 UI 元素的父级元素下标。
+    int getParentIndex() const
+    {
+        return parentIndex;
+    }
+
+
+    // 功能：直接设置 UI 元素当前位置。
+    void setPosition(double newX, double newY)
+    {
+        x = newX;
+        y = newY;
+    }
+
+    // 功能：直接设置 UI 元素目标位置。
+    void setTargetPosition(double newTargetX, double newTargetY)
+    {
+        targetX = newTargetX;
+        targetY = newTargetY;
+    }
+
+    // 功能：获取 UI 元素当前目标 X。
+    double getTargetX() const
+    {
+        return targetX;
+    }
+
+    // 功能：获取 UI 元素当前目标 Y。
+    double getTargetY() const
+    {
+        return targetY;
+    }
+
+    // 功能：按窗口锚点初始化 UI 元素，并默认显示在目标位置。
+    void init(int newW, int newH, UIAnchor newAnchor, int newMarginX, int newMarginY)
     {
         w = newW;
         h = newH;
 
+        anchor = newAnchor;
         marginX = newMarginX;
         marginY = newMarginY;
 
-        targetAnchor = startAnchor;
+        parentIndex = -1;
 
-        UIBox startBox = makeUIBoxByAnchor(w, h, startAnchor, marginX, marginY);
+        refreshTarget();
 
-        x = startBox.x;
-        y = startBox.y;
+        x = targetX;
+        y = targetY;
 
-        targetX = startBox.x;
-        targetY = startBox.y;
+        active = true;
+        visible = true;
+        interactable = true;
+
+        state = UI_VISIBLE;
     }
-
-    // 功能：切换 UI 面板目标锚点。
+    // 功能：按窗口作为父级重新计算目标位置。
+    void refreshTarget()
+    {
+        refreshTargetByParentBox(makeViewportUIBox());
+    }
+    // 功能：切换 UI 锚点，并把新锚点位置作为移动目标。
     void setAnchor(UIAnchor newAnchor)
     {
-        targetAnchor = newAnchor;
-
-        UIBox targetBox = makeUIBoxByAnchor(w, h, targetAnchor, marginX, marginY);
-
-        targetX = targetBox.x;
-        targetY = targetBox.y;
+        anchor = newAnchor;
+        refreshTarget();
     }
 
-    // 功能：平滑推进 UI 面板当前位置，使其靠近目标位置。
+    // 功能：根据指定父级 UIBox 重新计算目标位置。
+    void refreshTargetByParentBox(UIBox parentBox)
+    {
+        UIBox box = makeUIBoxByParentAnchor(
+            parentBox,
+            w,
+            h,
+            anchor,
+            marginX,
+            marginY
+        );
+
+        targetX = box.x;
+        targetY = box.y;
+    }
+
+
+    // 功能：立即显示 UI 元素，不播放进入动画。
+    void showInstant()
+    {
+        active = true;
+        visible = true;
+        interactable = true;
+
+        state = UI_VISIBLE;
+    }
+
+    // 功能：显示 UI 元素，并进入过渡动画状态。
+    void showAnimated()
+    {
+        active = true;
+        visible = true;
+        interactable = false;
+
+        state = UI_SHOWING;
+    }
+
+    // 功能：兼容旧调用，默认使用动画显示；目标位置由 UIManager 按父级关系刷新。
+    void show()
+    {
+        showAnimated();
+    }
+
+    // 功能：立即隐藏 UI 元素，不播放退出动画。
+    void hide()
+    {
+        active = false;
+        visible = false;
+        interactable = false;
+
+        state = UI_HIDDEN;
+    }
+
+    // 功能：进入隐藏动画状态，动画结束后才真正隐藏。
+    void hideAnimated()
+    {
+        active = true;
+        visible = true;
+        interactable = false;
+
+        state = UI_HIDING;
+    }
+
+    // 功能：平滑推进 UI 元素当前位置，使其靠近目标位置。
     void update()
     {
-        // 用当前位置和目标位置的差值乘移动系数，得到本帧 UI 面板平滑位移。
+        if (!active)
+        {
+            return;
+        }
+
         x += (targetX - x) * moveSpeed;
         y += (targetY - y) * moveSpeed;
 
-        // 防止最后因为小数无限接近但不到达
         if (fabs(targetX - x) < 0.1)
         {
             x = targetX;
@@ -1892,10 +2218,24 @@ struct SmoothUIPanel
         {
             y = targetY;
         }
+
+        if (state == UI_SHOWING && x == targetX && y == targetY)
+        {
+            interactable = true;
+            state = UI_VISIBLE;
+        }
+
+        if (state == UI_HIDING && x == targetX && y == targetY)
+        {
+            active = false;
+            visible = false;
+            interactable = false;
+            state = UI_HIDDEN;
+        }
     }
 
-    // 功能：获取当前 UI 面板的屏幕矩形。
-    UIBox getBox()
+    // 功能：获取 UI 元素当前屏幕矩形。
+    UIBox getBox() const
     {
         UIBox box;
 
@@ -1906,7 +2246,228 @@ struct SmoothUIPanel
 
         return box;
     }
+
+    // 功能：判断 UI 元素是否参与 update。
+    bool isActive() const
+    {
+        return active;
+    }
+
+    // 功能：判断 UI 元素是否参与 render。
+    bool isVisible() const
+    {
+        return visible;
+    }
+
+    // 功能：判断 UI 元素是否允许交互。
+    bool isInteractable() const
+    {
+        return interactable;
+    }
+
+    // 功能：获取 UI 元素当前生命周期状态。
+    UIElementState getState() const
+    {
+        return state;
+    }
 };
+
+
+// UIManager：
+// 管理当前界面中的 UIElement。
+// 第一版只负责保存元素、根据父级关系刷新位置、统一 update，不处理自动布局。
+class UIManager
+{
+private:
+    vector<UIElement> elements;
+
+public:
+    // 功能：添加一个 UI 元素，返回它在 UIManager 中的下标。
+    int addElement(UIElement element)
+    {
+        elements.push_back(element);
+        return (int)elements.size() - 1;
+    }
+
+    // 功能：判断 UI 元素下标是否有效。
+    bool isValidIndex(int index) const
+    {
+        return index >= 0 && index < (int)elements.size();
+    }
+
+    // 功能：判断 UI 元素在父级链路影响下最终是否可见。
+    bool isElementEffectivelyVisible(int index) const
+    {
+        if (!isValidIndex(index))
+        {
+            return false;
+        }
+
+        const UIElement& element = elements[index];
+
+        if (!element.isVisible())
+        {
+            return false;
+        }
+
+        int parentIndex = element.getParentIndex();
+
+        if (parentIndex < 0)
+        {
+            return true;
+        }
+
+        return isElementEffectivelyVisible(parentIndex);
+    }
+
+    // 功能：获取指定 UI 元素的可写引用。
+    UIElement& getElement(int index)
+    {
+        return elements[index];
+    }
+
+    // 功能：获取指定 UI 元素的只读引用。
+    const UIElement& getElement(int index) const
+    {
+        return elements[index];
+    }
+
+    // 功能：获取指定 UI 元素当前屏幕矩形。
+    UIBox getElementBox(int index) const
+    {
+        if (!isValidIndex(index))
+        {
+            return makeViewportUIBox();
+        }
+
+        return elements[index].getBox();
+    }
+
+    // 功能：根据父级关系刷新指定 UI 元素的目标位置。
+    void refreshElementTarget(int index)
+    {
+        if (!isValidIndex(index))
+        {
+            return;
+        }
+
+        int parentIndex = elements[index].getParentIndex();
+
+        UIBox parentBox;
+
+        if (isValidIndex(parentIndex))
+        {
+            parentBox = elements[parentIndex].getBox();
+        }
+        else
+        {
+            parentBox = makeViewportUIBox();
+        }
+
+        elements[index].refreshTargetByParentBox(parentBox);
+    }
+
+    // 功能：按父级关系刷新位置后立即显示指定 UI 元素。
+    void showElementInstant(int index)
+    {
+        if (!isValidIndex(index))
+        {
+            return;
+        }
+
+        refreshElementTarget(index);
+        elements[index].showInstant();
+        elements[index].snapToTarget();
+    }
+
+    // 功能：按父级关系刷新位置后以动画方式显示指定 UI 元素。
+    void showElementAnimated(int index)
+    {
+        if (!isValidIndex(index))
+        {
+            return;
+        }
+
+        refreshElementTarget(index);
+        elements[index].showAnimated();
+    }
+
+    // 功能：按父级关系刷新目标位置后，从指定偏移位置滑入。
+    void showElementAnimatedFromOffset(int index, double offsetX, double offsetY)
+    {
+        if (!isValidIndex(index))
+        {
+            return;
+        }
+
+        refreshElementTarget(index);
+
+        double targetX = elements[index].getTargetX();
+        double targetY = elements[index].getTargetY();
+
+        elements[index].setPosition(targetX + offsetX, targetY + offsetY);
+        elements[index].showAnimated();
+    }
+
+    // 功能：按父级关系取得正常目标位置，再把目标改为偏移位置并播放隐藏动画。
+    void hideElementAnimatedToOffset(int index, double offsetX, double offsetY)
+    {
+        if (!isValidIndex(index))
+        {
+            return;
+        }
+
+        refreshElementTarget(index);
+
+        double targetX = elements[index].getTargetX();
+        double targetY = elements[index].getTargetY();
+
+        elements[index].setTargetPosition(targetX + offsetX, targetY + offsetY);
+        elements[index].hideAnimated();
+    }
+
+    // 功能：立即隐藏指定 UI 元素。
+    void hideElementInstant(int index)
+    {
+        if (!isValidIndex(index))
+        {
+            return;
+        }
+
+        elements[index].hide();
+    }
+
+    // 功能：统一更新所有 UI 元素的位置和状态。
+    void update()
+    {
+        for (int i = 0; i < (int)elements.size(); i++)
+        {
+            int parentIndex = elements[i].getParentIndex();
+
+            UIBox parentBox;
+
+            if (isValidIndex(parentIndex))
+            {
+                parentBox = elements[parentIndex].getBox();
+            }
+            else
+            {
+                parentBox = makeViewportUIBox();
+            }
+
+            // UI_HIDING 使用 hideElementAnimatedToOffset() 指定的离场目标，
+            // 不能每帧刷新回父级位置，否则隐藏动画会被覆盖。
+            if (elements[i].getState() != UI_HIDING)
+            {
+                elements[i].refreshTargetByParentBox(parentBox);
+            }
+
+            elements[i].update();
+        }
+    }
+};
+
+
 
 // drawUIBox：
  // 绘制一个圆角 UI 矩形。当前用于调试面板和面板内的临时条目。
@@ -1925,46 +2486,6 @@ void drawUIBox(UIBox box, COLORREF fillColor, COLORREF borderColor)
         30
     );
 }
-// drawListPanel：
- // 临时绘制一个列表面板，用于测试 UI 锚点、平滑移动和简单层级绘制。
-// 功能：绘制当前用于测试的列表面板 UI。
-void drawListPanel(UIBox panel)
-{
-    drawUIBox(panel, RGB(255, 255, 255), WHITE);
-
-    int padding = 16;
-    int itemH = 36;
-    int gap = 8;
-
-    for (int i = 0; i < 7; i++)
-    {
-        UIBox item;
-
-        item.x = panel.x + padding;
-        item.y = panel.y + padding + i * (itemH + gap);
-        item.w = 4 * itemH;
-        item.h = itemH;
-
-        drawUIBox(item, RGB(255, 0, 0), RGB(180, 180, 180));
-    }
-
-    UIBox button1;
-    button1.x = panel.x + padding;
-    button1.y = panel.y + panel.h - padding - 40;
-    button1.w = 120;
-    button1.h = 40;
-
-    drawUIBox(button1, RGB(90, 90, 90), WHITE);
-
-    UIBox button2;
-    button2.x = button1.x + button1.w + 12;
-    button2.y = button1.y;
-    button2.w = 120;
-    button2.h = 40;
-
-    drawUIBox(button2, RGB(90, 90, 90), WHITE);
-}
-
 // InputManager：
  // 统一采集键盘和鼠标输入。
  // keyNow 表示当前帧是否按下；keyLast 表示上一帧是否按下。
@@ -3638,6 +4159,59 @@ void updateCameraFollow(
         offsetWorldY
     );
 }
+
+
+// DebugPanelData：
+// Debug 面板一帧要显示的数据快照。
+struct DebugPanelData
+{
+    int targetIndex;
+
+    double entityX;
+    double entityY;
+
+    int entityScreenX;
+    int entityScreenY;
+
+    int renderEntityCount;
+    int renderTileCount;
+
+    double cameraCenterX;
+    double cameraCenterY;
+    double cameraZoom;
+
+    double viewLeft;
+    double viewRight;
+    double viewBottom;
+    double viewTop;
+
+    DebugPanelData()
+    {
+        targetIndex = -1;
+
+        entityX = 0;
+        entityY = 0;
+
+        entityScreenX = 0;
+        entityScreenY = 0;
+
+        renderEntityCount = 0;
+        renderTileCount = 0;
+
+        cameraCenterX = 0;
+        cameraCenterY = 0;
+        cameraZoom = 1.0;
+
+        viewLeft = 0;
+        viewRight = 0;
+        viewBottom = 0;
+        viewTop = 0;
+    }
+};
+
+
+
+
 // Renderer：
  // 统一管理当前关卡中的可渲染对象。
  // 它负责把 sprite / tile / UI 等数据绘制到屏幕，并集中处理实体调试碰撞框绘制。
@@ -3645,8 +4219,15 @@ void updateCameraFollow(
 class Renderer
 {
 private:
+
+	// 是否显示实体逻辑碰撞盒。
 	bool showCollisionBox;
+
+	// 是否显示 tile 逻辑碰撞盒。
 	bool showTileCollisionBox;
+
+    // 是否显示所有可绘制对象的屏幕绘制边界。
+    bool showRenderBounds;
 
 
     // 功能：从图集中裁剪指定区域，并以 Alpha 混合绘制到屏幕目标矩形。
@@ -3716,6 +4297,24 @@ private:
         rectangle(screenLeft, screenTop, screenRight, screenBottom);
     }
 
+    // 功能：在屏幕坐标中绘制渲染对象的实际绘制边界。
+    // 这个矩形表示图像最终画到屏幕上的范围，不等同于逻辑碰撞盒。
+    void drawRenderBounds(int x, int y, int w, int h, COLORREF color)
+    {
+        if (!showRenderBounds)
+        {
+            return;
+        }
+
+        if (w <= 0 || h <= 0)
+        {
+            return;
+        }
+
+        setlinecolor(color);
+        rectangle(x, y, x + w, y + h);
+    }
+
 
 public:
 	// 功能：初始化渲染器的调试绘制开关。
@@ -3723,6 +4322,7 @@ public:
 	{
 		showCollisionBox = true;
 		showTileCollisionBox = false;
+		showRenderBounds = false;
 	}
 
 	// 功能：设置是否绘制实体碰撞框。
@@ -3749,6 +4349,12 @@ public:
 		showTileCollisionBox = !showTileCollisionBox;
 	}
 
+    // 功能：切换可绘制对象的绘制边界框显示状态。
+    void toggleRenderBounds()
+    {
+        showRenderBounds = !showRenderBounds;
+    }
+
     // 功能：绘制当前关卡多层视差背景。
     // parallaxOffsetX 表示相机中心相对初始中心的累计水平位移。
     // cameraZoom 表示当前真实相机 zoom，用于让不同远近的背景层按不同强度响应缩放。
@@ -3756,14 +4362,14 @@ public:
     void drawBackground(IMAGE backgroundLayers[], int layerCount, double parallaxOffsetX, double cameraZoom)
     {
         // 数值越大，越靠近前景，横向移动越明显。
-        double parallaxFactors[4] = { 0.0, 0.04, 0.12, 0.25 };
+        double parallaxFactors[5] = { 0.0, 0.04, 0.12, 0.25, 0.4 };
         // 数值越大，这一层越明显地响应 camera zoom。
         // 最远天空层通常不明显缩放；近景层更接近场景元素。
-        double zoomFactors[4] = { 0.0, 0.25, 0.55, 0.85 };
+        double zoomFactors[5] = { 0.0, 0.25, 0.55, 0.85, 1.0 };
 
-        if (layerCount > 4)
+        if (layerCount > 5)
         {
-            layerCount = 4;
+            layerCount = 5;
         }
 
         for (int i = 0; i < layerCount; i++)
@@ -3800,10 +4406,10 @@ public:
                 drawH = 1;
             }
 
-            // tile 层的屏幕移动速度约等于 -cameraMoveX * cameraZoom。
-            // 背景层在这个基础上乘 parallaxFactor，保证背景永远比 tile 慢。
+            // 背景平移只使用相机中心的真实位移；layerZoom 只负责把该层自身缩放后的偏移换算成屏幕距离。
+            // 不直接乘全局 cameraZoom，避免角色不动但缩放时背景发生横向滑动。
             double screenOriginX =
-                -parallaxOffsetX * cameraZoom * parallaxFactors[i]
+                -parallaxOffsetX * parallaxFactors[i] * layerZoom
                 + WINDOW_WIDTH / 2.0
                 - drawW / 2.0;
 
@@ -3828,20 +4434,133 @@ public:
                 {
                     putimage_alpha(drawX, drawY, drawW, drawH, &backgroundLayers[i]);
                 }
+
+                // 背景层可能会横向平铺；这里显示的是每一块平铺图片的实际绘制范围。
+                drawRenderBounds(
+                    drawX,
+                    drawY,
+                    drawW,
+                    drawH,
+                    RGB(120, 160, 255)
+                );
             }
         }
     }
 
-	// 功能：绘制 tile map，并根据开关绘制 tile 调试碰撞框。
-	void drawTileMap(TileMap& tileMap)
-	{
-		tileMap.draw();
+    // 功能：根据 TileInstance 数据绘制单个地图 tile。
+    void drawTileInstance(TileMap& tileMap, const TileInstance& tile)
+    {
+        if (!tile.visible)
+        {
+            return;
+        }
 
-		if (showTileCollisionBox)
-		{
-			tileMap.drawDebugCollisionBoxes();
-		}
-	}
+        if (tile.tileId == TILE_EMPTY)
+        {
+            return;
+        }
+
+        IMAGE* tileset = tileMap.getTilesetImage();
+
+        if (tileset == NULL)
+        {
+            return;
+        }
+
+        int sourceTileWidth = tileMap.getSourceTileWidth();
+        int sourceTileHeight = tileMap.getSourceTileHeight();
+
+        if (sourceTileWidth <= 0 || sourceTileHeight <= 0)
+        {
+            return;
+        }
+
+        int tilesetCols = tileset->getwidth() / sourceTileWidth;
+
+        if (tilesetCols <= 0)
+        {
+            return;
+        }
+
+        int realTileIndex = tile.tileId - 1;
+
+        // 用 tileId 在 tileset 中的线性序号换算源图裁剪坐标。
+        int srcX = (realTileIndex % tilesetCols) * sourceTileWidth;
+        int srcY = (realTileIndex / tilesetCols) * sourceTileHeight;
+
+        // 用默认 tile 世界尺寸乘实例缩放，得到这个 tile 本帧实际绘制尺寸。
+        double worldDrawW = tileMap.getDrawTileWidth() * tile.scaleX;
+        double worldDrawH = tileMap.getDrawTileHeight() * tile.scaleY;
+
+        // 用实例中心点加偏移，得到这个 tile 本帧实际绘制中心点。
+        double drawCenterX = tile.centerX + tile.offsetX;
+        double drawCenterY = tile.centerY + tile.offsetY;
+
+        // 以中心点为锚点，计算世界坐标中的绘制矩形。
+        double worldLeft = drawCenterX - worldDrawW / 2.0;
+        double worldRight = drawCenterX + worldDrawW / 2.0;
+        double worldBottom = drawCenterY - worldDrawH / 2.0;
+        double worldTop = drawCenterY + worldDrawH / 2.0;
+
+        int screenLeft = gCamera.worldToScreenX(worldLeft);
+        int screenRight = gCamera.worldToScreenX(worldRight);
+        int screenTop = gCamera.worldToScreenY(worldTop);
+        int screenBottom = gCamera.worldToScreenY(worldBottom);
+
+        // 用屏幕左右/上下边界相减，得到最终绘制到屏幕上的 tile 尺寸。
+        int screenTileW = screenRight - screenLeft;
+        int screenTileH = screenBottom - screenTop;
+
+        if (screenTileW < 1)
+        {
+            screenTileW = 1;
+        }
+
+        if (screenTileH < 1)
+        {
+            screenTileH = 1;
+        }
+
+        drawImageTileAlpha(
+            screenLeft,
+            screenTop,
+            screenTileW,
+            screenTileH,
+            tileset,
+            srcX,
+            srcY,
+            sourceTileWidth,
+            sourceTileHeight
+        );
+
+        // tile 绘制边界来自 TileInstance 的中心点、偏移和缩放，可能与 tile 碰撞盒不同。
+        drawRenderBounds(
+            screenLeft,
+            screenTop,
+            screenTileW,
+            screenTileH,
+            RGB(255, 220, 0)
+        );
+
+    }
+
+
+
+    // 功能：逐个绘制当前地图中的 tile 实例，并根据开关绘制 tile 调试碰撞框。
+    void drawTileMap(TileMap& tileMap)
+    {
+        const vector<TileInstance>& tileInstances = tileMap.getTileInstances();
+
+        for (int i = 0; i < (int)tileInstances.size(); i++)
+        {
+            drawTileInstance(tileMap, tileInstances[i]);
+        }
+
+        if (showTileCollisionBox)
+        {
+            tileMap.drawDebugCollisionBoxes();
+        }
+    }
 
 	// 功能：根据实体中心点和 sprite 数据绘制单帧图像。
 	void drawSprite(const sprite& targetSprite, double ownerX, double ownerY)
@@ -3894,6 +4613,16 @@ public:
             targetSprite.srcH
         );
 
+
+        // sprite 绘制边界来自 sprite 的源帧尺寸、缩放和偏移，通常不等同于实体碰撞盒。
+        drawRenderBounds(
+            drawX,
+            drawY,
+            screenDrawW,
+            screenDrawH,
+            RGB(0, 220, 255)
+        );
+
     }
 
 	// 功能：绘制实体列表中的所有存活实体，并根据开关绘制实体调试碰撞框。
@@ -3918,16 +4647,133 @@ public:
 		}
 	}
 
-	// 功能：绘制当前测试 UI 面板。
-	void drawUI(SmoothUIPanel& listPanel)
-	{
-		drawListPanel(listPanel.getBox());
-	}
+    // 功能：绘制一个通用 UIElement 面板。
+    void drawUIElementPanel(const UIElement& element)
+    {
+        if (!element.isVisible())
+        {
+            return;
+        }
+
+        drawUIBox(
+            element.getBox(),
+            RGB(255, 255, 255),
+            RGB(180, 180, 180)
+        );
+    }
+
+    // 功能：绘制 Debug 面板中的实体数据区。
+    void drawDebugEntitySectionText(const UIElement& content, DebugPanelData data)
+    {
+        if (!content.isVisible())
+        {
+            return;
+        }
+
+        UIBox box = content.getBox();
+
+        setbkmode(TRANSPARENT);
+        settextcolor(RGB(40, 40, 40));
+        settextstyle(18, 0, _T("Mojangles"));
+
+        int x = box.x;
+        int y = box.y;
+        int lineH = 22;
+
+        TCHAR text[128];
+
+        _stprintf_s(text, _T("Debug Target"));
+        outtextxy(x, y, text);
+        y += lineH;
+
+        _stprintf_s(text, _T("Entity Index: %d"), data.targetIndex);
+        outtextxy(x, y, text);
+        y += lineH;
+
+        _stprintf_s(text, _T("World Pos: %.1f, %.1f"), data.entityX, data.entityY);
+        outtextxy(x, y, text);
+        y += lineH;
+
+        _stprintf_s(text, _T("Screen Pos: %d, %d"), data.entityScreenX, data.entityScreenY);
+        outtextxy(x, y, text);
+    }
+
+    // 功能：绘制 Debug 面板中的渲染数据区。
+    void drawDebugRenderSectionText(const UIElement& content, DebugPanelData data)
+    {
+        if (!content.isVisible())
+        {
+            return;
+        }
+
+        UIBox box = content.getBox();
+
+        setbkmode(TRANSPARENT);
+        settextcolor(RGB(40, 40, 40));
+        settextstyle(18, 0, _T("Mojangles"));
+
+        int x = box.x;
+        int y = box.y;
+        int lineH = 22;
+
+        TCHAR text[128];
+
+        _stprintf_s(text, _T("Render"));
+        outtextxy(x, y, text);
+        y += lineH;
+
+        _stprintf_s(text, _T("Entities: %d"), data.renderEntityCount);
+        outtextxy(x, y, text);
+        y += lineH;
+
+        _stprintf_s(text, _T("Tiles: %d"), data.renderTileCount);
+        outtextxy(x, y, text);
+    }
+
+    // 功能：绘制 Debug 面板中的相机数据区。
+    void drawDebugCameraSectionText(const UIElement& content, DebugPanelData data)
+    {
+        if (!content.isVisible())
+        {
+            return;
+        }
+
+        UIBox box = content.getBox();
+
+        setbkmode(TRANSPARENT);
+        settextcolor(RGB(40, 40, 40));
+        settextstyle(18, 0, _T("Mojangles"));
+
+        int x = box.x;
+        int y = box.y;
+        int lineH = 22;
+
+        TCHAR text[128];
+
+        _stprintf_s(text, _T("Camera"));
+        outtextxy(x, y, text);
+        y += lineH;
+
+        _stprintf_s(text, _T("Center: %.1f, %.1f"), data.cameraCenterX, data.cameraCenterY);
+        outtextxy(x, y, text);
+        y += lineH;
+
+        _stprintf_s(text, _T("Zoom: %.2f"), data.cameraZoom);
+        outtextxy(x, y, text);
+        y += lineH;
+
+        _stprintf_s(text, _T("View L/R: %.1f / %.1f"), data.viewLeft, data.viewRight);
+        outtextxy(x, y, text);
+        y += lineH;
+
+        _stprintf_s(text, _T("View B/T: %.1f / %.1f"), data.viewBottom, data.viewTop);
+        outtextxy(x, y, text);
+    }
 };
 
 // Level：
  // 当前关卡/场景管理器。
- // 它持有当前关卡的地图、背景、实体列表、UI面板和各种 Handle。
+ // 它持有当前关卡的地图、背景、实体列表、UI 面板和各种 Handle。
  // 它不应该亲自写复杂的移动/碰撞细节，而是负责“调度顺序”：
  //   init()   加载关卡内容
  //   update() 每帧按顺序调度输入、实体、相机、事件、UI
@@ -3939,11 +4785,22 @@ private:
     ResourceManager resources;
 
     TileMap tileMap;
-    IMAGE backgrounds[4];
+    IMAGE backgrounds[5];
 
     // 当前关卡实体列表。使用 vector 取代固定数组，为后续动态生成和清理实体做准备。
     vector<Entity> entitys;
-    SmoothUIPanel listPanel;
+
+    // 当前关卡 UI 元素管理器，负责维护 UIElement 的父子关系和位置更新。
+    UIManager uiManager;
+
+    // Debug 面板父元素在 UIManager 中的下标。
+    int debugPanelIndex;
+
+    // Debug 面板下的三个逻辑子区域；它们共享父级面板，但可以独立控制显示状态。
+    int debugEntitySectionIndex;
+    int debugRenderSectionIndex;
+    int debugCameraSectionIndex;
+
     Renderer renderer;
 
     int controlTargerIndex;
@@ -3952,8 +4809,6 @@ private:
     MovementHandle movementHandle;
     CollisionHandle collisionHandle;
 
-
-   
     int worldWidth;
     int worldHeight;
 
@@ -3966,6 +4821,61 @@ private:
     // 背景视差初始参考点。
     // 用来计算摄像机从初始位置开始实际移动了多少。
     double parallaxOriginX;
+
+    // 功能：根据当前相机跟随目标生成 Debug 面板数据。
+    DebugPanelData buildDebugPanelData()
+    {
+        DebugPanelData data;
+
+        data.targetIndex = gCameraFollowTargetIndex;
+
+        if (
+            gCameraFollowTargetIndex >= 0 &&
+            gCameraFollowTargetIndex < (int)entitys.size()
+            )
+        {
+            Entity& target = entitys[gCameraFollowTargetIndex];
+
+            data.entityX = target.getX();
+            data.entityY = target.getY();
+
+            data.entityScreenX = gCamera.worldToScreenX(target.getX());
+            data.entityScreenY = gCamera.worldToScreenY(target.getY());
+        }
+
+        data.renderEntityCount = countRenderableEntities();
+        data.renderTileCount = tileMap.getTileInstanceCount();
+
+        data.cameraCenterX = gCamera.centerX;
+        data.cameraCenterY = gCamera.centerY;
+        data.cameraZoom = gCamera.zoom;
+
+        data.viewLeft = gCamera.getViewLeft();
+        data.viewRight = gCamera.getViewRight();
+        data.viewBottom = gCamera.getViewBottom();
+        data.viewTop = gCamera.getViewTop();
+
+        return data;
+    }
+
+    // 功能：统计当前场景中存活且可参与绘制的实体数量。
+    // 当前第一版只按 isAlive 统计，后续可进一步过滤 sprite visible / 视口裁切结果。
+    int countRenderableEntities()
+    {
+        int count = 0;
+
+        for (int i = 0; i < (int)entitys.size(); i++)
+        {
+            if (!entitys[i].getIsAlive())
+            {
+                continue;
+            }
+
+            count++;
+        }
+
+        return count;
+    }
 
     // 以下历史状态缓存必须与 entitys.size() 同步，用于判断状态变化和重叠事件首次触发。
     vector<vector<bool>> lastOverlap;
@@ -3981,10 +4891,17 @@ public:
     Level()
     {
 
-		controlTargerIndex = 0;
+        controlTargerIndex = 0;
+
+        // 初始化 UI 元素下标；-1 表示当前还没有创建对应元素。
+        debugPanelIndex = -1;
+
+        debugEntitySectionIndex = -1;
+        debugRenderSectionIndex = -1;
+        debugCameraSectionIndex = -1;
 
         // 预留当前测试关卡的实体数量，避免初始化期间 vector 扩容搬移 Entity。
-        entitys.reserve(7);
+        entitys.reserve(20);
 
         entitys.emplace_back(200, 700, true, true, true, false, PLAYER, ANIM_SET_PLAYER1, 1);
 
@@ -3999,6 +4916,17 @@ public:
         entitys.emplace_back(_T("assets\\tex\\entities\\items\\MonedaP.png"), 256 + 48 + 16, 256, false, true, false, true, COIN, 5, 1);
 
         entitys.emplace_back(_T("assets\\tex\\entities\\items\\MonedaR.png"), 256 + (48 * 2) + (16 * 2), 256, false, true, false, true, COIN, 5, 1);
+
+        entitys.emplace_back(_T("assets\\tex\\entities\\items\\MonedaD.png"), 5662, 1312, false, true, false, true, COIN, 5, 1);
+
+        entitys.emplace_back(_T("assets\\tex\\entities\\items\\MonedaD.png"), 5662, 1312 + 64 + 16, false, true, false, true, COIN, 5, 1);
+
+        entitys.emplace_back(_T("assets\\tex\\entities\\items\\MonedaD.png"), 5662, 1312 + 64 + 16 + 64 + 16, false, true, false, true, COIN, 5, 1);
+
+
+
+
+
 
         worldWidth = WINDOW_WIDTH;
         worldHeight = WINDOW_HEIGHT;
@@ -4048,11 +4976,11 @@ public:
             2. clearEntityFrameState() 清理上一帧临时状态
             3. updateEntities() 生成 intent，并调用 MovementHandle / CollisionHandle
             4. handleCameraInput() 处理 F1-F4 跟随目标切换
-            5. handleUIInput() 处理 UI 锚点切换
+            5. handleUIInput() 处理 Debug UI 临时显隐输入
             6. updateCamera() 更新摄像机跟随
             7. updateDebugStates() 输出状态变化
             8. updateOverlapEvents() 处理重叠事件，如金币拾取
-            9. listPanel.update() 更新 UI 过渡
+            9. uiManager.update() 更新 UIElement 父子定位和过渡
         */
         if (input.isMouseLeftPressed())
         {
@@ -4079,8 +5007,7 @@ public:
         updateDebugStates();
 
         updateOverlapEvents();
-
-        listPanel.update();
+        uiManager.update();
     }
 
 	// 功能：委托 Renderer 绘制当前关卡画面。
@@ -4088,11 +5015,44 @@ public:
     {
         double parallaxOffsetX = parallaxCameraX - parallaxOriginX;
 
-        renderer.drawBackground(backgrounds, 4, parallaxOffsetX, gCamera.zoom);
+        renderer.drawBackground(backgrounds, 5, parallaxOffsetX, gCamera.zoom);
         renderer.drawTileMap(tileMap);
         renderer.drawEntities(entitys);
-        //renderer.drawUI(listPanel);
+
+        // Debug 面板父级负责整体背景；子 section 的最终可见性由 UIManager 按父级链路判断。
+        if (uiManager.isElementEffectivelyVisible(debugPanelIndex))
+        {
+            renderer.drawUIElementPanel(uiManager.getElement(debugPanelIndex));
+        }
+
+        DebugPanelData data = buildDebugPanelData();
+
+        if (uiManager.isElementEffectivelyVisible(debugEntitySectionIndex))
+        {
+            renderer.drawDebugEntitySectionText(
+                uiManager.getElement(debugEntitySectionIndex),
+                data
+            );
+        }
+
+        if (uiManager.isElementEffectivelyVisible(debugRenderSectionIndex))
+        {
+            renderer.drawDebugRenderSectionText(
+                uiManager.getElement(debugRenderSectionIndex),
+                data
+            );
+        }
+
+        if (uiManager.isElementEffectivelyVisible(debugCameraSectionIndex))
+        {
+            renderer.drawDebugCameraSectionText(
+                uiManager.getElement(debugCameraSectionIndex),
+                data
+            );
+        }
+
     }
+
 
 private:
 
@@ -4127,15 +5087,44 @@ private:
     // 功能：加载关卡背景图片。
     void initBackground()
     {
-        loadimage(&backgrounds[0], _T("assets\\tex\\maps\\Clouds 2\\1.png"), WINDOW_WIDTH, WINDOW_HEIGHT, true);
-        loadimage(&backgrounds[1], _T("assets\\tex\\maps\\Clouds 2\\2.png"), WINDOW_WIDTH, WINDOW_HEIGHT, true);
-        loadimage(&backgrounds[2], _T("assets\\tex\\maps\\Clouds 2\\3.png"), WINDOW_WIDTH, WINDOW_HEIGHT, true);
-        loadimage(&backgrounds[3], _T("assets\\tex\\maps\\Clouds 2\\4.png"), WINDOW_WIDTH, WINDOW_HEIGHT, true);
+        loadimage(&backgrounds[0], _T("assets\\tex\\maps\\Clouds 5\\1.png"), WINDOW_WIDTH, WINDOW_HEIGHT, true);
+        loadimage(&backgrounds[1], _T("assets\\tex\\maps\\Clouds 5\\2.png"), WINDOW_WIDTH, WINDOW_HEIGHT, true);
+        loadimage(&backgrounds[2], _T("assets\\tex\\maps\\Clouds 5\\3.png"), WINDOW_WIDTH, WINDOW_HEIGHT, true);
+        loadimage(&backgrounds[3], _T("assets\\tex\\maps\\Clouds 5\\4.png"), WINDOW_WIDTH, WINDOW_HEIGHT, true);
+        loadimage(&backgrounds[4], _T("assets\\tex\\maps\\Clouds 5\\5.png"), WINDOW_WIDTH, WINDOW_HEIGHT, true);
     }
-    // 功能：初始化测试 UI 面板。
+    // 功能：初始化当前关卡使用的 Debug UI 面板。
     void initUI()
     {
-        listPanel.init(480, 600, UI_TOP_LEFT, 32, 32);
+        // Debug 面板是顶层 UI，相对于窗口右上角定位。
+        UIElement debugPanel;
+        debugPanel.init(420, 520, UI_TOP_RIGHT, 24, 24);
+
+        debugPanelIndex = uiManager.addElement(debugPanel);
+
+        // Debug Entity 区域：显示当前相机跟随目标实体的数据。
+        UIElement debugEntitySection;
+        debugEntitySection.init(388, 110, UI_TOP_LEFT, 16, 16);
+        debugEntitySection.setParentIndex(debugPanelIndex);
+        debugEntitySection.refreshTargetByParentBox(uiManager.getElement(debugPanelIndex).getBox());
+        debugEntitySection.snapToTarget();
+        debugEntitySectionIndex = uiManager.addElement(debugEntitySection);
+
+        // Debug Render 区域：显示当前渲染相关数据。
+        UIElement debugRenderSection;
+        debugRenderSection.init(388, 90, UI_TOP_LEFT, 16, 140);
+        debugRenderSection.setParentIndex(debugPanelIndex);
+        debugRenderSection.refreshTargetByParentBox(uiManager.getElement(debugPanelIndex).getBox());
+        debugRenderSection.snapToTarget();
+        debugRenderSectionIndex = uiManager.addElement(debugRenderSection);
+
+        // Debug Camera 区域：显示当前相机和视口数据。
+        UIElement debugCameraSection;
+        debugCameraSection.init(388, 180, UI_TOP_LEFT, 16, 250);
+        debugCameraSection.setParentIndex(debugPanelIndex);
+        debugCameraSection.refreshTargetByParentBox(uiManager.getElement(debugPanelIndex).getBox());
+        debugCameraSection.snapToTarget();
+        debugCameraSectionIndex = uiManager.addElement(debugCameraSection);
     }
 
     // 功能：设置实体 sprite 缩放、动画速度和碰撞盒缩放。
@@ -4148,6 +5137,11 @@ private:
         entitys[4].setSpriteTransform(4.0, 4.0, 0, 0);
         entitys[5].setSpriteTransform(4.0, 4.0, 0, 0);
         entitys[6].setSpriteTransform(4.0, 4.0, 0, 0);
+        entitys[7].setSpriteTransform(4.0, 4.0, 0, 0);
+        entitys[8].setSpriteTransform(4.0, 4.0, 0, 0);
+        entitys[9].setSpriteTransform(4.0, 4.0, 0, 0);
+
+
 
         entitys[0].setAnimationSpeed(3);
         entitys[4].setAnimationSpeed(3);
@@ -4314,27 +5308,106 @@ private:
         }
     }
 
-    // 功能：处理 UI 面板锚点切换输入。
+    // 功能：处理 Debug UI 临时显隐控制输入。
     void handleUIInput(InputManager& input)
     {
-        if (input.isKeyPressed('W'))
+        // 以下 F8-F11 仅用于当前阶段验证 Debug UI 层级、显隐状态和 section 动画。
+        // 后续正式 UI 交互应改由按钮、配置面板或 Debug 菜单自身控制。
+        if (input.isKeyPressed(VK_F8))
         {
-            listPanel.setAnchor(UI_TOP_LEFT);
+            toggleDebugPanelVisible();
+            cout << "Toggle debug panel." << endl;
         }
 
-        if (input.isKeyPressed('S'))
+        if (input.isKeyPressed(VK_F9))
         {
-            listPanel.setAnchor(UI_TOP_RIGHT);
+            toggleDebugEntitySectionVisible();
+            cout << "Toggle debug entity section." << endl;
         }
 
-        if (input.isKeyPressed('A'))
+        if (input.isKeyPressed(VK_F10))
         {
-            listPanel.setAnchor(UI_BOTTOM_LEFT);
+            toggleDebugRenderSectionVisible();
+            cout << "Toggle debug render section." << endl;
         }
 
-        if (input.isKeyPressed('D'))
+        if (input.isKeyPressed(VK_F11))
         {
-            listPanel.setAnchor(UI_BOTTOM_RIGHT);
+            toggleDebugCameraSectionVisible();
+            cout << "Toggle debug camera section." << endl;
+        }
+
+    }
+
+    // 功能：切换整个 Debug 面板的显示状态。
+    void toggleDebugPanelVisible()
+    {
+        toggleUIElementVisible(debugPanelIndex);
+    }
+
+    // 功能：切换 Debug 实体信息区。显示时从左侧滑入，隐藏时向右侧滑出。
+    void toggleDebugEntitySectionVisible()
+    {
+        UIElement& element = uiManager.getElement(debugEntitySectionIndex);
+
+        if (element.isVisible())
+        {
+            uiManager.hideElementAnimatedToOffset(debugEntitySectionIndex, 40, 0);
+        }
+        else
+        {
+            uiManager.showElementAnimatedFromOffset(debugEntitySectionIndex, -40, 0);
+        }
+    }
+
+    // 功能：切换 Debug 渲染信息区。显示时从右侧滑入，隐藏时向左侧滑出。
+    void toggleDebugRenderSectionVisible()
+    {
+        UIElement& element = uiManager.getElement(debugRenderSectionIndex);
+
+        if (element.isVisible())
+        {
+            uiManager.hideElementAnimatedToOffset(debugRenderSectionIndex, -40, 0);
+        }
+        else
+        {
+            uiManager.showElementAnimatedFromOffset(debugRenderSectionIndex, 40, 0);
+        }
+    }
+
+    // 功能：切换 Debug 相机信息区。显示时从下方滑入，隐藏时向上方滑出。
+    void toggleDebugCameraSectionVisible()
+    {
+        UIElement& element = uiManager.getElement(debugCameraSectionIndex);
+
+        if (element.isVisible())
+        {
+            uiManager.hideElementAnimatedToOffset(debugCameraSectionIndex, 0, -40);
+        }
+        else
+        {
+            uiManager.showElementAnimatedFromOffset(debugCameraSectionIndex, 0, 40);
+        }
+    }
+
+    // 功能：切换指定 UI 元素自身的显示状态。
+    // 这个函数只改变当前元素，不递归修改子元素；父级覆盖由 isElementEffectivelyVisible() 处理。
+    void toggleUIElementVisible(int elementIndex)
+    {
+        if (!uiManager.isValidIndex(elementIndex))
+        {
+            return;
+        }
+
+        UIElement& element = uiManager.getElement(elementIndex);
+
+        if (element.isVisible())
+        {
+            element.hide();
+        }
+        else
+        {
+            uiManager.showElementInstant(elementIndex);
         }
     }
 
@@ -4353,6 +5426,11 @@ private:
 			cout << "Toggle map tile edge." << endl;
 
 		}
+        if (input.isKeyPressed(VK_F7))
+        {
+            renderer.toggleRenderBounds();
+            cout << "Toggle render bounds." << endl;
+        }
 	}
 
     // 功能：根据输入状态更新相机跟随。
@@ -4362,8 +5440,9 @@ private:
             entitys,
             worldWidth,
             worldHeight,
-            input.getMouseOffsetX(),
-            input.getMouseOffsetY()
+            //input.getMouseOffsetX(),
+            //input.getMouseOffsetY()
+            0,0
         );
     }
 
@@ -4561,6 +5640,11 @@ int main()
     */
     initgraph(WINDOW_WIDTH, WINDOW_HEIGHT);
     setbkcolor(BLACK);
+
+    // 加载全局字体，供 UI 和调试信息使用。
+    loadUIFont();
+
+
 
     InputManager input;
     Level level;

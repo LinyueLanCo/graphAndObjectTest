@@ -710,6 +710,153 @@ zoomFactor 越大，层越靠前，越明显响应 camera zoom。
 不要来自受 zoom 影响的视口边界。
 ```
 
+### 这几次 Camera bug 给我的提醒
+
+这几天背景绘制相关的问题基本都和 Camera 有关，尤其是我把 Camera 主锚点从“视口左下角”改成“视口中心点”以后，旧公式里很多看起来没问题的东西都会变得不对。
+
+这里要记住一个核心变化：
+
+```text
+旧 Camera：
+    x / y 本身就是视口左下角。
+
+新 Camera：
+    centerX / centerY 才是真正的 Camera 主状态。
+    viewLeft / viewBottom / viewRight / viewTop 都是根据 center 和 zoom 临时推导出来的。
+```
+
+所以后面只要遇到背景、视口、缩放、鼠标偏移相关的问题，就要先检查这件事：
+
+```text
+我现在用的这个值，到底是 Camera 的真实主状态，
+还是由主状态和 zoom 推导出来的临时视口边界？
+```
+
+#### 1. 不要把 viewLeft 当成真实相机位移
+
+`viewLeft` 的计算依赖 zoom：
+
+```text
+viewLeft = centerX - visibleW / 2
+visibleW = WINDOW_WIDTH / zoom
+```
+
+这意味着即使玩家不动、`centerX` 不变，只要 zoom 改变，`viewLeft` 也会改变。
+
+如果背景视差用 `viewLeft` 判断相机移动，就会出现：
+
+```text
+玩家没动
+Camera center 没动
+只是 zoom 变了
+但是背景以为相机横向移动了
+```
+
+所以视差背景应该使用 `centerX` 的变化量，而不是 `viewLeft` 的变化量。
+
+#### 2. 不要把背景平移和 Camera zoom 直接绑死
+
+这次遇到的一个明显 bug 是类似这样的公式：
+
+```cpp
+screenOriginX = -parallaxOffsetX * cameraZoom * parallaxFactor
+```
+
+这里的问题是：
+
+```text
+parallaxOffsetX:
+    相机中心从初始点移动了多少。
+
+cameraZoom:
+    当前相机缩放倍率。
+```
+
+如果把它们直接相乘，就会导致：
+
+```text
+Camera center 不变
+parallaxOffsetX 不变
+cameraZoom 改变
+最终背景横向偏移也跟着改变
+```
+
+于是玩家站在原地缩放时，背景会发生横向滑动。
+
+更合理的理解是：
+
+```text
+相机移动：
+    影响背景横向平移。
+
+背景层自己的 zoom：
+    影响该层绘制尺寸。
+
+cameraZoom：
+    不应该额外制造背景横向位移。
+```
+
+如果要让背景层的平移跟随自己的缩放关系，应该优先考虑使用该层自己的 `layerZoom`，而不是直接用全局 `cameraZoom` 去放大相机移动量。
+
+#### 3. 越靠地图右侧，错误越明显
+
+这个现象也很重要。
+
+```text
+parallaxOffsetX = gCamera.centerX - parallaxOriginX
+```
+
+角色越往地图右边走，`gCamera.centerX` 越大，`parallaxOffsetX` 也越大。
+
+如果错误地写成：
+
+```text
+parallaxOffsetX * cameraZoom
+```
+
+那么 zoom 改变带来的错误偏移会随着 `parallaxOffsetX` 变大而变大。
+
+所以有些 Camera bug 会出现这种表现：
+
+```text
+地图左边看起来问题不明显；
+走到地图右边以后，一缩放背景就明显滑动。
+```
+
+这不是错觉，而是公式里的错误项本身随着世界坐标位置变大了。
+
+#### 4. Debug 面板的价值
+
+这次 debug 面板很有用。只靠肉眼看，很容易怀疑是：
+
+```text
+背景图有问题
+tile 绘制有问题
+角色缩放有问题
+Camera center 又漂了
+```
+
+但 debug 面板显示：
+
+```text
+缩放前后 Camera Center 基本不变；
+变化的是 Zoom；
+背景却发生横向滑动。
+```
+
+这就能判断问题不在 Camera 跟随本身，而是在背景绘制公式里还有某个和 zoom 相关的量参与了横向偏移。
+
+以后遇到类似问题，我应该先看这些数据：
+
+```text
+Camera center 是否真的变了？
+viewLeft 是否因为 zoom 改了？
+parallaxOffsetX 是否稳定？
+背景公式里有没有把平移量又乘上 zoom？
+```
+
+这个经验后面做前景层、WorldSpaceUI、编辑器视图、不同缩放模式时还会反复用到。
+
 ---
 
 ## Tile 碰撞第一版
