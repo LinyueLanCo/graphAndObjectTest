@@ -4581,6 +4581,75 @@ public:
         }
     }
 
+    // 功能：根据 sprite 自身保存的世界绘制数据绘制单帧图像。
+    void drawSprite(const sprite& targetSprite)
+    {
+        if (!targetSprite.visible)
+        {
+            return;
+        }
+
+        if (targetSprite.imageSource == NULL)
+        {
+            return;
+        }
+
+        if (targetSprite.srcW <= 0 || targetSprite.srcH <= 0)
+        {
+            return;
+        }
+
+        if (targetSprite.worldDrawW <= 0 || targetSprite.worldDrawH <= 0)
+        {
+            return;
+        }
+
+        // 用 sprite 世界中心点和世界绘制尺寸，计算世界绘制矩形。
+        double worldLeft = targetSprite.worldCenterX - targetSprite.worldDrawW / 2.0;
+        double worldTop = targetSprite.worldCenterY + targetSprite.worldDrawH / 2.0;
+
+        // 把世界绘制矩形转换为屏幕左上角。
+        int drawX = gCamera.worldToScreenX(worldLeft);
+        int drawY = gCamera.worldToScreenY(worldTop);
+
+        // 把世界绘制尺寸转换为屏幕绘制尺寸。
+        int screenDrawW = gCamera.worldSizeToScreen(targetSprite.worldDrawW);
+        int screenDrawH = gCamera.worldSizeToScreen(targetSprite.worldDrawH);
+
+        if (screenDrawW < 1)
+        {
+            screenDrawW = 1;
+        }
+
+        if (screenDrawH < 1)
+        {
+            screenDrawH = 1;
+        }
+
+        // 根据源图裁剪矩形和屏幕目标矩形完成 Alpha 混合绘制。
+        drawImageTileAlpha(
+            drawX,
+            drawY,
+            screenDrawW,
+            screenDrawH,
+            targetSprite.imageSource,
+            targetSprite.srcX,
+            targetSprite.srcY,
+            targetSprite.srcW,
+            targetSprite.srcH
+        );
+
+        // sprite 绘制边界来自 sprite 自身的世界绘制数据。
+        drawRenderBounds(
+            drawX,
+            drawY,
+            screenDrawW,
+            screenDrawH,
+            RGB(0, 220, 255)
+        );
+    }
+
+
 	// 功能：根据实体中心点和 sprite 数据绘制单帧图像。
 	void drawSprite(const sprite& targetSprite, double ownerX, double ownerY)
 	{
