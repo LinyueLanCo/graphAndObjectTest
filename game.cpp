@@ -4713,6 +4713,19 @@ public:
                 continue;
             }
 
+            if (layer.drawMode == BACKGROUND_SINGLE_WORLD)
+            {
+                sprite backgroundSprite = layer.buildSprite();
+
+                drawSprite(
+                    backgroundSprite,
+                    RGB(120, 160, 255)
+                );
+
+                continue;
+            }
+
+
             if (layer.drawMode != BACKGROUND_REPEAT_X)
             {
                 continue;
@@ -5385,9 +5398,12 @@ private:
             0.4,
             1.0,
             true,
-			BACKGROUND_FIXED_CAMERA
+            BACKGROUND_SINGLE_WORLD
         );
+        layer4.setDrawData(800, 450, worldWidth, worldHeight);
+
         backgroundManager.addLayer(layer4);
+
     }
     // 功能：初始化当前关卡使用的 Debug UI 面板。
     void initUI()
