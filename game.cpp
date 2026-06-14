@@ -922,7 +922,6 @@ struct BackgroundLayer
     }
 
     // 功能：把当前背景对象转换成世界空间 sprite 数据。
-// 功能：把当前背景对象转换成世界空间 sprite 数据。
     sprite buildSprite()
     {
         sprite backgroundSprite;
@@ -994,7 +993,7 @@ struct BackgroundLayer
 
 // BackgroundManager：
 // 管理当前关卡中的所有背景层。
-// 当前只负责保存背景层数据，后续会负责按相机状态生成 background sprite。
+// 它负责保存背景对象，并按 renderOrder 维护背景绘制顺序。
 class BackgroundManager
 {
 private:
@@ -4446,7 +4445,7 @@ void updateCameraFollow(
 }
 
 // RenderFrameStats：
-// 记录当前帧真实通过 Renderer 绘制成功的 sprite 数量。
+// 记录当前帧真实通过 Renderer::drawSprite 绘制成功的 sprite 数量。
 struct RenderFrameStats
 {
     int backgroundSpriteCount;
@@ -4475,7 +4474,7 @@ struct RenderFrameStats
 
 
 // DebugPanelData：
-// Debug 面板一帧要显示的数据快照。
+// Debug 面板一帧要显示的数据快照，数据由 Level 在当前帧收集后交给 Renderer 显示。
 struct DebugPanelData
 {
     int targetIndex;
@@ -4486,8 +4485,10 @@ struct DebugPanelData
     int entityScreenX;
     int entityScreenY;
 
-    int renderEntityCount;
-    int renderTileCount;
+    int renderedBackgroundSprites;
+    int renderedTileSprites;
+    int renderedEntitySprites;
+    int renderedTotalSprites;
 
     double cameraCenterX;
     double cameraCenterY;
@@ -4508,8 +4509,10 @@ struct DebugPanelData
         entityScreenX = 0;
         entityScreenY = 0;
 
-        renderEntityCount = 0;
-        renderTileCount = 0;
+        renderedBackgroundSprites = 0;
+        renderedTileSprites = 0;
+        renderedEntitySprites = 0;
+        renderedTotalSprites = 0;
 
         cameraCenterX = 0;
         cameraCenterY = 0;
@@ -4668,47 +4671,11 @@ public:
         showRenderBounds = !showRenderBounds;
     }
 
-    // 功能：按屏幕坐标绘制单张背景图片，并绘制调试边界。
-    void drawBackgroundImageOnScreen(
-        BackgroundLayer& layer,
-        int drawX,
-        int drawY,
-        int drawW,
-        int drawH
-    )
-    {
-        if (drawW <= 0 || drawH <= 0)
-        {
-            return;
-        }
-
-        if (layer.useAlphaBlend)
-        {
-            putimage_alpha(drawX, drawY, drawW, drawH, &layer.image);
-        }
-        else
-        {
-            putimage(drawX, drawY, drawW, drawH, &layer.image, 0, 0);
-        }
-
-        drawRenderBounds(
-            drawX,
-            drawY,
-            drawW,
-            drawH,
-            RGB(120, 160, 255)
-        );
-    }
-
-
-
-    // 功能：绘制当前关卡多层视差背景。
+    // 功能：绘制当前关卡多层视差背景，并返回真实绘制成功的 background sprite 数量。
     // parallaxOffsetX 表示相机中心相对初始中心的累计水平位移。
-    // cameraZoom 表示当前真实相机 zoom，用于让不同远近的背景层按不同强度响应缩放。
-    // 当前阶段只处理 BACKGROUND_REPEAT_X；其他模式后续再接入。
-    int drawBackground(BackgroundManager& backgroundManager, double parallaxOffsetX, double cameraZoom)
+    // BACKGROUND_REPEAT_X 会以背景对象自身位置为基准，在当前视口横向生成多个 sprite。
+    int drawBackground(BackgroundManager& backgroundManager, double parallaxOffsetX)
     {
-        
         int renderedBackgroundCount = 0;
 
         vector<BackgroundLayer>& backgroundLayers = backgroundManager.getLayers();
@@ -4760,15 +4727,6 @@ public:
             if (imageW <= 0 || imageH <= 0)
             {
                 continue;
-            }
-
-            // 计算这一层自己的 zoom；不同背景层可以按不同强度响应 camera zoom。
-            double layerZoom = 1.0 + (cameraZoom - 1.0) * layer.zoomFactor;
-
-            // 防止 zoom out 时背景缩小露出黑边。
-            if (layerZoom < 1.0)
-            {
-                layerZoom = 1.0;
             }
 
             // repeat 背景仍然以 background 自己的世界中心点为基准，只是在绘制时生成多个 sprite。
@@ -4825,8 +4783,9 @@ public:
                 }
             }
         }
-		return renderedBackgroundCount;
+        return renderedBackgroundCount;
     }
+
     // 功能：根据 TileInstance 生成通用 sprite，并交给统一 sprite 绘制接口。
     bool drawTileInstance(TileMap& tileMap, const TileInstance& tile)
     {
@@ -4839,7 +4798,7 @@ public:
     }
 
 
-    // 功能：逐个绘制当前地图中的 tile 实例，并根据开关绘制 tile 调试碰撞框。
+    // 功能：逐个绘制当前地图中的 tile 实例，并返回真实绘制成功的 tile sprite 数量。
     int drawTileMap(TileMap& tileMap)
     {
         int renderedTileCount = 0;
@@ -4861,7 +4820,9 @@ public:
 
         return renderedTileCount;
     }
+
     // 功能：根据 sprite 自身保存的世界绘制数据绘制单帧图像。
+    // 返回 true 表示本次通过数据校验并实际调用了图像绘制逻辑。
     bool drawSprite(const sprite& targetSprite, COLORREF renderBoundsColor = RGB(0, 220, 255))
     {
         if (!targetSprite.visible)
@@ -4928,11 +4889,11 @@ public:
             renderBoundsColor
         );
 
-		return true;
+        return true;
     }
 
 
-	// 功能：绘制实体列表中的所有存活实体，并根据开关绘制实体调试碰撞框。
+	// 功能：绘制实体列表中的所有存活实体，并返回真实绘制成功的 entity sprite 数量。
     int drawEntities(vector<Entity>& entitys)
     {
         int renderedEntityCount = 0;
@@ -5032,11 +4993,19 @@ public:
         outtextxy(x, y, text);
         y += lineH;
 
-        _stprintf_s(text, _T("Entities: %d"), data.renderEntityCount);
+        _stprintf_s(text, _T("Bg Sprites: %d"), data.renderedBackgroundSprites);
         outtextxy(x, y, text);
         y += lineH;
 
-        _stprintf_s(text, _T("Tiles: %d"), data.renderTileCount);
+        _stprintf_s(text, _T("Tile Sprites: %d"), data.renderedTileSprites);
+        outtextxy(x, y, text);
+        y += lineH;
+
+        _stprintf_s(text, _T("Entity Sprites: %d"), data.renderedEntitySprites);
+        outtextxy(x, y, text);
+        y += lineH;
+
+        _stprintf_s(text, _T("Total Sprites: %d"), data.renderedTotalSprites);
         outtextxy(x, y, text);
     }
 
@@ -5155,8 +5124,10 @@ private:
             data.entityScreenY = gCamera.worldToScreenY(target.getY());
         }
 
-        data.renderEntityCount = countRenderableEntities();
-        data.renderTileCount = tileMap.getTileInstanceCount();
+        data.renderedBackgroundSprites = renderFrameStats.backgroundSpriteCount;
+        data.renderedTileSprites = renderFrameStats.tileSpriteCount;
+        data.renderedEntitySprites = renderFrameStats.entitySpriteCount;
+        data.renderedTotalSprites = renderFrameStats.totalSpriteCount;
 
         data.cameraCenterX = gCamera.centerX;
         data.cameraCenterY = gCamera.centerY;
@@ -5168,25 +5139,6 @@ private:
         data.viewTop = gCamera.getViewTop();
 
         return data;
-    }
-
-    // 功能：统计当前场景中存活且可参与绘制的实体数量。
-    // 当前第一版只按 isAlive 统计，后续可进一步过滤 sprite visible / 视口裁切结果。
-    int countRenderableEntities()
-    {
-        int count = 0;
-
-        for (int i = 0; i < (int)entitys.size(); i++)
-        {
-            if (!entitys[i].getIsAlive())
-            {
-                continue;
-            }
-
-            count++;
-        }
-
-        return count;
     }
 
     // 以下历史状态缓存必须与 entitys.size() 同步，用于判断状态变化和重叠事件首次触发。
@@ -5328,7 +5280,7 @@ public:
         double parallaxOffsetX = parallaxCameraX - parallaxOriginX;
 
         renderFrameStats.backgroundSpriteCount =
-            renderer.drawBackground(backgroundManager, parallaxOffsetX, gCamera.zoom);
+            renderer.drawBackground(backgroundManager, parallaxOffsetX);
 
         renderFrameStats.tileSpriteCount =
             renderer.drawTileMap(tileMap);
@@ -5489,7 +5441,7 @@ private:
 
         // Debug Render 区域：显示当前渲染相关数据。
         UIElement debugRenderSection;
-        debugRenderSection.init(388, 90, UI_TOP_LEFT, 16, 140);
+        debugRenderSection.init(388, 130, UI_TOP_LEFT, 16, 140);
         debugRenderSection.setParentIndex(debugPanelIndex);
         debugRenderSection.refreshTargetByParentBox(uiManager.getElement(debugPanelIndex).getBox());
         debugRenderSection.snapToTarget();
@@ -5497,7 +5449,7 @@ private:
 
         // Debug Camera 区域：显示当前相机和视口数据。
         UIElement debugCameraSection;
-        debugCameraSection.init(388, 180, UI_TOP_LEFT, 16, 250);
+        debugCameraSection.init(388, 180, UI_TOP_LEFT, 16, 300);
         debugCameraSection.setParentIndex(debugPanelIndex);
         debugCameraSection.refreshTargetByParentBox(uiManager.getElement(debugPanelIndex).getBox());
         debugCameraSection.snapToTarget();
