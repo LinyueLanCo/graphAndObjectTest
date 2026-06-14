@@ -5,6 +5,9 @@
 #include <iostream>
 #include<fstream>
 #include <vector>
+#include <algorithm>
+
+
 // 后续会继续接入 JSON 配置读取。
 using namespace std;
 
@@ -931,16 +934,31 @@ private:
     vector<BackgroundLayer> layers;
 
 public:
+
+    // 功能：按照 renderOrder 从小到大排序背景层，数值越小越先绘制。
+    void sortLayersByRenderOrder()
+    {
+        sort(
+            layers.begin(),
+            layers.end(),
+            [](const BackgroundLayer& a, const BackgroundLayer& b)
+            {
+                return a.renderOrder < b.renderOrder;
+            }
+        );
+    }
+
     // 功能：清空所有背景层。
     void clear()
     {
         layers.clear();
     }
 
-    // 功能：添加一个背景层。
+    // 功能：添加一个背景层，并按 renderOrder 维护绘制顺序。
     void addLayer(const BackgroundLayer& layer)
     {
         layers.push_back(layer);
+        sortLayersByRenderOrder();
     }
 
     // 功能：获取背景层数量。
