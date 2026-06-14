@@ -4796,11 +4796,11 @@ public:
         }
     }
     // 功能：根据 TileInstance 生成通用 sprite，并交给统一 sprite 绘制接口。
-    void drawTileInstance(TileMap& tileMap, const TileInstance& tile)
+    bool drawTileInstance(TileMap& tileMap, const TileInstance& tile)
     {
         sprite tileSprite = tileMap.buildSpriteFromTileInstance(tile);
 
-        drawSprite(
+        return drawSprite(
             tileSprite,
             RGB(255, 220, 0)
         );
@@ -4808,21 +4808,27 @@ public:
 
 
     // 功能：逐个绘制当前地图中的 tile 实例，并根据开关绘制 tile 调试碰撞框。
-    void drawTileMap(TileMap& tileMap)
+    int drawTileMap(TileMap& tileMap)
     {
+        int renderedTileCount = 0;
+
         const vector<TileInstance>& tileInstances = tileMap.getTileInstances();
 
         for (int i = 0; i < (int)tileInstances.size(); i++)
         {
-            drawTileInstance(tileMap, tileInstances[i]);
+            if (drawTileInstance(tileMap, tileInstances[i]))
+            {
+                renderedTileCount++;
+            }
         }
 
         if (showTileCollisionBox)
         {
             tileMap.drawDebugCollisionBoxes();
         }
-    }
 
+        return renderedTileCount;
+    }
     // 功能：根据 sprite 自身保存的世界绘制数据绘制单帧图像。
     bool drawSprite(const sprite& targetSprite, COLORREF renderBoundsColor = RGB(0, 220, 255))
     {
