@@ -836,6 +836,90 @@ struct sprite
 };
 
 
+// BackgroundLayer：
+// 单个背景层的数据对象。
+// 它保存图片、视差系数、缩放响应系数和绘制开关。
+struct BackgroundLayer
+{
+    IMAGE image;
+
+    int renderOrder;
+
+    double parallaxFactor;
+    double zoomFactor;
+
+    bool visible;
+    bool repeatX;
+    bool useAlphaBlend;
+
+    // 功能：初始化背景层默认数据。
+    BackgroundLayer()
+    {
+        renderOrder = 0;
+
+        parallaxFactor = 0.0;
+        zoomFactor = 0.0;
+
+        visible = true;
+        repeatX = true;
+        useAlphaBlend = true;
+    }
+
+    // 功能：加载背景层图片并设置基础绘制参数。
+    void load(
+        const TCHAR* imagePath,
+        int newRenderOrder,
+        double newParallaxFactor,
+        double newZoomFactor,
+        bool newUseAlphaBlend
+    )
+    {
+        loadimage(&image, imagePath, WINDOW_WIDTH, WINDOW_HEIGHT, true);
+
+        renderOrder = newRenderOrder;
+        parallaxFactor = newParallaxFactor;
+        zoomFactor = newZoomFactor;
+        useAlphaBlend = newUseAlphaBlend;
+    }
+};
+
+
+
+// BackgroundManager：
+// 管理当前关卡中的所有背景层。
+// 当前只负责保存背景层数据，后续会负责按相机状态生成 background sprite。
+class BackgroundManager
+{
+private:
+    vector<BackgroundLayer> layers;
+
+public:
+    // 功能：清空所有背景层。
+    void clear()
+    {
+        layers.clear();
+    }
+
+    // 功能：添加一个背景层。
+    void addLayer(const BackgroundLayer& layer)
+    {
+        layers.push_back(layer);
+    }
+
+    // 功能：获取背景层数量。
+    int getLayerCount() const
+    {
+        return (int)layers.size();
+    }
+
+    // 功能：获取背景层只读列表。
+    const vector<BackgroundLayer>& getLayers() const
+    {
+        return layers;
+    }
+};
+
+
 // animatedSprite：
  // 过渡期的序列帧动画播放器，后续可以进一步改名为 AnimationPlayer。
  // 它根据 AnimationClip 绑定图片资源，推进 currentFrame，并把当前帧写入 sprite。
