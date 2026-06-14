@@ -4901,23 +4901,30 @@ public:
 
 
 	// 功能：绘制实体列表中的所有存活实体，并根据开关绘制实体调试碰撞框。
-	void drawEntities(vector<Entity>& entitys)
-	{
-		for (int i = 0; i < (int)entitys.size(); i++)
-		{
-			if (!entitys[i].getIsAlive())
-			{
-				continue;
-			}
+    int drawEntities(vector<Entity>& entitys)
+    {
+        int renderedEntityCount = 0;
 
-            drawSprite(entitys[i].getSprite());
-			if (showCollisionBox)
-			{
+        for (int i = 0; i < (int)entitys.size(); i++)
+        {
+            if (!entitys[i].getIsAlive())
+            {
+                continue;
+            }
+
+            if (drawSprite(entitys[i].getSprite()))
+            {
+                renderedEntityCount++;
+            }
+
+            if (showCollisionBox)
+            {
                 drawEntityCollisionBox(entitys[i]);
-			}
-		}
-	}
+            }
+        }
 
+        return renderedEntityCount;
+    }
     // 功能：绘制一个通用 UIElement 面板。
     void drawUIElementPanel(const UIElement& element)
     {
