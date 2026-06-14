@@ -783,6 +783,12 @@ struct sprite
 	double offsetX;
 	double offsetY;
 
+	double worldCenterX;
+	double worldCenterY;
+
+    double worldDrawW;
+	double worldDrawH;
+
 	// 功能：初始化一个空精灵，默认没有图、帧矩形和变换。
     sprite() : imageSource(NULL),
     srcX(0),
@@ -793,6 +799,10 @@ struct sprite
     scaleY(1.0),
     offsetX(0.0),
     offsetY(0.0),
+    worldCenterX(0.0),
+    worldCenterY(0.0),
+    worldDrawW(0.0),
+    worldDrawH(0.0),
     visible(true)
 	{
 	}
@@ -814,6 +824,15 @@ struct sprite
 		offsetX = newOffsetX;
 		offsetY = newOffsetY;
 	}
+
+    // 功能：设置 sprite 在世界坐标中的最终绘制中心点和绘制尺寸。
+    void setWorldDrawData(double newCenterX, double newCenterY, double newDrawW, double newDrawH)
+    {
+        worldCenterX = newCenterX;
+        worldCenterY = newCenterY;
+        worldDrawW = newDrawW;
+        worldDrawH = newDrawH;
+    }
 };
 
 
