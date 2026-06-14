@@ -843,9 +843,9 @@ struct sprite
 // 背景对象的绘制/跟随规则。
 enum BackgroundDrawMode
 {
-    BACKGROUND_REPEAT_X,      // 横向平铺，常用于云层、远山、连续天空。
-    BACKGROUND_SINGLE_WORLD,  // 世界空间中的单张背景图，只在指定世界位置绘制。
-    BACKGROUND_FIXED_SCREEN   // 固定在视口上，营造背景不随地图移动的效果。
+    BACKGROUND_REPEAT_X,
+    BACKGROUND_SINGLE_WORLD,
+    BACKGROUND_FIXED_CAMERA
 };
 
 
@@ -921,6 +921,58 @@ struct BackgroundLayer
         drawH = newDrawH;
     }
 
+    // 功能：把当前背景对象转换成世界空间 sprite 数据。
+// 功能：把当前背景对象转换成世界空间 sprite 数据。
+    sprite buildSprite()
+    {
+        sprite backgroundSprite;
+
+        backgroundSprite.visible = visible;
+
+        if (!visible)
+        {
+            return backgroundSprite;
+        }
+
+        int imageW = image.getwidth();
+        int imageH = image.getheight();
+
+        if (imageW <= 0 || imageH <= 0)
+        {
+            backgroundSprite.visible = false;
+            return backgroundSprite;
+        }
+
+        backgroundSprite.setSource(
+            &image,
+            0,
+            0,
+            imageW,
+            imageH
+        );
+
+        double finalDrawW = drawW;
+        double finalDrawH = drawH;
+
+        if (finalDrawW <= 0)
+        {
+            finalDrawW = imageW;
+        }
+
+        if (finalDrawH <= 0)
+        {
+            finalDrawH = imageH;
+        }
+
+        backgroundSprite.setWorldDrawData(
+            centerX,
+            centerY,
+            finalDrawW,
+            finalDrawH
+        );
+
+        return backgroundSprite;
+    }
 };
 
 
@@ -4623,7 +4675,7 @@ public:
                 continue;
             }
 
-            if (layer.drawMode == BACKGROUND_FIXED_SCREEN)
+            if (layer.drawMode == BACKGROUND_FIXED_CAMERA)
             {
                 int imageW = layer.image.getwidth();
                 int imageH = layer.image.getheight();
@@ -5333,7 +5385,7 @@ private:
             0.4,
             1.0,
             true,
-			BACKGROUND_FIXED_SCREEN
+			BACKGROUND_FIXED_CAMERA
         );
         backgroundManager.addLayer(layer4);
     }
