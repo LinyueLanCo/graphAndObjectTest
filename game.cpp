@@ -868,6 +868,11 @@ struct BackgroundLayer
     double centerX;
     double centerY;
 
+    // 本帧实际用于生成 sprite 的逻辑中心点。
+    // centerX / centerY 是设计时基础位置，runtimeCenterX / runtimeCenterY 是经过视差/fixed 等规则后的当前位置。
+    double runtimeCenterX;
+    double runtimeCenterY;
+
     double drawW;
     double drawH;
     
@@ -887,6 +892,9 @@ struct BackgroundLayer
 
         centerX = 0.0;
         centerY = 0.0;
+
+        runtimeCenterX = centerX;
+        runtimeCenterY = centerY;
 
         drawW = WINDOW_WIDTH;
         drawH = WINDOW_HEIGHT;   
@@ -917,8 +925,43 @@ struct BackgroundLayer
     {
         centerX = newCenterX;
         centerY = newCenterY;
+
+        runtimeCenterX = centerX;
+        runtimeCenterY = centerY;
+
         drawW = newDrawW;
         drawH = newDrawH;
+    }
+
+    // 功能：根据背景模式更新本帧用于生成 sprite 的逻辑中心点。
+    void updateRuntimeTransform(double parallaxOffsetX)
+    {
+        if (drawMode == BACKGROUND_FIXED_CAMERA)
+        {
+            // fixed 背景直接把运行时中心锁到真实 Camera 中心，使 sprite 看起来固定在视口中。
+            runtimeCenterX = gCamera.centerX;
+            runtimeCenterY = gCamera.centerY;
+            return;
+        }
+
+        if (drawMode == BACKGROUND_SINGLE_WORLD)
+        {
+            // 单张世界背景不响应视差，运行时中心保持设计时基础位置。
+            runtimeCenterX = centerX;
+            runtimeCenterY = centerY;
+            return;
+        }
+
+        if (drawMode == BACKGROUND_REPEAT_X)
+        {
+            // 用基础中心点减去视差偏移，得到本帧背景层自己的逻辑中心点。
+            runtimeCenterX = centerX - parallaxOffsetX * parallaxFactor;
+            runtimeCenterY = centerY;
+            return;
+        }
+
+        runtimeCenterX = centerX;
+        runtimeCenterY = centerY;
     }
 
     // 功能：把当前背景对象转换成世界空间 sprite 数据。
@@ -964,8 +1007,8 @@ struct BackgroundLayer
         }
 
         backgroundSprite.setWorldDrawData(
-            centerX,
-            centerY,
+            runtimeCenterX,
+            runtimeCenterY,
             finalDrawW,
             finalDrawH
         );
@@ -1025,6 +1068,15 @@ public:
     {
         layers.push_back(layer);
         sortLayersByRenderOrder();
+    }
+
+    // 功能：更新所有背景层本帧用于生成 sprite 的逻辑变换。
+    void updateRuntimeTransforms(double parallaxOffsetX)
+    {
+        for (int i = 0; i < (int)layers.size(); i++)
+        {
+            layers[i].updateRuntimeTransform(parallaxOffsetX);
+        }
     }
 
     // 功能：获取背景层数量。
@@ -4671,10 +4723,10 @@ public:
         showRenderBounds = !showRenderBounds;
     }
 
-    // 功能：绘制当前关卡多层视差背景，并返回真实绘制成功的 background sprite 数量。
-    // parallaxOffsetX 表示相机中心相对初始中心的累计水平位移。
-    // BACKGROUND_REPEAT_X 会以背景对象自身位置为基准，在当前视口横向生成多个 sprite。
-    int drawBackground(BackgroundManager& backgroundManager, double parallaxOffsetX)
+    // 功能：绘制当前关卡背景层，并返回真实绘制成功的 background sprite 数量。
+    // 背景层的视差/fixed 等逻辑位置已在 BackgroundManager 更新阶段写入 runtime 坐标。
+    // BACKGROUND_REPEAT_X 会以背景对象的 runtime 中心点为基准，在当前视口横向生成多个 sprite。
+    int drawBackground(BackgroundManager& backgroundManager)
     {
         int renderedBackgroundCount = 0;
 
@@ -4690,10 +4742,7 @@ public:
 
             if (layer.drawMode == BACKGROUND_FIXED_CAMERA)
             {
-                sprite backgroundSprite = layer.buildSpriteAt(
-                    gCamera.centerX,
-                    gCamera.centerY
-                );
+                sprite backgroundSprite = layer.buildSprite();
 
                 if (drawSprite(backgroundSprite, RGB(120, 160, 255)))
                 {
@@ -4729,7 +4778,7 @@ public:
                 continue;
             }
 
-            // repeat 背景仍然以 background 自己的世界中心点为基准，只是在绘制时生成多个 sprite。
+            // repeat 背景以 background 本帧 runtime 中心点为基准，只在横向生成额外 sprite 覆盖视口。
             double repeatDrawW = layer.drawW;
             double repeatDrawH = layer.drawH;
 
@@ -4748,9 +4797,9 @@ public:
                 continue;
             }
 
-            // 视差只影响当前帧的渲染中心，不直接修改 background 对象自己的逻辑中心。
-            double renderCenterX = layer.centerX - parallaxOffsetX * layer.parallaxFactor;
-            double renderCenterY = layer.centerY;
+            // 读取逻辑层预先算好的 runtime 中心点，Renderer 不再负责计算视差偏移。
+            double renderCenterX = layer.runtimeCenterX;
+            double renderCenterY = layer.runtimeCenterY;
 
             // 从视口左侧外面开始找第一张需要绘制的背景 sprite。
             double startCenterX = renderCenterX;
@@ -5228,8 +5277,8 @@ public:
             gCamera.followInstant(entitys[0].getX(), entitys[0].getY(), worldWidth, worldHeight);
         }
 
-        parallaxCameraX = gCamera.centerX;
-        parallaxOriginX = gCamera.centerX;
+        parallaxCameraX = getParallaxCameraCenterX();
+        parallaxOriginX = parallaxCameraX;
     }
 
 
@@ -5271,6 +5320,9 @@ public:
         updateCamera(input);
         updateParallaxCamera();
 
+        double parallaxOffsetX = parallaxCameraX - parallaxOriginX;
+        backgroundManager.updateRuntimeTransforms(parallaxOffsetX);
+
         updateDebugStates();
 
         updateOverlapEvents();
@@ -5280,10 +5332,8 @@ public:
 	// 功能：委托 Renderer 绘制当前关卡画面。
     void draw()
     {
-        double parallaxOffsetX = parallaxCameraX - parallaxOriginX;
-
         renderFrameStats.backgroundSpriteCount =
-            renderer.drawBackground(backgroundManager, parallaxOffsetX);
+            renderer.drawBackground(backgroundManager);
 
         renderFrameStats.tileSpriteCount =
             renderer.drawTileMap(tileMap);
@@ -5778,13 +5828,48 @@ private:
         );
     }
 
+    // 功能：按固定参考视口宽度计算背景视差使用的横向相机中心。
+    // 这个值不使用当前 gCamera.zoom，因此不会因为缩放改变可见宽度而产生额外视差位移。
+    double getParallaxCameraCenterX()
+    {
+        if (
+            gCameraFollowTargetIndex < 0 ||
+            gCameraFollowTargetIndex >= (int)entitys.size()
+            )
+        {
+            return parallaxCameraX;
+        }
+
+        double targetX = entitys[gCameraFollowTargetIndex].getX();
+
+        // 视差背景的横向锚点使用 zoom = 1 时的窗口宽度作为参考视口。
+        double referenceVisibleW = WINDOW_WIDTH;
+        double referenceHalfW = referenceVisibleW / 2.0;
+
+        if (worldWidth <= referenceVisibleW)
+        {
+            return worldWidth / 2.0;
+        }
+
+        if (targetX < referenceHalfW)
+        {
+            return referenceHalfW;
+        }
+
+        if (targetX > worldWidth - referenceHalfW)
+        {
+            return worldWidth - referenceHalfW;
+        }
+
+        return targetX;
+    }
+
 
     // 功能：更新背景视差专用相机位置。
-    // 注意：这里记录的是摄像机最终中心位置，而不是角色位置。
-    // 因此当摄像机被世界边界限制住时，背景也会停止滚动。
+    // 它使用固定参考视口计算横向锚点，避免真实 Camera 贴边缩放时污染背景视差。
     void updateParallaxCamera()
     {
-        parallaxCameraX = gCamera.centerX;
+        parallaxCameraX = getParallaxCameraCenterX();
     }
 
     // 功能：检测实体状态变化并输出调试信息。
