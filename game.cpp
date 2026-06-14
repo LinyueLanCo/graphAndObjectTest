@@ -1542,9 +1542,8 @@ public:
 		double worldDrawW = drawTileWidth * tile.scaleX;
 		double worldDrawH = drawTileHeight * tile.scaleY;
 
-		double worldCenterX = tile.centerX + offsetX;
-		double worldCenterY = tile.centerY + offsetY;
-
+        double worldCenterX = tile.centerX + tile.offsetX;
+        double worldCenterY = tile.centerY + tile.offsetY;
 
 		tileSprite.setWorldDrawData(
 			worldCenterX,
@@ -4550,103 +4549,16 @@ public:
         }
     }
 
-    // 功能：根据 TileInstance 数据绘制单个地图 tile。
+// 功能：根据 TileInstance 生成通用 sprite，并交给统一 sprite 绘制接口。
     void drawTileInstance(TileMap& tileMap, const TileInstance& tile)
     {
-        if (!tile.visible)
-        {
-            return;
-        }
+        sprite tileSprite = tileMap.buildSpriteFromTileInstance(tile);
 
-        if (tile.tileId == TILE_EMPTY)
-        {
-            return;
-        }
-
-        IMAGE* tileset = tileMap.getTilesetImage();
-
-        if (tileset == NULL)
-        {
-            return;
-        }
-
-        int sourceTileWidth = tileMap.getSourceTileWidth();
-        int sourceTileHeight = tileMap.getSourceTileHeight();
-
-        if (sourceTileWidth <= 0 || sourceTileHeight <= 0)
-        {
-            return;
-        }
-
-        int tilesetCols = tileset->getwidth() / sourceTileWidth;
-
-        if (tilesetCols <= 0)
-        {
-            return;
-        }
-
-        int realTileIndex = tile.tileId - 1;
-
-        // 用 tileId 在 tileset 中的线性序号换算源图裁剪坐标。
-        int srcX = (realTileIndex % tilesetCols) * sourceTileWidth;
-        int srcY = (realTileIndex / tilesetCols) * sourceTileHeight;
-
-        // 用默认 tile 世界尺寸乘实例缩放，得到这个 tile 本帧实际绘制尺寸。
-        double worldDrawW = tileMap.getDrawTileWidth() * tile.scaleX;
-        double worldDrawH = tileMap.getDrawTileHeight() * tile.scaleY;
-
-        // 用实例中心点加偏移，得到这个 tile 本帧实际绘制中心点。
-        double drawCenterX = tile.centerX + tile.offsetX;
-        double drawCenterY = tile.centerY + tile.offsetY;
-
-        // 以中心点为锚点，计算世界坐标中的绘制矩形。
-        double worldLeft = drawCenterX - worldDrawW / 2.0;
-        double worldRight = drawCenterX + worldDrawW / 2.0;
-        double worldBottom = drawCenterY - worldDrawH / 2.0;
-        double worldTop = drawCenterY + worldDrawH / 2.0;
-
-        int screenLeft = gCamera.worldToScreenX(worldLeft);
-        int screenRight = gCamera.worldToScreenX(worldRight);
-        int screenTop = gCamera.worldToScreenY(worldTop);
-        int screenBottom = gCamera.worldToScreenY(worldBottom);
-
-        // 用屏幕左右/上下边界相减，得到最终绘制到屏幕上的 tile 尺寸。
-        int screenTileW = screenRight - screenLeft;
-        int screenTileH = screenBottom - screenTop;
-
-        if (screenTileW < 1)
-        {
-            screenTileW = 1;
-        }
-
-        if (screenTileH < 1)
-        {
-            screenTileH = 1;
-        }
-
-        drawImageTileAlpha(
-            screenLeft,
-            screenTop,
-            screenTileW,
-            screenTileH,
-            tileset,
-            srcX,
-            srcY,
-            sourceTileWidth,
-            sourceTileHeight
-        );
-
-        // tile 绘制边界来自 TileInstance 的中心点、偏移和缩放，可能与 tile 碰撞盒不同。
-        drawRenderBounds(
-            screenLeft,
-            screenTop,
-            screenTileW,
-            screenTileH,
+        drawSprite(
+            tileSprite,
             RGB(255, 220, 0)
         );
-
     }
-
 
 
     // 功能：逐个绘制当前地图中的 tile 实例，并根据开关绘制 tile 调试碰撞框。
@@ -4666,7 +4578,7 @@ public:
     }
 
     // 功能：根据 sprite 自身保存的世界绘制数据绘制单帧图像。
-    void drawSprite(const sprite& targetSprite)
+    void drawSprite(const sprite& targetSprite, COLORREF renderBoundsColor = RGB(0, 220, 255))
     {
         if (!targetSprite.visible)
         {
@@ -4729,7 +4641,7 @@ public:
             drawY,
             screenDrawW,
             screenDrawH,
-            RGB(0, 220, 255)
+            renderBoundsColor
         );
     }
 
