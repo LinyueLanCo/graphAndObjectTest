@@ -4671,69 +4671,6 @@ public:
     }
 
 
-	// 功能：根据实体中心点和 sprite 数据绘制单帧图像。
-	void drawSprite(const sprite& targetSprite, double ownerX, double ownerY)
-	{
-        if(!targetSprite.visible)
-        {
-            return;
-
-        }
-
-        if (targetSprite.imageSource == NULL)
-        {
-            return;
-        }
-
-        if(targetSprite.srcW <= 0 || targetSprite.srcH <= 0)
-        {
-            return;
-		}
-		// 计算世界坐标系下的绘制尺寸,绘制位置以实体中心点为基准，并加上 sprite 的偏移
-        // 用源帧尺寸乘 sprite 缩放，得到当前帧在世界坐标里的绘制宽高。
-		double worldDrawW = targetSprite.srcW * targetSprite.scaleX;
-		double worldDrawH = targetSprite.srcH * targetSprite.scaleY;
-
-        // 用实体中心点加 sprite 偏移，得到 sprite 自己的世界中心点。
-		double spriteCenterX = ownerX + targetSprite.offsetX;
-		double spriteCenterY = ownerY + targetSprite.offsetY;
-
-        // 用 sprite 世界中心点减半宽、加半高，得到世界绘制矩形左上角。
-		double worldDrawLeft = spriteCenterX - worldDrawW / 2.0;
-		double worldDrawTop = spriteCenterY + worldDrawH / 2.0;
-
-		//再经历一次世界坐标 -> 屏幕坐标的转换，得到最终的绘制位置
-		int drawX = gCamera.worldToScreenX(worldDrawLeft);
-		int drawY = gCamera.worldToScreenY(worldDrawTop);
-		// 世界尺寸 -> 屏幕尺寸的转换，得到最终的绘制尺寸,这个过程会经历camera的zoom
-		int screenDrawW = gCamera.worldSizeToScreen(worldDrawW);
-		int screenDrawH = gCamera.worldSizeToScreen(worldDrawH);
-
-        // 根据源图裁剪矩形和屏幕目标矩形完成 Alpha 混合绘制。
-        drawImageTileAlpha(
-            drawX,
-            drawY,
-            screenDrawW,
-            screenDrawH,
-            targetSprite.imageSource,
-            targetSprite.srcX,
-            targetSprite.srcY,
-            targetSprite.srcW,
-            targetSprite.srcH
-        );
-
-
-        // sprite 绘制边界来自 sprite 的源帧尺寸、缩放和偏移，通常不等同于实体碰撞盒。
-        drawRenderBounds(
-            drawX,
-            drawY,
-            screenDrawW,
-            screenDrawH,
-            RGB(0, 220, 255)
-        );
-
-    }
-
 	// 功能：绘制实体列表中的所有存活实体，并根据开关绘制实体调试碰撞框。
 	void drawEntities(vector<Entity>& entitys)
 	{
