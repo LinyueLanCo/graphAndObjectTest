@@ -4847,15 +4847,18 @@ public:
 
         // 用 sprite 世界中心点和世界绘制尺寸，计算世界绘制矩形。
         double worldLeft = targetSprite.worldCenterX - targetSprite.worldDrawW / 2.0;
+        double worldRight = targetSprite.worldCenterX + targetSprite.worldDrawW / 2.0;
         double worldTop = targetSprite.worldCenterY + targetSprite.worldDrawH / 2.0;
+        double worldBottom = targetSprite.worldCenterY - targetSprite.worldDrawH / 2.0;
 
-        // 把世界绘制矩形转换为屏幕左上角。
         int drawX = gCamera.worldToScreenX(worldLeft);
         int drawY = gCamera.worldToScreenY(worldTop);
 
-        // 把世界绘制尺寸转换为屏幕绘制尺寸。
-        int screenDrawW = gCamera.worldSizeToScreen(targetSprite.worldDrawW);
-        int screenDrawH = gCamera.worldSizeToScreen(targetSprite.worldDrawH);
+        int drawRight = gCamera.worldToScreenX(worldRight);
+        int drawBottom = gCamera.worldToScreenY(worldBottom);
+
+        int screenDrawW = drawRight - drawX;
+        int screenDrawH = drawBottom - drawY;
 
         if (screenDrawW < 1)
         {
