@@ -4573,6 +4573,40 @@ public:
         showRenderBounds = !showRenderBounds;
     }
 
+    // 功能：按屏幕坐标绘制单张背景图片，并绘制调试边界。
+    void drawBackgroundImageOnScreen(
+        BackgroundLayer& layer,
+        int drawX,
+        int drawY,
+        int drawW,
+        int drawH
+    )
+    {
+        if (drawW <= 0 || drawH <= 0)
+        {
+            return;
+        }
+
+        if (layer.useAlphaBlend)
+        {
+            putimage_alpha(drawX, drawY, drawW, drawH, &layer.image);
+        }
+        else
+        {
+            putimage(drawX, drawY, drawW, drawH, &layer.image, 0, 0);
+        }
+
+        drawRenderBounds(
+            drawX,
+            drawY,
+            drawW,
+            drawH,
+            RGB(120, 160, 255)
+        );
+    }
+
+
+
     // 功能：绘制当前关卡多层视差背景。
     // parallaxOffsetX 表示相机中心相对初始中心的累计水平位移。
     // cameraZoom 表示当前真实相机 zoom，用于让不同远近的背景层按不同强度响应缩放。
@@ -4586,6 +4620,44 @@ public:
 
             if (!layer.visible)
             {
+                continue;
+            }
+
+            if (layer.drawMode == BACKGROUND_FIXED_SCREEN)
+            {
+                int imageW = layer.image.getwidth();
+                int imageH = layer.image.getheight();
+
+                if (imageW <= 0 || imageH <= 0)
+                {
+                    continue;
+                }
+
+                // fixed 背景固定在视口中心，不跟随世界坐标移动。
+                int drawW = (int)layer.drawW;
+                int drawH = (int)layer.drawH;
+
+                if (drawW <= 0)
+                {
+                    drawW = imageW;
+                }
+
+                if (drawH <= 0)
+                {
+                    drawH = imageH;
+                }
+
+                int drawX = WINDOW_WIDTH / 2 - drawW / 2;
+                int drawY = WINDOW_HEIGHT / 2 - drawH / 2;
+
+                drawBackgroundImageOnScreen(
+                    layer,
+                    drawX,
+                    drawY,
+                    drawW,
+                    drawH
+                );
+
                 continue;
             }
 
@@ -4643,22 +4715,12 @@ public:
 
             for (int drawX = baseX; drawX < WINDOW_WIDTH; drawX += drawW)
             {
-                if (layer.useAlphaBlend)
-                {
-                    putimage_alpha(drawX, drawY, drawW, drawH, &layer.image);
-                }
-                else
-                {
-                    putimage(drawX, drawY, drawW, drawH, &layer.image, 0, 0);
-                }
-
-                // 背景层可能会横向平铺；这里显示每一块平铺图片的实际绘制范围。
-                drawRenderBounds(
+                drawBackgroundImageOnScreen(
+                    layer,
                     drawX,
                     drawY,
                     drawW,
-                    drawH,
-                    RGB(120, 160, 255)
+                    drawH
                 );
             }
         }
@@ -5271,7 +5333,7 @@ private:
             0.4,
             1.0,
             true,
-            BACKGROUND_REPEAT_X
+			BACKGROUND_FIXED_SCREEN
         );
         backgroundManager.addLayer(layer4);
     }
