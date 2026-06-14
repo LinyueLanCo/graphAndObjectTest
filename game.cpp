@@ -4740,44 +4740,57 @@ public:
                 layerZoom = 1.0;
             }
 
-            int drawW = (int)(imageW * layerZoom);
-            int drawH = (int)(imageH * layerZoom);
+            // repeat 背景仍然以 background 自己的世界中心点为基准，只是在绘制时生成多个 sprite。
+            double repeatDrawW = layer.drawW;
+            double repeatDrawH = layer.drawH;
 
-            if (drawW < 1)
+            if (repeatDrawW <= 0)
             {
-                drawW = 1;
+                repeatDrawW = layer.image.getwidth();
             }
 
-            if (drawH < 1)
+            if (repeatDrawH <= 0)
             {
-                drawH = 1;
+                repeatDrawH = layer.image.getheight();
             }
 
-            // 背景平移只使用相机中心的真实位移；
-            // layerZoom 只负责把该层自身缩放后的偏移换算成屏幕距离。
-            double screenOriginX =
-                -parallaxOffsetX * layer.parallaxFactor * layerZoom
-                + WINDOW_WIDTH / 2.0
-                - drawW / 2.0;
-
-            int baseX = (int)fmod(screenOriginX, (double)drawW);
-
-            if (baseX > 0)
+            if (repeatDrawW <= 0 || repeatDrawH <= 0)
             {
-                baseX -= drawW;
+                continue;
             }
 
-            // 纵向先保持屏幕中心缩放。
-            int drawY = (WINDOW_HEIGHT - drawH) / 2;
+            // 视差只影响当前帧的渲染中心，不直接修改 background 对象自己的逻辑中心。
+            double renderCenterX = layer.centerX - parallaxOffsetX * layer.parallaxFactor;
+            double renderCenterY = layer.centerY;
 
-            for (int drawX = baseX; drawX < WINDOW_WIDTH; drawX += drawW)
+            // 从视口左侧外面开始找第一张需要绘制的背景 sprite。
+            double startCenterX = renderCenterX;
+
+            while (startCenterX - repeatDrawW / 2.0 > gCamera.getViewLeft())
             {
-                drawBackgroundImageOnScreen(
-                    layer,
-                    drawX,
-                    drawY,
-                    drawW,
-                    drawH
+                startCenterX -= repeatDrawW;
+            }
+
+            while (startCenterX + repeatDrawW / 2.0 < gCamera.getViewLeft())
+            {
+                startCenterX += repeatDrawW;
+            }
+
+            // 从左到右生成多个背景 sprite，直到覆盖当前视口。
+            for (
+                double currentCenterX = startCenterX;
+                currentCenterX - repeatDrawW / 2.0 < gCamera.getViewRight();
+                currentCenterX += repeatDrawW
+                )
+            {
+                sprite backgroundSprite = layer.buildSpriteAt(
+                    currentCenterX,
+                    renderCenterY
+                );
+
+                drawSprite(
+                    backgroundSprite,
+                    RGB(120, 160, 255)
                 );
             }
         }
@@ -4811,26 +4824,26 @@ public:
     }
 
     // 功能：根据 sprite 自身保存的世界绘制数据绘制单帧图像。
-    void drawSprite(const sprite& targetSprite, COLORREF renderBoundsColor = RGB(0, 220, 255))
+    bool drawSprite(const sprite& targetSprite, COLORREF renderBoundsColor = RGB(0, 220, 255))
     {
         if (!targetSprite.visible)
         {
-            return;
+            return false;
         }
 
         if (targetSprite.imageSource == NULL)
         {
-            return;
+            return false;
         }
 
         if (targetSprite.srcW <= 0 || targetSprite.srcH <= 0)
         {
-            return;
+            return false;
         }
 
         if (targetSprite.worldDrawW <= 0 || targetSprite.worldDrawH <= 0)
         {
-            return;
+            return false;
         }
 
         // 用 sprite 世界中心点和世界绘制尺寸，计算世界绘制矩形。
@@ -4876,6 +4889,8 @@ public:
             screenDrawH,
             renderBoundsColor
         );
+
+		return true;
     }
 
 
@@ -5348,6 +5363,7 @@ private:
             false,
             BACKGROUND_REPEAT_X
         );
+        layer0.setDrawData(800, 450, WINDOW_WIDTH, WINDOW_HEIGHT);
         backgroundManager.addLayer(layer0);
 
         BackgroundLayer layer1;
@@ -5359,6 +5375,7 @@ private:
             true,
             BACKGROUND_REPEAT_X
         );
+        layer1.setDrawData(800, 450, WINDOW_WIDTH, WINDOW_HEIGHT);
         backgroundManager.addLayer(layer1);
 
         BackgroundLayer layer2;
@@ -5370,6 +5387,7 @@ private:
             true,
             BACKGROUND_REPEAT_X
         );
+        layer2.setDrawData(800, 450, WINDOW_WIDTH, WINDOW_HEIGHT);
         backgroundManager.addLayer(layer2);
 
         BackgroundLayer layer3;
@@ -5381,6 +5399,7 @@ private:
             true,
             BACKGROUND_REPEAT_X
         );
+        layer3.setDrawData(800, 450, WINDOW_WIDTH, WINDOW_HEIGHT);
         backgroundManager.addLayer(layer3);
 
         BackgroundLayer layer4;
@@ -5390,9 +5409,9 @@ private:
             0.4,
             1.0,
             true,
-            BACKGROUND_SINGLE_WORLD
+            BACKGROUND_REPEAT_X
         );
-        layer4.setDrawData(800, 450, worldWidth, worldHeight);
+        layer4.setDrawData(800, 450, WINDOW_WIDTH, WINDOW_HEIGHT);
 
         backgroundManager.addLayer(layer4);
 
