@@ -836,6 +836,16 @@ struct sprite
 };
 
 
+// BackgroundDrawMode：
+// 背景对象的绘制/跟随规则。
+enum BackgroundDrawMode
+{
+    BACKGROUND_REPEAT_X,      // 横向平铺，常用于云层、远山、连续天空。
+    BACKGROUND_SINGLE_WORLD,  // 世界空间中的单张背景图，只在指定世界位置绘制。
+    BACKGROUND_FIXED_SCREEN   // 固定在视口上，营造背景不随地图移动的效果。
+};
+
+
 // BackgroundLayer：
 // 单个背景层的数据对象。
 // 它保存图片、视差系数、缩放响应系数和绘制开关。
@@ -849,7 +859,15 @@ struct BackgroundLayer
     double zoomFactor;
 
     bool visible;
-    bool repeatX;
+    
+    BackgroundDrawMode drawMode;
+    
+    double centerX;
+    double centerY;
+
+    double drawW;
+    double drawH;
+    
     bool useAlphaBlend;
 
     // 功能：初始化背景层默认数据。
@@ -861,7 +879,14 @@ struct BackgroundLayer
         zoomFactor = 0.0;
 
         visible = true;
-        repeatX = true;
+
+        drawMode = BACKGROUND_REPEAT_X;
+
+        centerX = 0.0;
+        centerY = 0.0;
+
+        drawW = WINDOW_WIDTH;
+        drawH = WINDOW_HEIGHT;   
         useAlphaBlend = true;
     }
 
@@ -871,7 +896,8 @@ struct BackgroundLayer
         int newRenderOrder,
         double newParallaxFactor,
         double newZoomFactor,
-        bool newUseAlphaBlend
+        bool newUseAlphaBlend,
+        BackgroundDrawMode newDrawMode
     )
     {
         loadimage(&image, imagePath, WINDOW_WIDTH, WINDOW_HEIGHT, true);
@@ -880,7 +906,18 @@ struct BackgroundLayer
         parallaxFactor = newParallaxFactor;
         zoomFactor = newZoomFactor;
         useAlphaBlend = newUseAlphaBlend;
+        drawMode = newDrawMode;
     }
+
+    // 功能：设置背景对象在世界/逻辑空间中的中心点和绘制尺寸。
+    void setDrawData(double newCenterX, double newCenterY, double newDrawW, double newDrawH)
+    {
+        centerX = newCenterX;
+        centerY = newCenterY;
+        drawW = newDrawW;
+        drawH = newDrawH;
+    }
+
 };
 
 
