@@ -1461,37 +1461,8 @@ public:
     }
 
 
-    // 功能：获取当前地图使用的 tileset 图片。
-    IMAGE* getTilesetImage()
-    {
-        return &tileset;
-    }
-
-    // 功能：获取 tileset 中单个 tile 的原始宽度。
-    int getSourceTileWidth() const
-    {
-        return sourceTileWidth;
-    }
-
-    // 功能：获取 tileset 中单个 tile 的原始高度。
-    int getSourceTileHeight() const
-    {
-        return sourceTileHeight;
-    }
-
-    // 功能：获取 tile 绘制到世界坐标后的宽度。
-    int getDrawTileWidth() const
-    {
-        return drawTileWidth;
-    }
-
-    // 功能：获取 tile 绘制到世界坐标后的高度。
-    int getDrawTileHeight() const
-    {
-        return drawTileHeight;
-    }
-	//功能： 把一个tileinstance转换为通用的sprite数据，供Renderer绘制使用。
-    sprite buildSpriteFromTileInstance(const TileInstance& tile)
+    // 功能：把一个 TileInstance 转换为通用 sprite 数据，供 Renderer 绘制使用。  
+     sprite buildSpriteFromTileInstance(const TileInstance& tile)
     {
 		sprite tileSprite;
 
@@ -4549,7 +4520,7 @@ public:
         }
     }
 
-// 功能：根据 TileInstance 生成通用 sprite，并交给统一 sprite 绘制接口。
+    // 功能：根据 TileInstance 生成通用 sprite，并交给统一 sprite 绘制接口。
     void drawTileInstance(TileMap& tileMap, const TileInstance& tile)
     {
         sprite tileSprite = tileMap.buildSpriteFromTileInstance(tile);
