@@ -3161,11 +3161,31 @@ public:
 		collisionBox.setScale(scaleX, scaleY);
 	}
 
+    // 功能：根据实体当前位置和 sprite 自身变换，补全当前帧的世界绘制数据。
+    void syncRenderSpriteWorldDrawData()
+    {
+        // 用源帧尺寸乘 sprite 缩放，得到当前帧在世界坐标里的绘制宽高。
+        double worldDrawW = renderSprite.srcW * renderSprite.scaleX;
+        double worldDrawH = renderSprite.srcH * renderSprite.scaleY;
+
+        // 用实体中心点加 sprite 偏移，得到 sprite 本帧的世界中心点。
+        double worldCenterX = x + renderSprite.offsetX;
+        double worldCenterY = y + renderSprite.offsetY;
+
+        renderSprite.setWorldDrawData(
+            worldCenterX,
+            worldCenterY,
+            worldDrawW,
+            worldDrawH
+        );
+    }
+
     // 功能：推进实体当前动画播放器，并把当前帧同步写入 renderSprite。
     void updateAnimatedSprite()
     {
         animation.update();
-		animation.writeCurrentFrameTo(renderSprite);
+        animation.writeCurrentFrameTo(renderSprite);
+        syncRenderSpriteWorldDrawData();
     }
 
 
@@ -3173,6 +3193,7 @@ public:
     void setSpriteTransform(double scaleX, double scaleY, double offsetX, double offsetY)
     {
         renderSprite.setTransform(scaleX, scaleY, offsetX, offsetY);
+        syncRenderSpriteWorldDrawData();
     }
     // 功能：设置实体动画播放速度。
     void setAnimationSpeed(int speed)
@@ -3186,7 +3207,7 @@ public:
         animator.initAnimation(*this, resources);
 
         animation.writeCurrentFrameTo(renderSprite);
-
+        syncRenderSpriteWorldDrawData();
         if (animation.getFrameWidth() > 0 && animation.getFrameHeight() > 0)
         {
             collisionBox.setBaseSize(
@@ -4723,11 +4744,7 @@ public:
 				continue;
 			}
 
-            drawSprite(
-                entitys[i].getSprite(),
-                entitys[i].getX(),
-                entitys[i].getY()
-            );
+            drawSprite(entitys[i].getSprite());
 			if (showCollisionBox)
 			{
                 drawEntityCollisionBox(entitys[i]);
