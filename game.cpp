@@ -949,6 +949,12 @@ public:
         return (int)layers.size();
     }
 
+    // 功能：获取背景层可写列表。
+    vector<BackgroundLayer>& getLayers()
+    {
+        return layers;
+    }
+
     // 功能：获取背景层只读列表。
     const vector<BackgroundLayer>& getLayers() const
     {
@@ -4552,36 +4558,36 @@ public:
     // 功能：绘制当前关卡多层视差背景。
     // parallaxOffsetX 表示相机中心相对初始中心的累计水平位移。
     // cameraZoom 表示当前真实相机 zoom，用于让不同远近的背景层按不同强度响应缩放。
-    // 注意：这里不再读取旧的视口左边界；视差只使用 centerX 的真实位移，避免被 zoom 改变污染。
-    void drawBackground(IMAGE backgroundLayers[], int layerCount, double parallaxOffsetX, double cameraZoom)
+    // 当前阶段只处理 BACKGROUND_REPEAT_X；其他模式后续再接入。
+    void drawBackground(BackgroundManager& backgroundManager, double parallaxOffsetX, double cameraZoom)
     {
-        // 数值越大，越靠近前景，横向移动越明显。
-        double parallaxFactors[5] = { 0.0, 0.04, 0.12, 0.25, 0.4 };
-        // 数值越大，这一层越明显地响应 camera zoom。
-        // 最远天空层通常不明显缩放；近景层更接近场景元素。
-        double zoomFactors[5] = { 0.0, 0.25, 0.55, 0.85, 1.0 };
-
-        if (layerCount > 5)
+        vector<BackgroundLayer>& backgroundLayers = backgroundManager.getLayers();
+        for (int i = 0; i < (int)backgroundLayers.size(); i++)
         {
-            layerCount = 5;
-        }
+            BackgroundLayer& layer = backgroundLayers[i];
 
-        for (int i = 0; i < layerCount; i++)
-        {
-            int imageW = backgroundLayers[i].getwidth();
-            int imageH = backgroundLayers[i].getheight();
+            if (!layer.visible)
+            {
+                continue;
+            }
+
+            if (layer.drawMode != BACKGROUND_REPEAT_X)
+            {
+                continue;
+            }
+
+            int imageW = layer.image.getwidth();
+            int imageH = layer.image.getheight();
 
             if (imageW <= 0 || imageH <= 0)
             {
                 continue;
             }
 
-            // 计算这一层自己的 zoom。
-            // 不是所有背景层都必须 100% 跟随 camera zoom。
-            double layerZoom = 1.0 + (cameraZoom - 1.0) * zoomFactors[i];
+            // 计算这一层自己的 zoom；不同背景层可以按不同强度响应 camera zoom。
+            double layerZoom = 1.0 + (cameraZoom - 1.0) * layer.zoomFactor;
 
             // 防止 zoom out 时背景缩小露出黑边。
-            // 如果你想让背景完全像世界物体一样缩小，可以删掉这个 if。
             if (layerZoom < 1.0)
             {
                 layerZoom = 1.0;
@@ -4600,10 +4606,10 @@ public:
                 drawH = 1;
             }
 
-            // 背景平移只使用相机中心的真实位移；layerZoom 只负责把该层自身缩放后的偏移换算成屏幕距离。
-            // 不直接乘全局 cameraZoom，避免角色不动但缩放时背景发生横向滑动。
+            // 背景平移只使用相机中心的真实位移；
+            // layerZoom 只负责把该层自身缩放后的偏移换算成屏幕距离。
             double screenOriginX =
-                -parallaxOffsetX * parallaxFactors[i] * layerZoom
+                -parallaxOffsetX * layer.parallaxFactor * layerZoom
                 + WINDOW_WIDTH / 2.0
                 - drawW / 2.0;
 
@@ -4615,21 +4621,20 @@ public:
             }
 
             // 纵向先保持屏幕中心缩放。
-            // 这样 zoom in 时背景从屏幕中心向外放大。
             int drawY = (WINDOW_HEIGHT - drawH) / 2;
 
             for (int drawX = baseX; drawX < WINDOW_WIDTH; drawX += drawW)
             {
-                if (i == 0)
+                if (layer.useAlphaBlend)
                 {
-                    putimage(drawX, drawY, drawW, drawH, &backgroundLayers[i], 0, 0);
+                    putimage_alpha(drawX, drawY, drawW, drawH, &layer.image);
                 }
                 else
                 {
-                    putimage_alpha(drawX, drawY, drawW, drawH, &backgroundLayers[i]);
+                    putimage(drawX, drawY, drawW, drawH, &layer.image, 0, 0);
                 }
 
-                // 背景层可能会横向平铺；这里显示的是每一块平铺图片的实际绘制范围。
+                // 背景层可能会横向平铺；这里显示每一块平铺图片的实际绘制范围。
                 drawRenderBounds(
                     drawX,
                     drawY,
@@ -4640,7 +4645,6 @@ public:
             }
         }
     }
-
     // 功能：根据 TileInstance 生成通用 sprite，并交给统一 sprite 绘制接口。
     void drawTileInstance(TileMap& tileMap, const TileInstance& tile)
     {
@@ -4894,7 +4898,7 @@ private:
     ResourceManager resources;
 
     TileMap tileMap;
-    IMAGE backgrounds[5];
+    BackgroundManager backgroundManager;
 
     // 当前关卡实体列表。使用 vector 取代固定数组，为后续动态生成和清理实体做准备。
     vector<Entity> entitys;
@@ -5124,7 +5128,7 @@ public:
     {
         double parallaxOffsetX = parallaxCameraX - parallaxOriginX;
 
-        renderer.drawBackground(backgrounds, 5, parallaxOffsetX, gCamera.zoom);
+        renderer.drawBackground(backgroundManager, parallaxOffsetX, gCamera.zoom);   
         renderer.drawTileMap(tileMap);
         renderer.drawEntities(entitys);
 
@@ -5196,11 +5200,62 @@ private:
     // 功能：加载关卡背景图片。
     void initBackground()
     {
-        loadimage(&backgrounds[0], _T("assets\\tex\\maps\\Clouds 5\\1.png"), WINDOW_WIDTH, WINDOW_HEIGHT, true);
-        loadimage(&backgrounds[1], _T("assets\\tex\\maps\\Clouds 5\\2.png"), WINDOW_WIDTH, WINDOW_HEIGHT, true);
-        loadimage(&backgrounds[2], _T("assets\\tex\\maps\\Clouds 5\\3.png"), WINDOW_WIDTH, WINDOW_HEIGHT, true);
-        loadimage(&backgrounds[3], _T("assets\\tex\\maps\\Clouds 5\\4.png"), WINDOW_WIDTH, WINDOW_HEIGHT, true);
-        loadimage(&backgrounds[4], _T("assets\\tex\\maps\\Clouds 5\\5.png"), WINDOW_WIDTH, WINDOW_HEIGHT, true);
+        backgroundManager.clear();
+
+        BackgroundLayer layer0;
+        layer0.load(
+            _T("assets\\tex\\maps\\Clouds 5\\1.png"),
+            0,
+            0.0,
+            0.0,
+            false,
+            BACKGROUND_REPEAT_X
+        );
+        backgroundManager.addLayer(layer0);
+
+        BackgroundLayer layer1;
+        layer1.load(
+            _T("assets\\tex\\maps\\Clouds 5\\2.png"),
+            1,
+            0.04,
+            0.25,
+            true,
+            BACKGROUND_REPEAT_X
+        );
+        backgroundManager.addLayer(layer1);
+
+        BackgroundLayer layer2;
+        layer2.load(
+            _T("assets\\tex\\maps\\Clouds 5\\3.png"),
+            2,
+            0.12,
+            0.55,
+            true,
+            BACKGROUND_REPEAT_X
+        );
+        backgroundManager.addLayer(layer2);
+
+        BackgroundLayer layer3;
+        layer3.load(
+            _T("assets\\tex\\maps\\Clouds 5\\4.png"),
+            3,
+            0.25,
+            0.85,
+            true,
+            BACKGROUND_REPEAT_X
+        );
+        backgroundManager.addLayer(layer3);
+
+        BackgroundLayer layer4;
+        layer4.load(
+            _T("assets\\tex\\maps\\Clouds 5\\5.png"),
+            4,
+            0.4,
+            1.0,
+            true,
+            BACKGROUND_REPEAT_X
+        );
+        backgroundManager.addLayer(layer4);
     }
     // 功能：初始化当前关卡使用的 Debug UI 面板。
     void initUI()
