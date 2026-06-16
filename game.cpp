@@ -927,7 +927,7 @@ public:
  // 它不负责动画播放、不负责动画状态切换，也不直接调用 EasyX 绘制函数。
 struct sprite
 {
-    IMAGE* imageSource;
+    Image2D* imageSource;
 
     int srcX;
     int srcY;
@@ -965,7 +965,7 @@ struct sprite
 	{
 	}
 	// 功能：设置精灵当前帧使用的图像资源和源图裁剪矩形。
-    void setSource(IMAGE* newImageSource,int newSrcX, int newSrcY, int newSrcW, int newSrcH)
+    void setSource(Image2D* newImageSource,int newSrcX, int newSrcY, int newSrcW, int newSrcH)
     {
         imageSource = newImageSource;
         srcX = newSrcX;
@@ -1384,8 +1384,7 @@ public:
 class animatedSprite
 {
 private:
-	IMAGE image;
-	IMAGE* imageSource;
+    Image2D* imageSource;
 
     int frameCount;
     int currentFrame;
@@ -1431,7 +1430,7 @@ public:
         isPlaying = true;
         isLoop = true;
 
-        imageSource = &image;
+        imageSource = NULL;
     }
 
     //接口，判定是否播放结束
@@ -1439,56 +1438,56 @@ public:
 	{
 		return !isLoop && !isPlaying;
 	}
-    // 功能：按显式帧尺寸加载序列帧图片。
-    void load(const TCHAR* path, int frameWidth, int frameHeight, int frameCount)
-    {
-        loadimage(&image, path);
-        imageSource = &image;
-        this->frameWidth = frameWidth;
-        this->frameHeight = frameHeight;
-        this->frameCount = frameCount;
+  //  // 功能：按显式帧尺寸加载序列帧图片。
+  //  void load(const TCHAR* path, int frameWidth, int frameHeight, int frameCount)
+  //  {
+  //      loadimage(&image, path);
+  //      imageSource = &image;
+  //      this->frameWidth = frameWidth;
+  //      this->frameHeight = frameHeight;
+  //      this->frameCount = frameCount;
 
-        sourceStartX = 0;
-        sourceStartY = 0;
+  //      sourceStartX = 0;
+  //      sourceStartY = 0;
 
-        frameSpacingX = 0;
-        frameSpacingY = 0;
+  //      frameSpacingX = 0;
+  //      frameSpacingY = 0;
 
-        frameColumns = frameCount;
+  //      frameColumns = frameCount;
 
-        currentFrame = 0;
-        frameTimer = 0;
-        isPlaying = 1;
+  //      currentFrame = 0;
+  //      frameTimer = 0;
+  //      isPlaying = 1;
 
-    }
-    // 功能：按帧数自动平均切分横向序列帧图片。
-    void load(const TCHAR* path, int newFrameCount)
-    {
-        loadimage(&image, path);
-		imageSource = &image;
+  //  }
+  //  // 功能：按帧数自动平均切分横向序列帧图片。
+  //  void load(const TCHAR* path, int newFrameCount)
+  //  {
+  //      loadimage(&image, path);
+		//imageSource = &image;
 
-        frameCount = newFrameCount;
+  //      frameCount = newFrameCount;
 
-        if (frameCount < 1)
-        {
-            frameCount = 1;
-        }
+  //      if (frameCount < 1)
+  //      {
+  //          frameCount = 1;
+  //      }
 
-        frameWidth = image.getwidth() / frameCount;
-        frameHeight = image.getheight();
+  //      frameWidth = image.getwidth() / frameCount;
+  //      frameHeight = image.getheight();
 
-        sourceStartX = 0;
-        sourceStartY = 0;
+  //      sourceStartX = 0;
+  //      sourceStartY = 0;
 
-        frameSpacingX = 0;
-        frameSpacingY = 0;
+  //      frameSpacingX = 0;
+  //      frameSpacingY = 0;
 
-        frameColumns = frameCount;
+  //      frameColumns = frameCount;
 
-        currentFrame = 0;
-        frameTimer = 0;
-        isPlaying = true;
-    }
+  //      currentFrame = 0;
+  //      frameTimer = 0;
+  //      isPlaying = true;
+  //  }
 
 	// 功能：绑定已经由 AnimationClipManager 提供的动画片段。
 	void setClip(AnimationClip clip)
@@ -1498,8 +1497,7 @@ public:
 			return;
 		}
 
-		imageSource = clip.image->getImage();
-
+        imageSource = clip.image;
 		frameCount = clip.frameCount;
 
 		if (frameCount < 1)
@@ -1514,7 +1512,7 @@ public:
         else
         {
             // 用图片总宽度除以帧数，得到旧横向单行动画的单帧宽度。
-            frameWidth = imageSource->getwidth() / frameCount;
+            frameWidth = imageSource->getWidth() / frameCount;
         }
 		// 同上，指定了单帧高度就用它，否则默认整张图高就是单帧高。
         if (clip.frameHeight > 0)
@@ -1524,7 +1522,7 @@ public:
         else
         {
             // 用图片总高度作为单帧高度，兼容旧横向单行动画。
-            frameHeight = imageSource->getheight();
+            frameHeight = imageSource->getHeight();
         }
 
         sourceStartX = clip.sourceStartX;
@@ -5117,7 +5115,7 @@ public:
             drawY,
             screenDrawW,
             screenDrawH,
-            targetSprite.imageSource,
+            targetSprite.imageSource->getImage(),
             targetSprite.srcX,
             targetSprite.srcY,
             targetSprite.srcW,
