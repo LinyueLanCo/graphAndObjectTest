@@ -151,6 +151,7 @@
     <ClInclude Include="Config.h" />
     <ClInclude Include="GraphicsUtils.h" />
     <ClInclude Include="Resource.h" />
+    <ClInclude Include="Sprite.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
