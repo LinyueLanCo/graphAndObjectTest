@@ -1,7 +1,7 @@
 ﻿#include "Config.h"
 #include "Camera.h"
 #include "GraphicsUtils.h"
-
+#include "Resource.h"
 
 /*
 ============================================================
@@ -112,66 +112,6 @@ class Sound
 
 };
 
-// Image2D：
-// 包装一张 EasyX IMAGE，并记录图片基础信息。
-// 它只负责加载和提供图片资源，不负责绘制、不负责动画、不负责坐标。
-class Image2D
-{
-private:
-    IMAGE image;
-
-    int width;
-    int height;
-
-public:
-    // 功能：初始化一个空图片资源。
-    Image2D()
-    {
-        width = 0;
-        height = 0;
-    }
-
-    // 功能：从文件加载图片，并记录图片宽高。
-    bool load(const TCHAR* path)
-    {
-        loadimage(&image, path);
-
-        width = image.getwidth();
-        height = image.getheight();
-
-        return width > 0 && height > 0;
-    }
-
-    // 功能：从文件加载图片，并按指定大小缩放到内存图片。
-    bool load(const TCHAR* path, int loadW, int loadH)
-    {
-        loadimage(&image, path, loadW, loadH, true);
-
-        width = image.getwidth();
-        height = image.getheight();
-
-        return width > 0 && height > 0;
-    }
-
-    // 功能：获取 EasyX 原始图片指针，供底层绘制函数使用。
-    IMAGE* getImage()
-    {
-        return &image;
-    }
-
-    // 功能：获取图片宽度。
-    int getWidth() const
-    {
-        return width;
-    }
-
-    // 功能：获取图片高度。
-    int getHeight() const
-    {
-        return height;
-    }
-};
-
 
 
 // AnimationState：
@@ -203,34 +143,6 @@ enum AnimationSetId
 {
     ANIM_SET_NONE,
 	ANIM_SET_PLAYER1,
-};
-
-// ImageResourceId：
-// ResourceManager 中通用图片资源的索引 ID。
-// 外部系统通过这个 ID 获取 Image2D，而不是直接持有图片路径。
-enum ImageResourceId
-{
-    IMG_BG_SKY,
-    IMG_BG_CLOUDS,
-    IMG_BG_FLORA1,
-    IMG_BG_FLORA2,
-
-    IMG_TILESET_MAIN,
-
-    IMG_PLAYER_IDLE_L,
-    IMG_PLAYER_IDLE_R,
-    IMG_PLAYER_WALK_L,
-    IMG_PLAYER_WALK_R,
-    IMG_PLAYER_RUN_L,
-    IMG_PLAYER_RUN_R,
-    IMG_PLAYER_JUMP_START_L,
-    IMG_PLAYER_JUMP_START_R,
-    IMG_PLAYER_JUMP_LOOP_L,
-    IMG_PLAYER_JUMP_LOOP_R,
-    IMG_PLAYER_JUMP_END_L,
-    IMG_PLAYER_JUMP_END_R,
-
-    IMG_RESOURCE_COUNT
 };
 
 
@@ -448,106 +360,6 @@ AnimationId getAnimationId(AnimationSetId setId, AnimationState state)
     return ANIM_ID_COUNT;
 }
 
-// ResourceManager：
-// 当前关卡图片资源管理器。
-// 它根据 ImageResourceId 注册和加载 Image2D，并提供稳定的图片资源查询接口。
-// 它不负责动画片段、地图 tile 规则、背景对象逻辑和绘制逻辑。
-class ResourceManager
-{
-private:
-
-    map<ImageResourceId, const TCHAR*> imagePaths;
-    map<ImageResourceId, unique_ptr<Image2D>> images;
-
-public:
-    // 功能：根据图片资源 ID 获取 EasyX 图片指针。
-    IMAGE* getRawImage(ImageResourceId id)
-    {
-        Image2D* image = getImage2D(id);
-
-        if (image == NULL)
-        {
-            return NULL;
-        }
-
-        return image->getImage();
-    }
-
-    // 功能：注册当前关卡需要的通用图片资源路径。
-    void initImageResourceTable()
-    {
-        imagePaths.clear();
-
-        imagePaths[IMG_BG_SKY] = _T("assets\\tex\\maps\\bg1\\Sky_1920x1080.png");
-        imagePaths[IMG_BG_CLOUDS] = _T("assets\\tex\\maps\\bg1\\Clouds_1920x1080.png");
-        imagePaths[IMG_BG_FLORA1] = _T("assets\\tex\\maps\\bg1\\Flora1_1920x1080.png");
-        imagePaths[IMG_BG_FLORA2] = _T("assets\\tex\\maps\\bg1\\Flora2_1920x1080.png");
-
-        imagePaths[IMG_TILESET_MAIN] = _T("assets\\tex\\maps\\tileset.png");
-
-        imagePaths[IMG_PLAYER_IDLE_L] = _T("assets\\tex\\entities\\characters\\player1_idle_L.png");
-        imagePaths[IMG_PLAYER_IDLE_R] = _T("assets\\tex\\entities\\characters\\player1_idle_R.png");
-        imagePaths[IMG_PLAYER_WALK_L] = _T("assets\\tex\\entities\\characters\\player1_walk_L.png");
-        imagePaths[IMG_PLAYER_WALK_R] = _T("assets\\tex\\entities\\characters\\player1_walk_R.png");
-        imagePaths[IMG_PLAYER_RUN_L] = _T("assets\\tex\\entities\\characters\\player1_run_L.png");
-        imagePaths[IMG_PLAYER_RUN_R] = _T("assets\\tex\\entities\\characters\\player1_run_R.png");
-        imagePaths[IMG_PLAYER_JUMP_START_L] = _T("assets\\tex\\entities\\characters\\player1_jumpStart_L.png");
-        imagePaths[IMG_PLAYER_JUMP_START_R] = _T("assets\\tex\\entities\\characters\\player1_jumpStart_R.png");
-        imagePaths[IMG_PLAYER_JUMP_LOOP_L] = _T("assets\\tex\\entities\\characters\\player1_jumpLoop_L.png");
-        imagePaths[IMG_PLAYER_JUMP_LOOP_R] = _T("assets\\tex\\entities\\characters\\player1_jumpLoop_R.png");
-        imagePaths[IMG_PLAYER_JUMP_END_L] = _T("assets\\tex\\entities\\characters\\player1_jumpEnd_L.png");
-        imagePaths[IMG_PLAYER_JUMP_END_R] = _T("assets\\tex\\entities\\characters\\player1_jumpEnd_R.png");
-    }
-
-    // 功能：根据图片资源 ID 加载一张 Image2D，并保存到资源表。
-    void loadImage2D(ImageResourceId id)
-    {
-        if (imagePaths.find(id) == imagePaths.end())
-        {
-            return;
-        }
-
-        unique_ptr<Image2D> image(new Image2D());
-
-        if (!image->load(imagePaths[id]))
-        {
-            return;
-        }
-
-        images[id] = move(image);
-    }
-
-    // 功能：加载当前资源表中注册的所有通用图片资源。
-    void loadImageResources()
-    {
-        images.clear();
-
-        for (map<ImageResourceId, const TCHAR*>::iterator it = imagePaths.begin(); it != imagePaths.end(); ++it)
-        {
-            loadImage2D(it->first);
-        }
-    }
-
-    // 功能：根据图片资源 ID 获取已加载的 Image2D。
-    Image2D* getImage2D(ImageResourceId id)
-    {
-        if (images.find(id) == images.end())
-        {
-            return NULL;
-        }
-
-        return images[id].get();
-    }
-
-	// 功能：加载当前关卡需要的图片资源。
-	void loadLevelResources()
-	{
-        initImageResourceTable();
-        loadImageResources();
-    }
-
-
-};
 
 
 // AnimationClipManager：
