@@ -1,4 +1,4 @@
-#include "AnimatedSprite.h"
+﻿#include "AnimatedSprite.h"
 
 // 功能：初始化序列帧动画的默认播放参数。
 animatedSprite::animatedSprite()

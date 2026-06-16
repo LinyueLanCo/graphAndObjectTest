@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 // AnimationState：
  // 动画表现状态枚举。当前主要由 Animator 保存和切换。

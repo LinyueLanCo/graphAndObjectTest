@@ -1,4 +1,4 @@
-#include "AnimationClipManager.h"
+﻿#include "AnimationClipManager.h"
 
 // 功能：根据资源管理器中已加载的图片创建当前关卡的动画片段表。
 void AnimationClipManager::init(ResourceManager& resources)

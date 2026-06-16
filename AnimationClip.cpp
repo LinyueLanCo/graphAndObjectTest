@@ -1,4 +1,4 @@
-#include "AnimationClip.h"
+﻿#include "AnimationClip.h"
 
 // 功能：初始化一个空动画片段描述。
 AnimationClip::AnimationClip()

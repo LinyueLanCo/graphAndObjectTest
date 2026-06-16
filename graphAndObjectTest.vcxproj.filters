@@ -18,6 +18,9 @@
     <ClCompile Include="AnimatedSprite.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="Animator.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
     <ClCompile Include="draggable.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
@@ -25,6 +28,9 @@
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="Camera.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="CameraFollow.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="GraphicsUtils.cpp">
@@ -42,15 +48,60 @@
     <ClCompile Include="AnimationClipManager.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="TileMap.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="TileTypes.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="BackgroundManager.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="BackgroundObject.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Collision.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="CollisionHandle.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="UI.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Input.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="MovementHandle.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Renderer.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Controller.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Entity.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Level.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="AnimatedSprite.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Animator.h">
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="Config.h">
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="Camera.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="CameraFollow.h">
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="GraphicsUtils.h">
@@ -72,6 +123,57 @@
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="AnimationTypes.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Background.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="BackgroundManager.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="BackgroundObject.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="BackgroundTypes.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Collision.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="CollisionHandle.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="TileMap.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="TileTypes.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="UI.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Input.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="MovementHandle.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Renderer.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Controller.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Entity.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="GameTypes.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Sound.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Level.h">
       <Filter>头文件</Filter>
     </ClInclude>
   </ItemGroup>

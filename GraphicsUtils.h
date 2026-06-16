@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include "Config.h"
 
 // 功能：注册项目内置字体，供 EasyX 文本绘制使用。

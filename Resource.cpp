@@ -1,4 +1,4 @@
-#include "Resource.h"
+﻿#include "Resource.h"
 
 Image2D::Image2D()
 {

@@ -1,4 +1,4 @@
-#include "GraphicsUtils.h"
+﻿#include "GraphicsUtils.h"
 
 // 功能：注册项目内置字体，供 EasyX 文本绘制使用。
 void loadUIFont()
