@@ -503,7 +503,7 @@ enum AnimationId
  // 它不保存当前播放进度，当前播放进度由 animatedSprite / 未来的 AnimationPlayer 负责。
 struct AnimationClip
 {
-	IMAGE* image;
+	Image2D* image;
 	int frameCount;
 	int speed;
 	bool loop;
@@ -545,8 +545,8 @@ struct AnimationClip
         frameColumns = 0;
     }
 
-	// 功能：按图片指针、帧数、速度和循环标记创建动画片段描述。
-    AnimationClip(IMAGE* newImage, int newFrameCount, int newSpeed, bool newLoop)
+	// 功能：按图片资源、帧数、速度和循环标记创建动画片段描述。
+    AnimationClip(Image2D* newImage, int newFrameCount, int newSpeed, bool newLoop)
     {
         image = newImage;
         frameCount = newFrameCount;
@@ -567,7 +567,7 @@ struct AnimationClip
 
     // 功能：按完整 sprite sheet 裁剪配置创建动画片段描述。
     AnimationClip(
-        IMAGE* newImage,
+        Image2D* newImage,
         int newFrameCount,
         int newSpeed,
         bool newLoop,
@@ -871,40 +871,40 @@ public:
         clips.clear();
 
         clips[ANIM_ID_PLAYER_IDLE_L] =
-            AnimationClip(resources.getRawImage(IMG_PLAYER_IDLE_L), 8, 3, true);
+            AnimationClip(resources.getImage2D(IMG_PLAYER_IDLE_L), 8, 3, true);
 
         clips[ANIM_ID_PLAYER_IDLE_R] =
-            AnimationClip(resources.getRawImage(IMG_PLAYER_IDLE_R), 8, 3, true);
+            AnimationClip(resources.getImage2D(IMG_PLAYER_IDLE_R), 8, 3, true);
 
         clips[ANIM_ID_PLAYER_WALK_L] =
-            AnimationClip(resources.getRawImage(IMG_PLAYER_WALK_L), 8, 3, true);
+            AnimationClip(resources.getImage2D(IMG_PLAYER_WALK_L), 8, 3, true);
 
         clips[ANIM_ID_PLAYER_WALK_R] =
-            AnimationClip(resources.getRawImage(IMG_PLAYER_WALK_R), 8, 3, true);
+            AnimationClip(resources.getImage2D(IMG_PLAYER_WALK_R), 8, 3, true);
 
         clips[ANIM_ID_PLAYER_RUN_L] =
-            AnimationClip(resources.getRawImage(IMG_PLAYER_RUN_L), 8, 3, true);
+            AnimationClip(resources.getImage2D(IMG_PLAYER_RUN_L), 8, 3, true);
 
         clips[ANIM_ID_PLAYER_RUN_R] =
-            AnimationClip(resources.getRawImage(IMG_PLAYER_RUN_R), 8, 3, true);
+            AnimationClip(resources.getImage2D(IMG_PLAYER_RUN_R), 8, 3, true);
 
         clips[ANIM_ID_PLAYER_JUMP_START_L] =
-            AnimationClip(resources.getRawImage(IMG_PLAYER_JUMP_START_L), 8, 2, false);
+            AnimationClip(resources.getImage2D(IMG_PLAYER_JUMP_START_L), 8, 2, false);
 
         clips[ANIM_ID_PLAYER_JUMP_START_R] =
-            AnimationClip(resources.getRawImage(IMG_PLAYER_JUMP_START_R), 8, 2, false);
+            AnimationClip(resources.getImage2D(IMG_PLAYER_JUMP_START_R), 8, 2, false);
 
         clips[ANIM_ID_PLAYER_JUMP_LOOP_L] =
-            AnimationClip(resources.getRawImage(IMG_PLAYER_JUMP_LOOP_L), 8, 3, true);
+            AnimationClip(resources.getImage2D(IMG_PLAYER_JUMP_LOOP_L), 8, 3, true);
 
         clips[ANIM_ID_PLAYER_JUMP_LOOP_R] =
-            AnimationClip(resources.getRawImage(IMG_PLAYER_JUMP_LOOP_R), 8, 3, true);
+            AnimationClip(resources.getImage2D(IMG_PLAYER_JUMP_LOOP_R), 8, 3, true);
 
         clips[ANIM_ID_PLAYER_JUMP_END_L] =
-            AnimationClip(resources.getRawImage(IMG_PLAYER_JUMP_END_L), 8, 2, false);
+            AnimationClip(resources.getImage2D(IMG_PLAYER_JUMP_END_L), 8, 2, false);
 
         clips[ANIM_ID_PLAYER_JUMP_END_R] =
-            AnimationClip(resources.getRawImage(IMG_PLAYER_JUMP_END_R), 8, 2, false);
+            AnimationClip(resources.getImage2D(IMG_PLAYER_JUMP_END_R), 8, 2, false);
     }
 
     // 功能：根据动画资源 ID 获取动画片段描述。
@@ -1498,7 +1498,7 @@ public:
 			return;
 		}
 
-		imageSource = clip.image;
+		imageSource = clip.image->getImage();
 
 		frameCount = clip.frameCount;
 
