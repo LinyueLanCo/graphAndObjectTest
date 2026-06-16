@@ -1,5 +1,7 @@
 ﻿#include "Config.h"
 #include "Camera.h"
+#include "GraphicsUtils.h"
+
 
 /*
 ============================================================
@@ -369,71 +371,8 @@ enum facingDirection
 };
 
 
-// 功能：注册项目内置字体，供 EasyX 文本绘制使用。
-void loadUIFont()
-{
-    AddFontResourceEx(
-        _T("Mojangles.ttf"),
-        FR_PRIVATE,
-        NULL
-    );
-}
 
 
-// putimage_alpha：
- // 使用 AlphaBlend 绘制带透明通道的 IMAGE，解决普通 putimage 透明通道不正确的问题。
-// 功能：按原图尺寸绘制带 Alpha 通道的图片。
-inline void putimage_alpha(int x, int y, IMAGE* img)
-{
-    int w = img->getwidth();
-    int h = img->getheight();
-
-    BLENDFUNCTION blend;
-    blend.BlendOp = AC_SRC_OVER;
-    blend.BlendFlags = 0;
-    blend.SourceConstantAlpha = 255;
-    blend.AlphaFormat = AC_SRC_ALPHA;
-
-    AlphaBlend(
-        GetImageHDC(NULL),
-        x, y, w, h,
-        GetImageHDC(img),
-        0, 0, w, h,
-        blend
-    );
-}
-// putimage_alpha 重载：
- // 支持指定绘制宽高，用于对整张透明图片进行简单缩放绘制。
-// 功能：按指定尺寸缩放绘制带 Alpha 通道的图片。
-inline void putimage_alpha(int x, int y, int drawW, int drawH, IMAGE* img)
-{
-    int sourceW = img->getwidth();
-    int sourceH = img->getheight();
-
-    if (drawW < 1)
-    {
-        drawW = 1;
-    }
-
-    if (drawH < 1)
-    {
-        drawH = 1;
-    }
-
-    BLENDFUNCTION blend;
-    blend.BlendOp = AC_SRC_OVER;
-    blend.BlendFlags = 0;
-    blend.SourceConstantAlpha = 255;
-    blend.AlphaFormat = AC_SRC_ALPHA;
-
-    AlphaBlend(
-        GetImageHDC(NULL),
-        x, y, drawW, drawH,
-        GetImageHDC(img),
-        0, 0, sourceW, sourceH,
-        blend
-    );
-}
 // 功能：把动画表现状态转换为玩家动画资源 ID。
 AnimationId getPlayerAnimationId(AnimationState state)
 {

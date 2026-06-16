@@ -143,10 +143,12 @@
     <ClCompile Include="Camera.cpp" />
     <ClCompile Include="draggable.cpp" />
     <ClCompile Include="game.cpp" />
+    <ClCompile Include="GraphicsUtils.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Camera.h" />
     <ClInclude Include="Config.h" />
+    <ClInclude Include="GraphicsUtils.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
