@@ -458,13 +458,28 @@ enum ImageResourceId
     IMG_BG_FLORA1,
     IMG_BG_FLORA2,
 
+    IMG_TILESET_MAIN,
+
+    IMG_PLAYER_IDLE_L,
+    IMG_PLAYER_IDLE_R,
+    IMG_PLAYER_WALK_L,
+    IMG_PLAYER_WALK_R,
+    IMG_PLAYER_RUN_L,
+    IMG_PLAYER_RUN_R,
+    IMG_PLAYER_JUMP_START_L,
+    IMG_PLAYER_JUMP_START_R,
+    IMG_PLAYER_JUMP_LOOP_L,
+    IMG_PLAYER_JUMP_LOOP_R,
+    IMG_PLAYER_JUMP_END_L,
+    IMG_PLAYER_JUMP_END_R,
+
     IMG_RESOURCE_COUNT
 };
 
 
 // AnimationId：
  // 资源层动画 ID。Animator 选择 AnimationState 后，
- // 会通过 getPlayerAnimationId 转换成 AnimationId，再向 ResourceManager 请求 AnimationClip。
+ // 会通过 getPlayerAnimationId 转换成 AnimationId，再向 AnimationClipManager 请求 AnimationClip。
 enum AnimationId
 {
 	ANIM_ID_PLAYER_IDLE_L,
@@ -740,43 +755,54 @@ AnimationId getAnimationId(AnimationSetId setId, AnimationState state)
 }
 
 // ResourceManager：
- // 当前关卡资源管理器。
- // 目前主要负责提前加载玩家动画 IMAGE，并根据 AnimationId 返回 AnimationClip。
- // 后续可以继续接管地图、音效、其它实体动画等资源。
+// 当前关卡图片资源管理器。
+// 它根据 ImageResourceId 注册和加载 Image2D，并提供稳定的图片资源查询接口。
+// 它不负责动画片段、地图 tile 规则、背景对象逻辑和绘制逻辑。
 class ResourceManager
 {
 private:
-	IMAGE playerIdleL;
-	IMAGE playerIdleR;
-	IMAGE playerWalkL;
-	IMAGE playerWalkR;
-	IMAGE playerRunL;
-	IMAGE playerRunR;
-	IMAGE playerJumpStartL;
-	IMAGE playerJumpStartR;
-	IMAGE playerJumpLoopL;
-	IMAGE playerJumpLoopR;
-	IMAGE playerJumpEndL;
-	IMAGE playerJumpEndR;
-
 
     map<ImageResourceId, const TCHAR*> imagePaths;
     map<ImageResourceId, unique_ptr<Image2D>> images;
 
 public:
-    // 功能：初始化资源指针默认值。
-    ResourceManager()
+    // 功能：根据图片资源 ID 获取 EasyX 图片指针。
+    IMAGE* getRawImage(ImageResourceId id)
     {
+        Image2D* image = getImage2D(id);
 
+        if (image == NULL)
+        {
+            return NULL;
+        }
+
+        return image->getImage();
     }
 
     // 功能：注册当前关卡需要的通用图片资源路径。
     void initImageResourceTable()
     {
+        imagePaths.clear();
+
         imagePaths[IMG_BG_SKY] = _T("assets\\tex\\maps\\bg1\\Sky_1920x1080.png");
         imagePaths[IMG_BG_CLOUDS] = _T("assets\\tex\\maps\\bg1\\Clouds_1920x1080.png");
         imagePaths[IMG_BG_FLORA1] = _T("assets\\tex\\maps\\bg1\\Flora1_1920x1080.png");
         imagePaths[IMG_BG_FLORA2] = _T("assets\\tex\\maps\\bg1\\Flora2_1920x1080.png");
+
+        imagePaths[IMG_TILESET_MAIN] = _T("assets\\tex\\maps\\tileset.png");
+
+        imagePaths[IMG_PLAYER_IDLE_L] = _T("assets\\tex\\entities\\characters\\player1_idle_L.png");
+        imagePaths[IMG_PLAYER_IDLE_R] = _T("assets\\tex\\entities\\characters\\player1_idle_R.png");
+        imagePaths[IMG_PLAYER_WALK_L] = _T("assets\\tex\\entities\\characters\\player1_walk_L.png");
+        imagePaths[IMG_PLAYER_WALK_R] = _T("assets\\tex\\entities\\characters\\player1_walk_R.png");
+        imagePaths[IMG_PLAYER_RUN_L] = _T("assets\\tex\\entities\\characters\\player1_run_L.png");
+        imagePaths[IMG_PLAYER_RUN_R] = _T("assets\\tex\\entities\\characters\\player1_run_R.png");
+        imagePaths[IMG_PLAYER_JUMP_START_L] = _T("assets\\tex\\entities\\characters\\player1_jumpStart_L.png");
+        imagePaths[IMG_PLAYER_JUMP_START_R] = _T("assets\\tex\\entities\\characters\\player1_jumpStart_R.png");
+        imagePaths[IMG_PLAYER_JUMP_LOOP_L] = _T("assets\\tex\\entities\\characters\\player1_jumpLoop_L.png");
+        imagePaths[IMG_PLAYER_JUMP_LOOP_R] = _T("assets\\tex\\entities\\characters\\player1_jumpLoop_R.png");
+        imagePaths[IMG_PLAYER_JUMP_END_L] = _T("assets\\tex\\entities\\characters\\player1_jumpEnd_L.png");
+        imagePaths[IMG_PLAYER_JUMP_END_R] = _T("assets\\tex\\entities\\characters\\player1_jumpEnd_R.png");
     }
 
     // 功能：根据图片资源 ID 加载一张 Image2D，并保存到资源表。
@@ -800,6 +826,8 @@ public:
     // 功能：加载当前资源表中注册的所有通用图片资源。
     void loadImageResources()
     {
+        images.clear();
+
         for (map<ImageResourceId, const TCHAR*>::iterator it = imagePaths.begin(); it != imagePaths.end(); ++it)
         {
             loadImage2D(it->first);
@@ -817,96 +845,80 @@ public:
         return images[id].get();
     }
 
-	// 功能：加载当前关卡需要的动画图片资源。
+	// 功能：加载当前关卡需要的图片资源。
 	void loadLevelResources()
 	{
         initImageResourceTable();
         loadImageResources();
-
-		loadimage(&playerIdleL, _T("assets\\tex\\entities\\characters\\player1_idle_L.png"));
-		loadimage(&playerIdleR, _T("assets\\tex\\entities\\characters\\player1_idle_R.png"));
-		loadimage(&playerWalkL, _T("assets\\tex\\entities\\characters\\player1_walk_L.png"));
-		loadimage(&playerWalkR, _T("assets\\tex\\entities\\characters\\player1_walk_R.png"));
-		loadimage(&playerRunL, _T("assets\\tex\\entities\\characters\\player1_run_L.png"));
-		loadimage(&playerRunR, _T("assets\\tex\\entities\\characters\\player1_run_R.png"));
-		loadimage(&playerJumpStartL, _T("assets\\tex\\entities\\characters\\player1_jumpStart_L.png"));
-		loadimage(&playerJumpStartR, _T("assets\\tex\\entities\\characters\\player1_jumpStart_R.png"));
-		loadimage(&playerJumpLoopL, _T("assets\\tex\\entities\\characters\\player1_jumpLoop_L.png"));
-		loadimage(&playerJumpLoopR, _T("assets\\tex\\entities\\characters\\player1_jumpLoop_R.png"));
-		loadimage(&playerJumpEndL, _T("assets\\tex\\entities\\characters\\player1_jumpEnd_L.png"));
-		loadimage(&playerJumpEndR, _T("assets\\tex\\entities\\characters\\player1_jumpEnd_R.png"));
-
-    
-    
     }
-
-	// 功能：根据动画 ID 获取对应动画资源描述。
-	AnimationClip getAnimationClip(AnimationId id)
-	{
-		if (id == ANIM_ID_PLAYER_IDLE_L)
-		{
-			return AnimationClip(&playerIdleL, 8, 3, true);
-		}
-
-		if (id == ANIM_ID_PLAYER_IDLE_R)
-		{
-			return AnimationClip(&playerIdleR, 8, 3, true);
-		}
-
-		if (id == ANIM_ID_PLAYER_WALK_L)
-		{
-			return AnimationClip(&playerWalkL, 8, 3, true);
-		}
-
-		if (id == ANIM_ID_PLAYER_WALK_R)
-		{
-			return AnimationClip(&playerWalkR, 8, 3, true);
-		}
-
-		if (id == ANIM_ID_PLAYER_RUN_L)
-		{
-			return AnimationClip(&playerRunL, 8, 3, true);
-		}
-
-		if (id == ANIM_ID_PLAYER_RUN_R)
-		{
-			return AnimationClip(&playerRunR, 8, 3, true);
-		}
-		if (id == ANIM_ID_PLAYER_JUMP_START_L)
-		{
-			return AnimationClip(&playerJumpStartL, 8, 2, false);
-		}
-
-		if (id == ANIM_ID_PLAYER_JUMP_START_R)
-		{
-			return AnimationClip(&playerJumpStartR, 8, 2, false);
-		}
-
-		if (id == ANIM_ID_PLAYER_JUMP_LOOP_L)
-		{
-			return AnimationClip(&playerJumpLoopL, 8, 3, true);
-		}
-
-		if (id == ANIM_ID_PLAYER_JUMP_LOOP_R)
-		{
-			return AnimationClip(&playerJumpLoopR, 8, 3, true);
-		}
-
-		if (id == ANIM_ID_PLAYER_JUMP_END_L)
-		{
-			return AnimationClip(&playerJumpEndL, 8, 2, false);
-		}
-
-		if (id == ANIM_ID_PLAYER_JUMP_END_R)
-		{
-			return AnimationClip(&playerJumpEndR, 8, 2, false);
-		}
-		return AnimationClip();
-	}
-
 
 
 };
+
+
+// AnimationClipManager：
+// 统一管理 AnimationId 到 AnimationClip 的映射。
+// 它不加载图片，只根据 ResourceManager 中已经加载好的 Image2D 创建动画片段描述。
+class AnimationClipManager
+{
+private:
+    map<AnimationId, AnimationClip> clips;
+
+public:
+    // 功能：根据资源管理器中已加载的图片创建当前关卡的动画片段表。
+    void init(ResourceManager& resources)
+    {
+        clips.clear();
+
+        clips[ANIM_ID_PLAYER_IDLE_L] =
+            AnimationClip(resources.getRawImage(IMG_PLAYER_IDLE_L), 8, 3, true);
+
+        clips[ANIM_ID_PLAYER_IDLE_R] =
+            AnimationClip(resources.getRawImage(IMG_PLAYER_IDLE_R), 8, 3, true);
+
+        clips[ANIM_ID_PLAYER_WALK_L] =
+            AnimationClip(resources.getRawImage(IMG_PLAYER_WALK_L), 8, 3, true);
+
+        clips[ANIM_ID_PLAYER_WALK_R] =
+            AnimationClip(resources.getRawImage(IMG_PLAYER_WALK_R), 8, 3, true);
+
+        clips[ANIM_ID_PLAYER_RUN_L] =
+            AnimationClip(resources.getRawImage(IMG_PLAYER_RUN_L), 8, 3, true);
+
+        clips[ANIM_ID_PLAYER_RUN_R] =
+            AnimationClip(resources.getRawImage(IMG_PLAYER_RUN_R), 8, 3, true);
+
+        clips[ANIM_ID_PLAYER_JUMP_START_L] =
+            AnimationClip(resources.getRawImage(IMG_PLAYER_JUMP_START_L), 8, 2, false);
+
+        clips[ANIM_ID_PLAYER_JUMP_START_R] =
+            AnimationClip(resources.getRawImage(IMG_PLAYER_JUMP_START_R), 8, 2, false);
+
+        clips[ANIM_ID_PLAYER_JUMP_LOOP_L] =
+            AnimationClip(resources.getRawImage(IMG_PLAYER_JUMP_LOOP_L), 8, 3, true);
+
+        clips[ANIM_ID_PLAYER_JUMP_LOOP_R] =
+            AnimationClip(resources.getRawImage(IMG_PLAYER_JUMP_LOOP_R), 8, 3, true);
+
+        clips[ANIM_ID_PLAYER_JUMP_END_L] =
+            AnimationClip(resources.getRawImage(IMG_PLAYER_JUMP_END_L), 8, 2, false);
+
+        clips[ANIM_ID_PLAYER_JUMP_END_R] =
+            AnimationClip(resources.getRawImage(IMG_PLAYER_JUMP_END_R), 8, 2, false);
+    }
+
+    // 功能：根据动画资源 ID 获取动画片段描述。
+    AnimationClip getClip(AnimationId id)
+    {
+        if (clips.find(id) == clips.end())
+        {
+            return AnimationClip();
+        }
+
+        return clips[id];
+    }
+};
+
 
 
 // sprite：
@@ -1155,8 +1167,9 @@ struct BackgroundObject
 
 
 // BackgroundManager：
-// 管理当前关卡中的所有背景层。
-// 它负责保存背景对象，并按 renderOrder 维护背景绘制顺序。
+// 管理当前关卡中的背景对象。
+// objects 保存手动创建的背景对象，renderObjects 保存本帧平铺展开后真正参与绘制的背景对象。
+// 它按 renderOrder 维护绘制顺序，但不直接负责绘制。
 class BackgroundManager
 {
 private:
@@ -1249,7 +1262,7 @@ public:
 
 
 
-    // 功能：清空所有背景资源、背景对象和本帧绘制对象。
+    // 功能：清空所有背景对象和本帧绘制对象。
     void clear()
     {
         objects.clear();
@@ -1300,18 +1313,16 @@ public:
         sortObjectsByRenderOrder();
         rebuildRenderObjects();
     }
-    // 功能：更新所有背景层和背景对象本帧用于生成 sprite 的逻辑变换。
+    // 功能：更新所有背景对象本帧用于生成 sprite 的逻辑变换。
     void updateRuntimeTransforms(double parallaxOffsetX)
     {
-
-
         for (int i = 0; i < (int)objects.size(); i++)
         {
             objects[i].updateRuntimeTransform(parallaxOffsetX);
             objects[i].updateSprite();
         }
 
-		rebuildRenderObjects();
+        rebuildRenderObjects();
     }
 
 
@@ -1479,7 +1490,7 @@ public:
         isPlaying = true;
     }
 
-	// 功能：绑定已经由 ResourceManager 加载好的动画资源。
+	// 功能：绑定已经由 AnimationClipManager 提供的动画片段。
 	void setClip(AnimationClip clip)
 	{
 		if (clip.image == NULL)
@@ -3280,7 +3291,7 @@ class Entity;
  // 动画状态控制组件。
  // 它被 Entity 持有，但不拥有实体真实游戏状态。
  // 它读取 Entity 的移动、跳跃、落地、冲刺、朝向等状态，
- // 决定当前应该播放哪个 AnimationState，并通过 ResourceManager 获取 AnimationClip。
+ // 决定当前应该播放哪个 AnimationState，并通过 AnimationClipManager 获取 AnimationClip。
 class Animator
 {
 private:
@@ -3301,16 +3312,16 @@ public:
 	Animator();
 
 	// 功能：切换实体当前动画片段，若状态未变化则直接返回。
-	void changeAnimation(Entity& entity, AnimationState newState, ResourceManager& resources);
-
+    void changeAnimation(Entity& entity, AnimationState newState, AnimationClipManager& animationClips);
 	// 功能：根据实体真实状态和本帧行为意图更新动画表现状态。
-    void update(Entity& entity, BehaviorIntent intent, ResourceManager& resources);
+    void update(Entity& entity, BehaviorIntent intent, AnimationClipManager& animationClips);
 
+
+    // 功能：在资源加载完成后，根据初始动画状态为实体绑定第一段动画。
+    void initAnimation(Entity& entity, AnimationClipManager& animationClips);
     // 功能：配置当前 Animator 使用的动画资源组和初始动画状态。
     void configure(AnimationSetId newSetId, AnimationState newInitialState);
 
-    // 功能：在资源加载完成后，根据初始动画状态为实体绑定第一段动画。
-    void initAnimation(Entity& entity, ResourceManager& resources);
 };
 
 class CollisionHandle;
@@ -3597,10 +3608,10 @@ public:
 	}
 
 	// 功能：委托实体内部 Animator 更新动画状态。
-	void updateAnimator(BehaviorIntent intent, ResourceManager& resources)
-	{
-		animator.update(*this, intent, resources);
-	}
+    void updateAnimator(BehaviorIntent intent, AnimationClipManager& animationClips)
+    {
+        animator.update(*this, intent, animationClips);
+    }
 
     // 功能：判断实体本帧是否处于碰撞或重叠反馈状态。
     bool hasCollisionState()//获取碰撞状态
@@ -3765,9 +3776,9 @@ public:
     }
 
     // 功能：让实体内部 Animator 根据初始状态绑定动画，并同步第一帧 sprite 和碰撞盒尺寸。
-    void initAnimationFromAnimator(ResourceManager& resources)
+    void initAnimationFromAnimator(AnimationClipManager& animationClips)
     {
-        animator.initAnimation(*this, resources);
+        animator.initAnimation(*this, animationClips);
 
         animation.writeCurrentFrameTo(renderSprite);
         syncRenderSpriteWorldDrawData();
@@ -3884,7 +3895,7 @@ Animator::Animator()
 }
 
 // 功能：按动画状态切换实体当前播放的 AnimationClip。
-void Animator::changeAnimation(Entity& entity, AnimationState newState, ResourceManager& resources)
+void Animator::changeAnimation(Entity& entity, AnimationState newState, AnimationClipManager& animationClips)
 {
     if (currentAnimState == newState)
     {
@@ -3899,7 +3910,7 @@ void Animator::changeAnimation(Entity& entity, AnimationState newState, Resource
         return;
     }
 
-    AnimationClip clip = resources.getAnimationClip(animationId);
+    AnimationClip clip = animationClips.getClip(animationId);
 
     if (clip.image == NULL)
     {
@@ -3912,7 +3923,7 @@ void Animator::changeAnimation(Entity& entity, AnimationState newState, Resource
 }
 
 // 功能：读取实体真实状态并决定 idle / walk / run / jumpStart / jumpLoop / jumpEnd。
-void Animator::update(Entity& entity, BehaviorIntent intent, ResourceManager& resources)
+void Animator::update(Entity& entity, BehaviorIntent intent, AnimationClipManager& animationClips)
 {
 	if (!entity.isControlled())
 	{
@@ -3945,7 +3956,7 @@ void Animator::update(Entity& entity, BehaviorIntent intent, ResourceManager& re
 
 	if (justLanded && !hasMoveInput)
 	{
-		changeAnimation(entity, jumpEndState, resources);
+		changeAnimation(entity, jumpEndState, animationClips);
 		wasInAir = entity.isInAir();
 		return;
 	}
@@ -3963,7 +3974,7 @@ void Animator::update(Entity& entity, BehaviorIntent intent, ResourceManager& re
 
 		if (shouldPlayJumpStart)
 		{
-			changeAnimation(entity, jumpStartState, resources);
+			changeAnimation(entity, jumpStartState, animationClips);
 			wasInAir = entity.isInAir();
 			return;
 		}
@@ -3972,14 +3983,14 @@ void Animator::update(Entity& entity, BehaviorIntent intent, ResourceManager& re
 		{
 			if (entity.isAnimationFinished())
 			{
-				changeAnimation(entity, jumpLoopState, resources);
+				changeAnimation(entity, jumpLoopState, animationClips);
 			}
 
 			wasInAir = entity.isInAir();
 			return;
 		}
 
-		changeAnimation(entity, jumpLoopState, resources);
+		changeAnimation(entity, jumpLoopState, animationClips);
 		wasInAir = entity.isInAir();
 		return;
 	}
@@ -3998,16 +4009,16 @@ void Animator::update(Entity& entity, BehaviorIntent intent, ResourceManager& re
 	{
 		if (entity.isSprinting())
 		{
-			changeAnimation(entity, runState, resources);
+			changeAnimation(entity, runState, animationClips);
 		}
 		else
 		{
-			changeAnimation(entity, walkState, resources);
+			changeAnimation(entity, walkState, animationClips);
 		}
 	}
 	else
 	{
-		changeAnimation(entity, idleState, resources);
+		changeAnimation(entity, idleState, animationClips);
 	}
 
 	wasInAir = entity.isInAir();
@@ -4022,14 +4033,14 @@ void Animator::configure(AnimationSetId newSetId, AnimationState newInitialState
 }
 
 // 功能：在资源加载完成后，根据初始状态绑定实体第一段动画。
-void Animator::initAnimation(Entity& entity, ResourceManager& resources)
+void Animator::initAnimation(Entity& entity, AnimationClipManager& animationClips)
 {
     if (animationSetId == ANIM_SET_NONE)
     {
         return;
     }
 
-    changeAnimation(entity, initialAnimState, resources);
+    changeAnimation(entity, initialAnimState, animationClips);
 }
 // 功能：根据行为意图、物理规则和碰撞结果更新实体移动状态。
 void MovementHandle::update(
@@ -4991,8 +5002,7 @@ public:
     }
 
 
-    // 功能：绘制 BackgroundManager 中已经实例化的背景对象，并返回真实绘制成功的 background sprite 数量。
-// 功能：绘制 BackgroundManager 中本帧已经展开好的背景对象，并返回真实绘制成功的 background sprite 数量。
+    // 功能：绘制 BackgroundManager 中本帧已经展开好的背景对象，并返回真实绘制成功的 background sprite 数量。
     int drawBackgroundObjects(BackgroundManager& backgroundManager)
     {
         int renderedBackgroundCount = 0;
@@ -5296,6 +5306,7 @@ class Level
 private:
 
     ResourceManager resources;
+    AnimationClipManager animationClips;
 
     TileMap tileMap;
     BackgroundManager backgroundManager;
@@ -5329,7 +5340,7 @@ private:
 
     // 背景视差专用相机位置。
     // 它记录的是真实摄像机中心 gCamera.centerX，
-    // 也就是背景层用于计算累计水平位移的稳定锚点。
+    // 也就是背景对象用于计算累计水平位移的稳定锚点。
     // 当摄像机被世界边界限制住时，这个值不会继续变化，背景也不会继续移动。
     double parallaxCameraX;
 
@@ -5438,7 +5449,7 @@ public:
     {
         for (int i = 0; i < (int)entitys.size(); i++)
         {
-            entitys[i].initAnimationFromAnimator(resources);
+            entitys[i].initAnimationFromAnimator(animationClips);
         }
     }
 
@@ -5446,6 +5457,7 @@ public:
     void init()
     {
         initResources();
+
         initMap();
         initBackground();
         initUI();
@@ -5561,11 +5573,12 @@ public:
 
 private:
 
-	// 功能：加载当前关卡需要的资源。
-	void initResources()
-	{
-		resources.loadLevelResources();
-	}
+    // 功能：加载当前关卡需要的图片资源，并根据图片资源创建动画片段表。
+    void initResources()
+    {
+        resources.loadLevelResources();
+        animationClips.init(resources);
+    }
 
 
     // 功能：加载地图资源并根据地图尺寸设置世界范围。
@@ -5589,7 +5602,7 @@ private:
         }
     }
 
-// 功能：加载关卡背景图片。
+    // 功能：根据已加载的背景图片资源创建当前关卡的背景对象。
     void initBackground()
     {
         backgroundManager.clear();
@@ -5652,7 +5665,9 @@ private:
             WINDOW_WIDTH,
             WINDOW_HEIGHT
         );
-    }    // 功能：初始化当前关卡使用的 Debug UI 面板。
+    }
+
+    // 功能：初始化当前关卡使用的 Debug UI 面板。
     void initUI()
     {
         // Debug 面板是顶层 UI，相对于窗口右上角定位。
@@ -5794,7 +5809,7 @@ private:
                 collisionHandle
             );
 
-			entitys[i].updateAnimator(intent, resources);
+			entitys[i].updateAnimator(intent, animationClips);
 			entitys[i].updateAnimatedSprite();
         }
     }
