@@ -15,6 +15,9 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="AnimatedSprite.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
     <ClCompile Include="draggable.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
@@ -33,8 +36,17 @@
     <ClCompile Include="Animation.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="AnimationClip.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="AnimationClipManager.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="AnimatedSprite.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
     <ClInclude Include="Config.h">
       <Filter>头文件</Filter>
     </ClInclude>
@@ -51,6 +63,15 @@
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="Animation.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="AnimationClip.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="AnimationClipManager.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="AnimationTypes.h">
       <Filter>头文件</Filter>
     </ClInclude>
   </ItemGroup>

@@ -140,7 +140,10 @@
     </Manifest>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="AnimatedSprite.cpp" />
     <ClCompile Include="Animation.cpp" />
+    <ClCompile Include="AnimationClip.cpp" />
+    <ClCompile Include="AnimationClipManager.cpp" />
     <ClCompile Include="Camera.cpp" />
     <ClCompile Include="draggable.cpp" />
     <ClCompile Include="game.cpp" />
@@ -148,7 +151,11 @@
     <ClCompile Include="Resource.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="AnimatedSprite.h" />
     <ClInclude Include="Animation.h" />
+    <ClInclude Include="AnimationClip.h" />
+    <ClInclude Include="AnimationClipManager.h" />
+    <ClInclude Include="AnimationTypes.h" />
     <ClInclude Include="Camera.h" />
     <ClInclude Include="Config.h" />
     <ClInclude Include="GraphicsUtils.h" />
