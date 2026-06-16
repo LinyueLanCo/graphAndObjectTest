@@ -1048,7 +1048,7 @@ struct BackgroundObject
     }
 
     // 功能：把背景对象的 sprite 绑定到指定图片资源。
-    void bindSpriteSource(IMAGE* imageSource)
+    void bindSpriteSource(Image2D* imageSource)
     {
         if (imageSource == NULL)
         {
@@ -1056,8 +1056,8 @@ struct BackgroundObject
             return;
         }
 
-        int imageW = imageSource->getwidth();
-        int imageH = imageSource->getheight();
+        int imageW = imageSource->getWidth();
+        int imageH = imageSource->getHeight();
 
         if (imageW <= 0 || imageH <= 0)
         {
@@ -1305,7 +1305,7 @@ public:
             newDrawH
         );
 
-        object.bindSpriteSource(imageResource->getImage());
+        object.bindSpriteSource(imageResource);
         object.updateRuntimeTransform(0.0);
         object.updateSprite();
 
@@ -1384,6 +1384,8 @@ public:
 class animatedSprite
 {
 private:
+
+    Image2D image;
     Image2D* imageSource;
 
     int frameCount;
@@ -1438,58 +1440,51 @@ public:
 	{
 		return !isLoop && !isPlaying;
 	}
-  //  // 功能：按显式帧尺寸加载序列帧图片。
-  //  void load(const TCHAR* path, int frameWidth, int frameHeight, int frameCount)
-  //  {
-  //      loadimage(&image, path);
-  //      imageSource = &image;
-  //      this->frameWidth = frameWidth;
-  //      this->frameHeight = frameHeight;
-  //      this->frameCount = frameCount;
+    // 功能：按显式帧尺寸加载序列帧图片。
+    void load(const TCHAR* path, int frameWidth, int frameHeight, int frameCount)
+    {
+        image.load(path);
+        imageSource = &image;
 
-  //      sourceStartX = 0;
-  //      sourceStartY = 0;
+        this->frameWidth = frameWidth;
+        this->frameHeight = frameHeight;
+        this->frameCount = frameCount;
 
-  //      frameSpacingX = 0;
-  //      frameSpacingY = 0;
+        sourceStartX = 0;
+        sourceStartY = 0;
+        frameSpacingX = 0;
+        frameSpacingY = 0;
+        frameColumns = frameCount;
 
-  //      frameColumns = frameCount;
+        currentFrame = 0;
+        frameTimer = 0;
+        isPlaying = true;
+    }    // 功能：按帧数自动平均切分横向序列帧图片。
+void load(const TCHAR* path, int newFrameCount)
+{
+    image.load(path);
+    imageSource = &image;
 
-  //      currentFrame = 0;
-  //      frameTimer = 0;
-  //      isPlaying = 1;
+    frameCount = newFrameCount;
 
-  //  }
-  //  // 功能：按帧数自动平均切分横向序列帧图片。
-  //  void load(const TCHAR* path, int newFrameCount)
-  //  {
-  //      loadimage(&image, path);
-		//imageSource = &image;
+    if (frameCount < 1)
+    {
+        frameCount = 1;
+    }
 
-  //      frameCount = newFrameCount;
+    frameWidth = image.getWidth() / frameCount;
+    frameHeight = image.getHeight();
 
-  //      if (frameCount < 1)
-  //      {
-  //          frameCount = 1;
-  //      }
+    sourceStartX = 0;
+    sourceStartY = 0;
+    frameSpacingX = 0;
+    frameSpacingY = 0;
+    frameColumns = frameCount;
 
-  //      frameWidth = image.getwidth() / frameCount;
-  //      frameHeight = image.getheight();
-
-  //      sourceStartX = 0;
-  //      sourceStartY = 0;
-
-  //      frameSpacingX = 0;
-  //      frameSpacingY = 0;
-
-  //      frameColumns = frameCount;
-
-  //      currentFrame = 0;
-  //      frameTimer = 0;
-  //      isPlaying = true;
-  //  }
-
-	// 功能：绑定已经由 AnimationClipManager 提供的动画片段。
+    currentFrame = 0;
+    frameTimer = 0;
+    isPlaying = true;
+}	// 功能：绑定已经由 AnimationClipManager 提供的动画片段。
 	void setClip(AnimationClip clip)
 	{
 		if (clip.image == NULL)
@@ -1827,7 +1822,7 @@ struct TileInstance
 class TileMap
 {
 private:
-    IMAGE tileset;
+    Image2D tileset;
 
     int rows;
     int cols;
@@ -2024,7 +2019,7 @@ public:
             return tileSprite;
         }
 
-		int tilesetCols = tileset.getwidth() / sourceTileWidth;
+		int tilesetCols = tileset.getWidth() / sourceTileWidth;
 
         if(tilesetCols <= 0)
         {
@@ -2125,7 +2120,7 @@ public:
     // 功能：加载 tile map 使用的 tileset 图片。
     void loadTileset(const TCHAR* imagePath)
     {
-        loadimage(&tileset, imagePath);
+        tileset.load(imagePath);
     }
 
     // 功能：根据视觉 tile id 返回默认碰撞类型。
