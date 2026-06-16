@@ -6,7 +6,8 @@
 #include<fstream>
 #include <vector>
 #include <algorithm>
-
+#include <memory>
+#include<map>
 
 // 后续会继续接入 JSON 配置读取。
 using namespace std;
@@ -353,6 +354,69 @@ class Sound
 
 
 };
+
+// Image2D：
+// 包装一张 EasyX IMAGE，并记录图片基础信息。
+// 它只负责加载和提供图片资源，不负责绘制、不负责动画、不负责坐标。
+class Image2D
+{
+private:
+    IMAGE image;
+
+    int width;
+    int height;
+
+public:
+    // 功能：初始化一个空图片资源。
+    Image2D()
+    {
+        width = 0;
+        height = 0;
+    }
+
+    // 功能：从文件加载图片，并记录图片宽高。
+    bool load(const TCHAR* path)
+    {
+        loadimage(&image, path);
+
+        width = image.getwidth();
+        height = image.getheight();
+
+        return width > 0 && height > 0;
+    }
+
+    // 功能：从文件加载图片，并按指定大小缩放到内存图片。
+    bool load(const TCHAR* path, int loadW, int loadH)
+    {
+        loadimage(&image, path, loadW, loadH, true);
+
+        width = image.getwidth();
+        height = image.getheight();
+
+        return width > 0 && height > 0;
+    }
+
+    // 功能：获取 EasyX 原始图片指针，供底层绘制函数使用。
+    IMAGE* getImage()
+    {
+        return &image;
+    }
+
+    // 功能：获取图片宽度。
+    int getWidth() const
+    {
+        return width;
+    }
+
+    // 功能：获取图片高度。
+    int getHeight() const
+    {
+        return height;
+    }
+};
+
+
+
 // AnimationState：
  // 动画表现状态枚举。当前主要由 Animator 保存和切换。
  // 它描述“现在应该播放什么动画”，不代表实体真实物理状态。
@@ -382,6 +446,19 @@ enum AnimationSetId
 {
     ANIM_SET_NONE,
 	ANIM_SET_PLAYER1,
+};
+
+// ImageResourceId：
+// ResourceManager 中通用图片资源的索引 ID。
+// 外部系统通过这个 ID 获取 Image2D，而不是直接持有图片路径。
+enum ImageResourceId
+{
+    IMG_BG_SKY,
+    IMG_BG_CLOUDS,
+    IMG_BG_FLORA1,
+    IMG_BG_FLORA2,
+
+    IMG_RESOURCE_COUNT
 };
 
 
@@ -682,10 +759,70 @@ private:
 	IMAGE playerJumpEndL;
 	IMAGE playerJumpEndR;
 
+
+    map<ImageResourceId, const TCHAR*> imagePaths;
+    map<ImageResourceId, unique_ptr<Image2D>> images;
+
 public:
+    // 功能：初始化资源指针默认值。
+    ResourceManager()
+    {
+
+    }
+
+    // 功能：注册当前关卡需要的通用图片资源路径。
+    void initImageResourceTable()
+    {
+        imagePaths[IMG_BG_SKY] = _T("assets\\tex\\maps\\bg1\\Sky_1920x1080.png");
+        imagePaths[IMG_BG_CLOUDS] = _T("assets\\tex\\maps\\bg1\\Clouds_1920x1080.png");
+        imagePaths[IMG_BG_FLORA1] = _T("assets\\tex\\maps\\bg1\\Flora1_1920x1080.png");
+        imagePaths[IMG_BG_FLORA2] = _T("assets\\tex\\maps\\bg1\\Flora2_1920x1080.png");
+    }
+
+    // 功能：根据图片资源 ID 加载一张 Image2D，并保存到资源表。
+    void loadImage2D(ImageResourceId id)
+    {
+        if (imagePaths.find(id) == imagePaths.end())
+        {
+            return;
+        }
+
+        unique_ptr<Image2D> image(new Image2D());
+
+        if (!image->load(imagePaths[id]))
+        {
+            return;
+        }
+
+        images[id] = move(image);
+    }
+
+    // 功能：加载当前资源表中注册的所有通用图片资源。
+    void loadImageResources()
+    {
+        for (map<ImageResourceId, const TCHAR*>::iterator it = imagePaths.begin(); it != imagePaths.end(); ++it)
+        {
+            loadImage2D(it->first);
+        }
+    }
+
+    // 功能：根据图片资源 ID 获取已加载的 Image2D。
+    Image2D* getImage2D(ImageResourceId id)
+    {
+        if (images.find(id) == images.end())
+        {
+            return NULL;
+        }
+
+        return images[id].get();
+    }
+
 	// 功能：加载当前关卡需要的动画图片资源。
 	void loadLevelResources()
 	{
+        initImageResourceTable();
+        loadImageResources();
+
 		loadimage(&playerIdleL, _T("assets\\tex\\entities\\characters\\player1_idle_L.png"));
 		loadimage(&playerIdleR, _T("assets\\tex\\entities\\characters\\player1_idle_R.png"));
 		loadimage(&playerWalkL, _T("assets\\tex\\entities\\characters\\player1_walk_L.png"));
@@ -698,7 +835,10 @@ public:
 		loadimage(&playerJumpLoopR, _T("assets\\tex\\entities\\characters\\player1_jumpLoop_R.png"));
 		loadimage(&playerJumpEndL, _T("assets\\tex\\entities\\characters\\player1_jumpEnd_L.png"));
 		loadimage(&playerJumpEndR, _T("assets\\tex\\entities\\characters\\player1_jumpEnd_R.png"));
-	}
+
+    
+    
+    }
 
 	// 功能：根据动画 ID 获取对应动画资源描述。
 	AnimationClip getAnimationClip(AnimationId id)
@@ -763,6 +903,9 @@ public:
 		}
 		return AnimationClip();
 	}
+
+
+
 };
 
 
@@ -849,61 +992,78 @@ enum BackgroundDrawMode
 };
 
 
-// BackgroundLayer：
-// 单个背景层的数据对象。
-// 它保存图片、视差系数、缩放响应系数和绘制开关。
-struct BackgroundLayer
+
+
+struct BackgroundObject
 {
-    IMAGE image;
+    double zoomFactor;
+    BackgroundDrawMode drawMode;
 
     int renderOrder;
-
     double parallaxFactor;
-    double zoomFactor;
-
     bool visible;
-    
-    BackgroundDrawMode drawMode;
-    
+    bool useAlphaBlend;
+    bool generatedByTiling;
+
     double centerX;
     double centerY;
-
-    // 本帧实际用于生成 sprite 的逻辑中心点。
-    // centerX / centerY 是设计时基础位置，runtimeCenterX / runtimeCenterY 是经过视差/fixed 等规则后的当前位置。
     double runtimeCenterX;
     double runtimeCenterY;
-
     double drawW;
     double drawH;
-    
-    bool useAlphaBlend;
 
-    // 功能：初始化背景层默认数据。
-    BackgroundLayer()
+    sprite renderSprite;
+
+    BackgroundObject()
     {
         renderOrder = 0;
 
-        parallaxFactor = 0.0;
+        parallaxFactor = 1.0;
         zoomFactor = 0.0;
 
         visible = true;
+        useAlphaBlend = true;
+        generatedByTiling = false;
 
-        drawMode = BACKGROUND_REPEAT_X;
+        drawMode = BACKGROUND_SINGLE_WORLD;
 
         centerX = 0.0;
         centerY = 0.0;
-
-        runtimeCenterX = centerX;
-        runtimeCenterY = centerY;
-
-        drawW = WINDOW_WIDTH;
-        drawH = WINDOW_HEIGHT;   
-        useAlphaBlend = true;
+        runtimeCenterX = 0.0;
+        runtimeCenterY = 0.0;
+        drawW = 0.0;
+        drawH = 0.0;
     }
 
-    // 功能：加载背景层图片并设置基础绘制参数。
-    void load(
-        const TCHAR* imagePath,
+    // 功能：把背景对象的 sprite 绑定到指定图片资源。
+    void bindSpriteSource(IMAGE* imageSource)
+    {
+        if (imageSource == NULL)
+        {
+            renderSprite.visible = false;
+            return;
+        }
+
+        int imageW = imageSource->getwidth();
+        int imageH = imageSource->getheight();
+
+        if (imageW <= 0 || imageH <= 0)
+        {
+            renderSprite.visible = false;
+            return;
+        }
+
+        renderSprite.setSource(
+            imageSource,
+            0,
+            0,
+            imageW,
+            imageH
+        );
+    }
+
+    // 功能：设置背景对象的渲染顺序、视差参数和绘制模式。
+    void setRenderData(
         int newRenderOrder,
         double newParallaxFactor,
         double newZoomFactor,
@@ -911,8 +1071,6 @@ struct BackgroundLayer
         BackgroundDrawMode newDrawMode
     )
     {
-        loadimage(&image, imagePath, WINDOW_WIDTH, WINDOW_HEIGHT, true);
-
         renderOrder = newRenderOrder;
         parallaxFactor = newParallaxFactor;
         zoomFactor = newZoomFactor;
@@ -920,25 +1078,52 @@ struct BackgroundLayer
         drawMode = newDrawMode;
     }
 
-    // 功能：设置背景对象在世界/逻辑空间中的中心点和绘制尺寸。
     void setDrawData(double newCenterX, double newCenterY, double newDrawW, double newDrawH)
     {
         centerX = newCenterX;
         centerY = newCenterY;
-
         runtimeCenterX = centerX;
         runtimeCenterY = centerY;
-
         drawW = newDrawW;
         drawH = newDrawH;
     }
 
-    // 功能：根据背景模式更新本帧用于生成 sprite 的逻辑中心点。
+// 功能：把背景对象当前运行时位置同步到自己的 sprite。
+    void updateSprite()
+    {
+        renderSprite.visible = visible;
+
+        if (!visible)
+        {
+            return;
+        }
+
+        double finalDrawW = drawW;
+        double finalDrawH = drawH;
+
+        if (finalDrawW <= 0)
+        {
+            finalDrawW = renderSprite.srcW;
+        }
+
+        if (finalDrawH <= 0)
+        {
+            finalDrawH = renderSprite.srcH;
+        }
+
+        renderSprite.setWorldDrawData(
+            runtimeCenterX,
+            runtimeCenterY,
+            finalDrawW,
+            finalDrawH
+        );
+    }
+    // 功能：根据背景模式更新本帧用于绘制的运行时逻辑中心点。
     void updateRuntimeTransform(double parallaxOffsetX)
     {
         if (drawMode == BACKGROUND_FIXED_CAMERA)
         {
-            // fixed 背景直接把运行时中心锁到真实 Camera 中心，使 sprite 看起来固定在视口中。
+            // fixed 背景把运行时中心锁到 Camera 中心，使背景看起来固定在视口里。
             runtimeCenterX = gCamera.centerX;
             runtimeCenterY = gCamera.centerY;
             return;
@@ -946,7 +1131,7 @@ struct BackgroundLayer
 
         if (drawMode == BACKGROUND_SINGLE_WORLD)
         {
-            // 单张世界背景不响应视差，运行时中心保持设计时基础位置。
+            // 普通世界背景不额外处理视差，直接使用对象自己的基础逻辑位置。
             runtimeCenterX = centerX;
             runtimeCenterY = centerY;
             return;
@@ -954,8 +1139,9 @@ struct BackgroundLayer
 
         if (drawMode == BACKGROUND_REPEAT_X)
         {
-            // 用基础中心点减去视差偏移，得到本帧背景层自己的逻辑中心点。
-            runtimeCenterX = centerX - parallaxOffsetX * parallaxFactor;
+            // parallaxFactor 表示背景在屏幕上相对地图的横向移动比例。
+            // 0.0 接近固定在屏幕上，1.0 接近普通世界物体。
+            runtimeCenterX = centerX + parallaxOffsetX * (1.0 - parallaxFactor);
             runtimeCenterY = centerY;
             return;
         }
@@ -964,74 +1150,8 @@ struct BackgroundLayer
         runtimeCenterY = centerY;
     }
 
-    // 功能：把当前背景对象转换成世界空间 sprite 数据。
-    sprite buildSprite()
-    {
-        sprite backgroundSprite;
 
-        backgroundSprite.visible = visible;
-
-        if (!visible)
-        {
-            return backgroundSprite;
-        }
-
-        int imageW = image.getwidth();
-        int imageH = image.getheight();
-
-        if (imageW <= 0 || imageH <= 0)
-        {
-            backgroundSprite.visible = false;
-            return backgroundSprite;
-        }
-
-        backgroundSprite.setSource(
-            &image,
-            0,
-            0,
-            imageW,
-            imageH
-        );
-
-        double finalDrawW = drawW;
-        double finalDrawH = drawH;
-
-        if (finalDrawW <= 0)
-        {
-            finalDrawW = imageW;
-        }
-
-        if (finalDrawH <= 0)
-        {
-            finalDrawH = imageH;
-        }
-
-        backgroundSprite.setWorldDrawData(
-            runtimeCenterX,
-            runtimeCenterY,
-            finalDrawW,
-            finalDrawH
-        );
-
-        return backgroundSprite;
-    }
-
-    // 功能：用指定世界中心点生成背景 sprite，常用于跟随 Camera 中心的背景。
-    sprite buildSpriteAt(double newCenterX, double newCenterY)
-    {
-        sprite backgroundSprite = buildSprite();
-
-        backgroundSprite.setWorldDrawData(
-            newCenterX,
-            newCenterY,
-            backgroundSprite.worldDrawW,
-            backgroundSprite.worldDrawH
-        );
-
-        return backgroundSprite;
-    }
 };
-
 
 
 // BackgroundManager：
@@ -1040,62 +1160,209 @@ struct BackgroundLayer
 class BackgroundManager
 {
 private:
-    vector<BackgroundLayer> layers;
+    vector<BackgroundObject> objects;
+    vector<BackgroundObject> renderObjects;
 
 public:
 
-    // 功能：按照 renderOrder 从小到大排序背景层，数值越小越先绘制。
-    void sortLayersByRenderOrder()
+    // 功能：获取本帧实际参与绘制的背景对象列表。
+    vector<BackgroundObject>& getRenderObjects()
     {
+        return renderObjects;
+    }
+
+    // 功能：获取本帧实际参与绘制的背景对象只读列表。
+    const vector<BackgroundObject>& getRenderObjects() const
+    {
+        return renderObjects;
+    }
+
+    // 功能：根据背景对象列表重建本帧实际参与绘制的背景对象列表。
+    void rebuildRenderObjects()
+    {
+        renderObjects.clear();
+
+        for (int i = 0; i < (int)objects.size(); i++)
+        {
+            BackgroundObject& object = objects[i];
+
+            if (!object.visible)
+            {
+                continue;
+            }
+
+            if (object.drawMode != BACKGROUND_REPEAT_X)
+            {
+                renderObjects.push_back(object);
+                continue;
+            }
+
+            double repeatDrawW = object.renderSprite.worldDrawW;
+            double repeatDrawH = object.renderSprite.worldDrawH;
+
+            if (repeatDrawW <= 0 || repeatDrawH <= 0)
+            {
+                continue;
+            }
+
+            double viewLeft = gCamera.getViewLeft();
+            double viewRight = gCamera.getViewRight();
+
+            double baseCenterX = object.runtimeCenterX;
+            double renderCenterY = object.runtimeCenterY;
+
+            int repeatIndex = (int)floor((viewLeft - baseCenterX) / repeatDrawW) - 1;
+            double currentCenterX = baseCenterX + repeatIndex * repeatDrawW;
+
+            while (currentCenterX - repeatDrawW / 2.0 <= viewRight + repeatDrawW)
+            {
+                BackgroundObject repeatedObject = object;
+
+                repeatedObject.generatedByTiling = true;
+
+                repeatedObject.runtimeCenterX = currentCenterX;
+                repeatedObject.runtimeCenterY = renderCenterY;
+
+                repeatedObject.renderSprite.setWorldDrawData(
+                    currentCenterX,
+                    renderCenterY,
+                    repeatDrawW,
+                    repeatDrawH
+                );
+
+                renderObjects.push_back(repeatedObject);
+
+                currentCenterX += repeatDrawW;
+            }
+        }
+
         sort(
-            layers.begin(),
-            layers.end(),
-            [](const BackgroundLayer& a, const BackgroundLayer& b)
+            renderObjects.begin(),
+            renderObjects.end(),
+            [](const BackgroundObject& a, const BackgroundObject& b)
             {
                 return a.renderOrder < b.renderOrder;
             }
         );
     }
 
-    // 功能：清空所有背景层。
+
+
+
+    // 功能：清空所有背景资源、背景对象和本帧绘制对象。
     void clear()
     {
-        layers.clear();
+        objects.clear();
+        renderObjects.clear();
     }
 
-    // 功能：添加一个背景层，并按 renderOrder 维护绘制顺序。
-    void addLayer(const BackgroundLayer& layer)
+    // 功能：根据已加载的图片资源创建一个背景对象。
+    void addObjectFromImage2D(
+        Image2D* imageResource,
+        int newRenderOrder,
+        double newParallaxFactor,
+        double newZoomFactor,
+        bool newUseAlphaBlend,
+        BackgroundDrawMode newDrawMode,
+        double newCenterX,
+        double newCenterY,
+        double newDrawW,
+        double newDrawH
+    )
     {
-        layers.push_back(layer);
-        sortLayersByRenderOrder();
-    }
+        if (imageResource == NULL)
+        {
+            return;
+        }
 
-    // 功能：更新所有背景层本帧用于生成 sprite 的逻辑变换。
+        BackgroundObject object;
+
+        object.setRenderData(
+            newRenderOrder,
+            newParallaxFactor,
+            newZoomFactor,
+            newUseAlphaBlend,
+            newDrawMode
+        );
+
+        object.setDrawData(
+            newCenterX,
+            newCenterY,
+            newDrawW,
+            newDrawH
+        );
+
+        object.bindSpriteSource(imageResource->getImage());
+        object.updateRuntimeTransform(0.0);
+        object.updateSprite();
+
+        objects.push_back(object);
+        sortObjectsByRenderOrder();
+        rebuildRenderObjects();
+    }
+    // 功能：更新所有背景层和背景对象本帧用于生成 sprite 的逻辑变换。
     void updateRuntimeTransforms(double parallaxOffsetX)
     {
-        for (int i = 0; i < (int)layers.size(); i++)
+
+
+        for (int i = 0; i < (int)objects.size(); i++)
         {
-            layers[i].updateRuntimeTransform(parallaxOffsetX);
+            objects[i].updateRuntimeTransform(parallaxOffsetX);
+            objects[i].updateSprite();
         }
+
+		rebuildRenderObjects();
     }
 
-    // 功能：获取背景层数量。
-    int getLayerCount() const
+
+
+
+
+    // 功能：按照 renderOrder 从小到大排序背景对象，数值越小越先绘制。
+    void sortObjectsByRenderOrder()
     {
-        return (int)layers.size();
+        sort(
+            objects.begin(),
+            objects.end(),
+            [](const BackgroundObject& a, const BackgroundObject& b)
+            {
+                return a.renderOrder < b.renderOrder;
+            }
+        );
     }
 
-    // 功能：获取背景层可写列表。
-    vector<BackgroundLayer>& getLayers()
+    // 功能：清空所有背景对象实例。
+    void clearObjects()
     {
-        return layers;
+        objects.clear();
     }
 
-    // 功能：获取背景层只读列表。
-    const vector<BackgroundLayer>& getLayers() const
+    // 功能：添加一个背景对象实例，并按 renderOrder 维护绘制顺序。
+    void addObject(const BackgroundObject& object)
     {
-        return layers;
+        objects.push_back(object);
+        sortObjectsByRenderOrder();
     }
+
+    // 功能：获取背景对象实例数量。
+    int getObjectCount() const
+    {
+        return (int)objects.size();
+    }
+
+    // 功能：获取背景对象可写列表。
+    vector<BackgroundObject>& getObjects()
+    {
+        return objects;
+    }
+
+    // 功能：获取背景对象只读列表。
+    const vector<BackgroundObject>& getObjects() const
+    {
+        return objects;
+    }
+
+
 };
 
 
@@ -4723,115 +4990,30 @@ public:
         showRenderBounds = !showRenderBounds;
     }
 
-    // 功能：绘制当前关卡背景层，并返回真实绘制成功的 background sprite 数量。
-    // 背景层的视差/fixed 等逻辑位置已在 BackgroundManager 更新阶段写入 runtime 坐标。
-    // BACKGROUND_REPEAT_X 会以背景对象的 runtime 中心点为基准，在当前视口横向生成多个 sprite。
-    int drawBackground(BackgroundManager& backgroundManager)
+
+    // 功能：绘制 BackgroundManager 中已经实例化的背景对象，并返回真实绘制成功的 background sprite 数量。
+// 功能：绘制 BackgroundManager 中本帧已经展开好的背景对象，并返回真实绘制成功的 background sprite 数量。
+    int drawBackgroundObjects(BackgroundManager& backgroundManager)
     {
         int renderedBackgroundCount = 0;
 
-        vector<BackgroundLayer>& backgroundLayers = backgroundManager.getLayers();
-        for (int i = 0; i < (int)backgroundLayers.size(); i++)
+        vector<BackgroundObject>& backgroundObjects = backgroundManager.getRenderObjects();
+
+        for (int i = 0; i < (int)backgroundObjects.size(); i++)
         {
-            BackgroundLayer& layer = backgroundLayers[i];
+            BackgroundObject& object = backgroundObjects[i];
 
-            if (!layer.visible)
+            if (!object.visible)
             {
                 continue;
             }
 
-            if (layer.drawMode == BACKGROUND_FIXED_CAMERA)
+            if (drawSprite(object.renderSprite, RGB(120, 160, 255)))
             {
-                sprite backgroundSprite = layer.buildSprite();
-
-                if (drawSprite(backgroundSprite, RGB(120, 160, 255)))
-                {
-                    renderedBackgroundCount++;
-                }
-
-                continue;
-            }
-
-            if (layer.drawMode == BACKGROUND_SINGLE_WORLD)
-            {
-                sprite backgroundSprite = layer.buildSprite();
-
-                if (drawSprite(backgroundSprite, RGB(120, 160, 255)))
-                {
-                    renderedBackgroundCount++;
-                }
-
-                continue;
-            }
-
-
-            if (layer.drawMode != BACKGROUND_REPEAT_X)
-            {
-                continue;
-            }
-
-            int imageW = layer.image.getwidth();
-            int imageH = layer.image.getheight();
-
-            if (imageW <= 0 || imageH <= 0)
-            {
-                continue;
-            }
-
-            // repeat 背景以 background 本帧 runtime 中心点为基准，只在横向生成额外 sprite 覆盖视口。
-            double repeatDrawW = layer.drawW;
-            double repeatDrawH = layer.drawH;
-
-            if (repeatDrawW <= 0)
-            {
-                repeatDrawW = layer.image.getwidth();
-            }
-
-            if (repeatDrawH <= 0)
-            {
-                repeatDrawH = layer.image.getheight();
-            }
-
-            if (repeatDrawW <= 0 || repeatDrawH <= 0)
-            {
-                continue;
-            }
-
-            // 读取逻辑层预先算好的 runtime 中心点，Renderer 不再负责计算视差偏移。
-            double renderCenterX = layer.runtimeCenterX;
-            double renderCenterY = layer.runtimeCenterY;
-
-            // 从视口左侧外面开始找第一张需要绘制的背景 sprite。
-            double startCenterX = renderCenterX;
-
-            while (startCenterX - repeatDrawW / 2.0 > gCamera.getViewLeft())
-            {
-                startCenterX -= repeatDrawW;
-            }
-
-            while (startCenterX + repeatDrawW / 2.0 < gCamera.getViewLeft())
-            {
-                startCenterX += repeatDrawW;
-            }
-
-            // 从左到右生成多个背景 sprite，直到覆盖当前视口。
-            for (
-                double currentCenterX = startCenterX;
-                currentCenterX - repeatDrawW / 2.0 < gCamera.getViewRight();
-                currentCenterX += repeatDrawW
-                )
-            {
-                sprite backgroundSprite = layer.buildSpriteAt(
-                    currentCenterX,
-                    renderCenterY
-                );
-
-                if (drawSprite(backgroundSprite, RGB(120, 160, 255)))
-                {
-                    renderedBackgroundCount++;
-                }
+                renderedBackgroundCount++;
             }
         }
+
         return renderedBackgroundCount;
     }
 
@@ -5333,8 +5515,7 @@ public:
     void draw()
     {
         renderFrameStats.backgroundSpriteCount =
-            renderer.drawBackground(backgroundManager);
-
+            renderer.drawBackgroundObjects(backgroundManager);
         renderFrameStats.tileSpriteCount =
             renderer.drawTileMap(tileMap);
 
@@ -5408,74 +5589,70 @@ private:
         }
     }
 
-    // 功能：加载关卡背景图片。
+// 功能：加载关卡背景图片。
     void initBackground()
     {
         backgroundManager.clear();
 
-        BackgroundLayer layer0;
-        layer0.load(
-            _T("assets\\tex\\maps\\Clouds 5\\1.png"),
+        Image2D* skyImage = resources.getImage2D(IMG_BG_SKY);
+        Image2D* cloudsImage = resources.getImage2D(IMG_BG_CLOUDS);
+        Image2D* flora1Image = resources.getImage2D(IMG_BG_FLORA1);
+        Image2D* flora2Image = resources.getImage2D(IMG_BG_FLORA2);
+
+
+        backgroundManager.addObjectFromImage2D(
+            skyImage,
             0,
-            0.0,
+            0.11,
             0.0,
             false,
-            BACKGROUND_REPEAT_X
+            BACKGROUND_REPEAT_X,
+            800,
+            450,
+            WINDOW_WIDTH,
+            WINDOW_HEIGHT
         );
-        layer0.setDrawData(800, 450, WINDOW_WIDTH, WINDOW_HEIGHT);
-        backgroundManager.addLayer(layer0);
 
-        BackgroundLayer layer1;
-        layer1.load(
-            _T("assets\\tex\\maps\\Clouds 5\\2.png"),
+
+        backgroundManager.addObjectFromImage2D(
+            cloudsImage,
             1,
-            0.04,
-            0.25,
+            0.26,
+            0.15,
             true,
-            BACKGROUND_REPEAT_X
+            BACKGROUND_REPEAT_X,
+            800,
+            450,
+            WINDOW_WIDTH,
+            WINDOW_HEIGHT
         );
-        layer1.setDrawData(800, 450, WINDOW_WIDTH, WINDOW_HEIGHT);
-        backgroundManager.addLayer(layer1);
 
-        BackgroundLayer layer2;
-        layer2.load(
-            _T("assets\\tex\\maps\\Clouds 5\\3.png"),
+        backgroundManager.addObjectFromImage2D(
+            flora1Image,
             2,
-            0.12,
-            0.55,
+            0.5,
+            0.35,
             true,
-            BACKGROUND_REPEAT_X
+            BACKGROUND_REPEAT_X,
+            800,
+            450,
+            WINDOW_WIDTH,
+            WINDOW_HEIGHT
         );
-        layer2.setDrawData(800, 450, WINDOW_WIDTH, WINDOW_HEIGHT);
-        backgroundManager.addLayer(layer2);
 
-        BackgroundLayer layer3;
-        layer3.load(
-            _T("assets\\tex\\maps\\Clouds 5\\4.png"),
+        backgroundManager.addObjectFromImage2D(
+            flora2Image,
             3,
-            0.25,
-            0.85,
+            0.73,
+            0.65,
             true,
-            BACKGROUND_REPEAT_X
+            BACKGROUND_REPEAT_X,
+            800,
+            450,
+            WINDOW_WIDTH,
+            WINDOW_HEIGHT
         );
-        layer3.setDrawData(800, 450, WINDOW_WIDTH, WINDOW_HEIGHT);
-        backgroundManager.addLayer(layer3);
-
-        BackgroundLayer layer4;
-        layer4.load(
-            _T("assets\\tex\\maps\\Clouds 5\\5.png"),
-            4,
-            0.4,
-            1.0,
-            true,
-            BACKGROUND_REPEAT_X
-        );
-        layer4.setDrawData(800, 450, WINDOW_WIDTH, WINDOW_HEIGHT);
-
-        backgroundManager.addLayer(layer4);
-
-    }
-    // 功能：初始化当前关卡使用的 Debug UI 面板。
+    }    // 功能：初始化当前关卡使用的 Debug UI 面板。
     void initUI()
     {
         // Debug 面板是顶层 UI，相对于窗口右上角定位。
@@ -5869,7 +6046,10 @@ private:
     // 它使用固定参考视口计算横向锚点，避免真实 Camera 贴边缩放时污染背景视差。
     void updateParallaxCamera()
     {
-        parallaxCameraX = getParallaxCameraCenterX();
+        double targetParallaxCameraX = getParallaxCameraCenterX();
+
+        double followSpeed = 0.16;
+        parallaxCameraX += (targetParallaxCameraX - parallaxCameraX) * followSpeed;
     }
 
     // 功能：检测实体状态变化并输出调试信息。
@@ -6074,10 +6254,10 @@ int main()
     {
         input.update();
 
-        if (input.isKeyDown(VK_ESCAPE))
-        {
-            break;
-        }
+        //if (input.isKeyDown(VK_ESCAPE))
+        //{
+        //    break;
+        //}
 
         level.update(input);
 
