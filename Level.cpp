@@ -1,14 +1,30 @@
 ﻿#include "Level.h"
-#include "json.hpp"
 
 #include "Camera.h"
 
+// contains: 一个小帮手函数，用来判断某个字符串是不是在 vector 里。
+// 主要是为了配合调试日志去重，传入历史名单 vec 和碰撞 ID，如果找到就返回 true。
+static bool contains(const std::vector<std::string>& vec, const std::string& key)
+{
+    for (const auto& item : vec)
+    {
+        if (item == key)
+        {
+            return true; // 找到了！说明之前就已经碰上了
+        }
+    }
+    return false; // 没找到，说明是个新来的碰撞
+}
+
+// 收集当前帧的游戏状态（如焦点角色的像素位置、渲染消耗、相机视口范围等），用作 Debug UI 的数据显示
 DebugPanelData Level::buildDebugPanelData()
 {
     DebugPanelData data;
 
+    // 拿到焦点跟随目标的 ID
     data.targetId = gCameraFollowTargetId;
 
+    // 如果这个目标演员还活着，把它的世界坐标和屏幕坐标取出来传给 UI 面板
     Entity* target = entityManager.getEntityById(gCameraFollowTargetId);
     if (target)
     {
@@ -19,15 +35,18 @@ DebugPanelData Level::buildDebugPanelData()
         data.entityScreenY = gCamera.worldToScreenY(target->getY());
     }
 
+    // 统计本帧画图开销数据
     data.renderedBackgroundSprites = renderFrameStats.backgroundSpriteCount;
     data.renderedTileSprites = renderFrameStats.tileSpriteCount;
     data.renderedEntitySprites = renderFrameStats.entitySpriteCount;
     data.renderedTotalSprites = renderFrameStats.totalSpriteCount;
 
+    // 获取相机的中心点和当前焦距缩放倍率
     data.cameraCenterX = gCamera.centerX;
     data.cameraCenterY = gCamera.centerY;
     data.cameraZoom = gCamera.zoom;
 
+    // 获取当前相机世界视口的四个边界线坐标
     data.viewLeft = gCamera.getViewLeft();
     data.viewRight = gCamera.getViewRight();
     data.viewBottom = gCamera.getViewBottom();
@@ -36,13 +55,13 @@ DebugPanelData Level::buildDebugPanelData()
     return data;
 }
 
+// 关卡构造函数：初始化状态控制变量默认值
 Level::Level()
 {
-    controlledEntityName = "Player1";
+    controlledEntityName = "Player1"; // 默认玩家一开始操控的是 "Player1"
 
-    // 初始化 UI 元素下标；-1 表示当前还没有创建对应元素。
+    // 初始化 UI 元素的索引。一开始还没创建，所以记为 -1
     debugPanelIndex = -1;
-
     debugEntitySectionIndex = -1;
     debugRenderSectionIndex = -1;
     debugCameraSectionIndex = -1;
@@ -56,118 +75,145 @@ Level::Level()
     parallaxOriginY = 0.0;
 }
 
+// 演员动画皮肤初始化：在关卡资源准备妥当后，给对象池中活着的实体同步绑定其动画包里的第一段待机动画
 void Level::initEntityAnimations()
 {
-    for (auto& ent : entityManager.getEntities())
+    auto& entities = entityManager.getEntities();
+    for (size_t idx : entityManager.getActiveIndices())
     {
-        ent.initAnimationFromAnimator(animationClips);
+        entities[idx].initAnimationFromAnimator(animationClips);
     }
 }
 
+// 关卡大初始化：加载本关所需的全部游戏资源
 void Level::init()
 {
+    // 1. 登记图片资源路径并载入内存
     initResources();
 
+    // 2. 从文本解析格子地图，设定世界总像素尺寸
     initMap();
 
-    // 从 JSON 配置文件加载并初始化实体
+    // 3. 从 JSON 配置文件加载本关的初始实体，放入对象池大箱子里
     entityManager.loadEntities("assets/data/entities.json", animationClips);
 
+	Entity* checkpoint = entityManager.getEntityById("Checkpoint");
+	if (checkpoint)
+	{
+		checkpoint->setCollisionBoxOffset(0.0, -30.0);
+	}
+
+    // 4. 拼装屏幕右上角的调试 UI 控制台
     initUI();
 
-    // 初始化相机位置，避免第一帧背景原点和真实相机位置不同。
+    // 5. 每次进关卡时，记得把碰撞打印的历史名单清空，准备开始新的计算
+    lastOverlapPairs.clear();
+
+    // 6. 初始化相机：把镜头瞬间平移到池子里第一个活跃角色的头上，避免镜头乱跳
     auto& entities = entityManager.getEntities();
-    if (!entities.empty())
+    const auto& activeIndices = entityManager.getActiveIndices();
+    if (!activeIndices.empty())
     {
-        gCamera.followInstant(entities[0].getX(), entities[0].getY(), worldWidth, worldHeight);
+        gCamera.followInstant(entities[activeIndices[0]].getX(), entities[activeIndices[0]].getY(), worldWidth, worldHeight);
     }
 
+    // 7. 设定多层视差背景的参考相机起点
     parallaxCameraX = getParallaxCameraCenterX();
     parallaxCameraY = getParallaxCameraCenterY();
     parallaxOriginX = parallaxCameraX;
     parallaxOriginY = parallaxCameraY;
 
-    // 同步实体的初始控制状态
+    // 8. 默认激活 Player1 的键盘操纵权限
     setControlTarget(controlledEntityName);
 
+    // 9. 摆放天空、云朵和树木图层
     initBackground();
 }
 
+// Level::update: 每一帧的核心更新流程（数据流动中枢）。
+// 一帧运转的详细流程如下：
+// 1. 清除所有实体上一帧的物理状态标记（是否在空中等）。
+// 2. 捕获切人控制的键盘按键（1、2、3、4）。
+// 3. 更新实体位移：计算意图，调用 MovementHandle 和 CollisionHandle 计算位置并应用动画。
+// 4. 处理镜头切换和 UI 显隐按键（F1-F4, F8-F11 等）。
+// 5. 缓缓移动镜头让其平滑跟上被控角色，并更新视差背景滚动。
+// 6. 输出状态日志（如落地、跳跃、死亡等）。
+// 7. 检测重叠事件（算算谁碰到了谁），让实体在内部标记发生了碰撞。
+// 8. 处理串联事件：如果旗杆动画播放完毕，就通知 EntityManager 在队列里登记生成金币。
+// 9. 调用 processSpawns() 安全完成垃圾回收和新生实体的复活。
+// 10. 更新 UI 各面板的缓动动画位置。
 void Level::update(InputManager& input)
 {
-    /*
-    Level 每帧更新顺序：
-        1. 处理输入反馈（临时鼠标调试）
-        2. clearEntityFrameState() 清理上一帧临时状态
-        3. updateEntities() 生成 intent，并调用 MovementHandle / CollisionHandle
-        4. handleCameraInput() 处理 F1-F4 跟随目标切换
-        5. handleUIInput() 处理 Debug UI 临时显隐输入
-        6. updateCamera() 更新摄像机跟随
-        7. updateDebugStates() 输出状态变化
-        8. updateOverlapEvents() 处理重叠事件，如金币拾取
-        9. uiManager.update() 更新 UIElement 父子定位和过渡
-    */
     if (input.isMouseLeftPressed())
     {
-        cout << "Left mouse down: "
+        cout << "鼠标左键按下了，坐标在: "
             << input.getMouseX()
             << " "
             << input.getMouseY()
             << endl;
     }
 
+    // 清理上帧的物理临时痕迹
     clearEntityFrameState();
 
+    // 监测切人按键
     handleControlInput(input);
 
+    // 物理移动与动画状态更新
     updateEntities(input);
 
+    // 捕获镜头和 UI 调试按键的输入
     handleCameraInput(input);
     handleUIInput(input);
     handleRendererInput(input);
 
+    // 更新镜头和平滑背景视差
     updateCamera(input);
     updateParallaxCamera();
 
     double parallaxOffsetX = parallaxCameraX - parallaxOriginX;
-    // Y 方向直接使用真实相机中心变化量，避免背景抢在 followSmooth 相机之前移动。
     double parallaxOffsetY = gCamera.centerY - parallaxOriginY;
     backgroundManager.updateRuntimeTransforms(parallaxOffsetX, parallaxOffsetY);
 
+    // 轮询并打印状态转移日志
     updateDebugStates();
 
+    // 进行重叠交互判定与响应
     updateOverlapEvents();
     resolveEntityOverlaps();
 
-    // 检测旗帜是否刚刚完成升旗动画，并在逻辑中心上方 64 像素生成一个 Coin2 对象
+    // 事件联动：检查是否有旗子刚刚播完升旗动画，如果是，立马让管家生成银币（Coin2）
     static int spawnedCoinCounter = 1;
-    for (auto& ent : entityManager.getEntities())
+    auto& entities = entityManager.getEntities();
+    for (size_t idx : entityManager.getActiveIndices())
     {
+        Entity& ent = entities[idx];
         if (ent.getEntityType() == CHECKPOINT && ent.flagActivatedJustNow)
         {
-            ent.flagActivatedJustNow = false; // 重置标记
+            ent.flagActivatedJustNow = false; // 消费掉这个标记，重置它
 
             std::string coinId = "SpawnedCoin_" + std::to_string(spawnedCoinCounter++);
             entityManager.queueSpawnEntity(
                 coinId,
                 ent.getX(),
-                ent.getY() - 64.0,
-                false,                 // controlled
-                true,                  // collidable
-                false,                 // blocking
-                true,                  // god
-                COIN,                  // type
-                ANIM_SET_COIN_SILVER,  // animSet (Coin2)
-                4.0, 4.0,              // scaleX, scaleY
+                ent.getY() + 64.0,     // 放置在新位置
+                false,                 // controlled = false，新钱不能由玩家操作
+                true,                  // collidable = true，可以被吃掉
+                false,                 // blocking = false，不阻挡别人走路
+                true,                  // god = true，不受重力且无视阻挡
+                COIN,                  // type = 金币
+                ANIM_SET_COIN_SILVER,  // animSet = 银币动画素材包
+                4.0, 4.0,              // scaleX, scaleY = 4倍大
                 1.0, 1.0,              // colScaleX, colScaleY
-                3                      // animSpeed
+                3                      // animSpeed = 每3帧播一幅图
             );
         }
     }
 
-    // 帧末安全执行所有的动态实体生成
+    // 帧末垃圾回收与动态生成落地
     entityManager.processSpawns(animationClips);
 
+    // UI 数据变化缓动更新
     uiManager.update();
 }
 
@@ -179,7 +225,7 @@ void Level::draw()
         renderer.drawTileMap(tileMap);
 
     renderFrameStats.entitySpriteCount =
-        renderer.drawEntities(entityManager.getEntities());
+        renderer.drawEntities(entityManager.getEntities(), entityManager.getActiveIndices());
 
     renderFrameStats.refreshTotal();
 
@@ -341,36 +387,30 @@ void Level::initUI()
     debugCameraSection.snapToTarget();
     debugCameraSectionIndex = uiManager.addElement(debugCameraSection);
 }
+// 步骤功能：在一帧最开始时，清空当前所有活跃演员身上上一帧残留的碰撞/重叠/阻挡的标记。
+// 这样物理引擎在接下来计算移动时，能拿到一张干干净净的状态纸开始写新的判定。
 void Level::clearEntityFrameState()
 {
-    for (auto& ent : entityManager.getEntities())
+    auto& entities = entityManager.getEntities();
+    for (size_t idx : entityManager.getActiveIndices())
     {
-        if (!ent.getIsAlive())
-        {
-            continue;
-        }
-
-        ent.clearFrameState();
+        entities[idx].clearFrameState();
     }
 }
 
+// 步骤功能：高频物理与动作更新。
+// 对大池子里的每一个活着并活跃的演员执行以下五部曲：
+// 1. 创建本帧默认的意图（不按键就代表什么都不想做）。
+// 2. 如果当前角色正好受键盘控制，由 PlayerController 搜集按键并翻译为意图（如水平想往左、想按下跳跃等）。
+// 3. 调用物理引擎 movementHandle.update()，根据意图算速度，并调用 collisionHandle 测算障碍，修正实体坐标。
+// 4. 让 Animator 状态机自动根据实体是否在空、在地面、是否在冲刺来决策应该播放哪一类动画（比如 idle 或 jump）。
+// 5. 推进当前动画帧计时器，并将最新一帧的裁剪源图贴到实体 Sprite 身上备用。
 void Level::updateEntities(InputManager& input)
 {
-    /*
-    实体更新数据流：
-        对每个存活实体：
-            1. 创建默认空 BehaviorIntent
-            2. 如果是当前玩家控制的对象，则由 PlayerController 根据输入生成 intent
-            3. MovementHandle 根据 intent 更新移动/物理
-            4. MovementHandle 内部调用 CollisionHandle 进行阻挡修正
-            5. Entity 根据 intent 和 sprinting 等状态切换动画
-            6. 推进动画帧
-    */
-
+    // 安全控制保护：如果当前操控的主角意外死亡，我们需要默认把操控权恢复给 Player1
     Entity* controlTarget = entityManager.getEntityById(controlledEntityName);
     if (!controlTarget || !controlTarget->getIsAlive())
     {
-        // 尝试默认恢复到 Player1
         controlTarget = entityManager.getEntityById("Player1");
         if (controlTarget && controlTarget->getIsAlive())
         {
@@ -383,53 +423,64 @@ void Level::updateEntities(InputManager& input)
     }
 
     auto& entities = entityManager.getEntities();
-    for (size_t i = 0; i < entities.size(); i++)
+    const auto& activeIndices = entityManager.getActiveIndices();
+    for (size_t idx : activeIndices)
     {
-        if (!entities[i].getIsAlive())
+        if (!entities[idx].getIsAlive())
         {
-            continue;
+            continue; // 忽略死人，防止对无用槽位空转计算
         }
 
         BehaviorIntent intent;
 
-        if (entities[i].isControlled())
+        // 如果这个角色当前被标记受控，让翻译官去生成意图
+        if (entities[idx].isControlled())
         {
-            intent = playerController.makeIntent(input, entities[i].isGod());
+            intent = playerController.makeIntent(input, entities[idx].isGod());
         }
 
+        // 送进物理流水线做位置、速度、阻挡修正更新
         movementHandle.update(
-            entities[i],
-            intent,
-            entities,
-            (int)i,
-            tileMap,
-            worldWidth,
-            worldHeight,
-            collisionHandle
+            entities[idx],      // 当前更新的角色
+            intent,             // 它的意图
+            entities,           // 整个大箱子，用来查询跟别的演员有没有物理相撞
+            activeIndices,      // 活跃列表
+            (int)idx,           // 它自己在对象池里的槽位号
+            tileMap,            // 地图图块信息，用来防止穿墙
+            worldWidth,         // 关卡世界宽度
+            worldHeight,        // 关卡世界高度
+            collisionHandle     // 碰撞盒子判定处理器
         );
 
-        entities[i].updateAnimator(intent, animationClips);
-        entities[i].updateAnimatedSprite();
+        // 让 Animator 状态机给它决策本帧动画片段
+        entities[idx].updateAnimator(intent, animationClips);
+        
+        // 推进精灵图动画的帧更新
+        entities[idx].updateAnimatedSprite();
     }
 }
 
+// 步骤功能：设置当前被键盘操控的主角。
+// 并把其它所有人的操控权一并剥夺。
+// name: 想操控的实体 ID 名字（找不到或者死了就不进行任何操作）
 void Level::setControlTarget(const std::string& name)
 {
     Entity* target = entityManager.getEntityById(name);
     if (!target || !target->getIsAlive())
     {
-        return;
+        return; // 安全保护：如果新目标是个空指针或者已经死了，直接拒绝切人
     }
 
     controlledEntityName = name;
 
-    // 动态同步每个实体的控制状态
-    for (auto& ent : entityManager.getEntities())
+    auto& entities = entityManager.getEntities();
+    // 遍历所有活着的人，给被选中的人 setControlled(true)，其它人 setControlled(false)
+    for (size_t idx : entityManager.getActiveIndices())
     {
-        ent.setControlled(ent.getId() == controlledEntityName);
+        entities[idx].setControlled(entities[idx].getId() == controlledEntityName);
     }
 
-    cout << "Control target changed to Entity "
+    cout << "操控角色已安全切换至: "
         << controlledEntityName
         << endl;
 }
@@ -681,134 +732,166 @@ void Level::updateParallaxCamera()
     parallaxCameraY += (targetParallaxCameraY - parallaxCameraY) * followSpeed;
 }
 
+// 步骤功能：监测各种物理状态转移日志。
+// 每帧遍历活着的演员，对比他们本帧和上一帧的状态，一旦发生变化就打印提示。
+// 比如：Player1 从空中落到了地上，或者金币 died（死亡了）。
 void Level::updateDebugStates()
 {
-    for (auto& ent : entityManager.getEntities())
+    auto& entities = entityManager.getEntities();
+    const auto& activeIndices = entityManager.getActiveIndices();
+
+    for (size_t idx : activeIndices)
     {
+        Entity& ent = entities[idx];
         if (!ent.getIsAlive())
         {
-            continue;
+            continue; // 忽略死人槽位
         }
 
-        // Collision State
+        // 碰撞状态监测：如果这帧撞上了，但上帧没撞，打印碰撞开始
         if (ent.hasCollisionState() && !ent.lastCollisionState)
         {
-            cout << "Entity " << ent.getId() << " collision state started." << endl;
+            cout << "演员 " << ent.getId() << " 开始碰到阻挡物了。" << endl;
         }
-        ent.lastCollisionState = ent.hasCollisionState();
+        ent.lastCollisionState = ent.hasCollisionState(); // 更新历史缓存
 
-        // On Ground State
+        // 落地状态监测：如果这帧站在地上了，但上帧还在空中，打印落地
         if (ent.isOnGround() && !ent.lastGroundState)
         {
-            cout << "Entity " << ent.getId() << " is on ground." << endl;
+            cout << "演员 " << ent.getId() << " 稳稳落地。" << endl;
         }
         ent.lastGroundState = ent.isOnGround();
 
-        // In Air State
+        // 悬空状态监测：如果起飞悬空了
         if (ent.isInAir() && !ent.lastInAirState)
         {
-            cout << "Entity " << ent.getId() << " is in air." << endl;
+            cout << "演员 " << ent.getId() << " 处于悬空状态。" << endl;
         }
         ent.lastInAirState = ent.isInAir();
 
-        // Jumping State
+        // 起跳状态监测
         bool nowJumping = ent.isJumping();
         if (nowJumping && !ent.lastJumpingState)
         {
-            cout << "Entity " << ent.getId() << " started jumping." << endl;
+            cout << "演员 " << ent.getId() << " 开始跳跃！" << endl;
         }
         if (!nowJumping && ent.lastJumpingState)
         {
-            cout << "Entity " << ent.getId() << " ended jumping." << endl;
+            cout << "演员 " << ent.getId() << " 结束了跳跃。" << endl;
         }
         ent.lastJumpingState = nowJumping;
 
-        // Sprinting State
+        // 冲刺/奔跑状态监测
         bool nowSprinting = ent.isSprinting();
         if (nowSprinting && !ent.lastSprintState)
         {
-            cout << "Entity " << ent.getId() << " started sprinting." << endl;
+            cout << "演员 " << ent.getId() << " 开始撒丫子狂奔（冲刺）。" << endl;
         }
         if (!nowSprinting && ent.lastSprintState)
         {
-            cout << "Entity " << ent.getId() << " ended sprinting." << endl;
+            cout << "演员 " << ent.getId() << " 停止了狂奔。" << endl;
         }
         ent.lastSprintState = nowSprinting;
     }
 
-    // Dying Log
-    for (auto& ent : entityManager.getEntities())
+    // 死亡日志监测：
+    // 因为这发生在帧末 processSpawns 之前，所以刚死的实体依然在 activeIndices 里。
+    // 我们在此捕获它们死亡的瞬间并打印它已经仙逝。
+    for (size_t idx : activeIndices)
     {
+        Entity& ent = entities[idx];
         bool nowAlive = ent.getIsAlive();
         if (!nowAlive && ent.lastAliveState)
         {
-            cout << "Entity " << ent.getId() << " died." << endl;
+            cout << "演员 " << ent.getId() << " 驾鹤西去（死亡）。" << endl;
         }
-        ent.lastAliveState = nowAlive;
+        ent.lastAliveState = nowAlive; // 同步生存历史标志
     }
 }
 
+// 步骤功能：双重循环检测实体两两之间是否有 AABB 碰撞重叠，并将碰撞事件填充到双方身上。
+// 
+// 为什么只在 activeIndices 中算？
+// 因为这样可以过滤掉死掉的金币或空闲实体，把运算开销从 O(N^2) 降低到 O(M^2)（M 为活人数量，如 10-20）。
+// 去重思路：
+// 我们用当前帧的名单 currentOverlapPairs 记录本帧发生了的所有碰撞组合（Key 是字母排序后的 ID 拼接，如 "Coin1_Player1"）。
+// 如果这个组合在去年的老名单 lastOverlapPairs 中查不到（调用 contains 辅助函数返回 false），
+// 说明这是一个“新鲜出炉的碰撞”！我们只在此时打印控制台日志。
 void Level::updateOverlapEvents()
 {
-    /*
-    重叠事件检测：
-        只负责计算两个 AABB 是否重叠，并将重叠信息填充进双方实体的重叠列表。
-    */
     auto& entities = entityManager.getEntities();
-    std::unordered_set<std::string> currentOverlapPairs;
+    const auto& activeIndices = entityManager.getActiveIndices();
+    std::vector<std::string> currentOverlapPairs;
 
-    for (size_t i = 0; i < entities.size(); i++)
+    for (size_t i = 0; i < activeIndices.size(); i++)
     {
-        for (size_t j = i + 1; j < entities.size(); j++)
+        for (size_t j = i + 1; j < activeIndices.size(); j++)
         {
-            if (!entities[i].getIsAlive() || !entities[j].getIsAlive())
+            size_t idxA = activeIndices[i];
+            size_t idxB = activeIndices[j];
+
+            // 死亡槽位或者不参与碰撞的实体（比如上帝模式的角色）直接跳过
+            if (!entities[idxA].getIsAlive() || !entities[idxB].getIsAlive())
             {
                 continue;
             }
 
-            if (!entities[i].isCollidable() || !entities[j].isCollidable())
+            if (!entities[idxA].isCollidable() || !entities[idxB].isCollidable())
             {
                 continue;
             }
 
-            RectBox a = entities[i].getWorldCollisionBox();
-            RectBox b = entities[j].getWorldCollisionBox();
+            // 获取两者本帧的世界碰撞盒边界
+            RectBox a = entities[idxA].getWorldCollisionBox();
+            RectBox b = entities[idxB].getWorldCollisionBox();
 
+            // 调用碰撞助手计算两个矩形是否有重叠相交
             bool overlapping = collisionHandle.isRectOverlapping(a, b);
 
             if (overlapping)
             {
-                entities[i].setOverlapping(true);
-                entities[j].setOverlapping(true);
+                // 如果相撞，给两个实体标记上本帧 overlapping 标志（以供绘制红色碰撞盒）
+                entities[idxA].setOverlapping(true);
+                entities[idxB].setOverlapping(true);
 
-                // 填充重叠双方实体的重叠列表（记录对方的唯一 ID 和类型）
-                entities[i].addOverlap(entities[j].getId(), entities[j].getEntityType());
-                entities[j].addOverlap(entities[i].getId(), entities[i].getEntityType());
+                // 核心：把对方的名字 ID 和类型登记到各自内部的 currentOverlaps vector 中，实现碰撞关系存储
+                entities[idxA].addOverlap(entities[idxB].getId(), entities[idxB].getEntityType());
+                entities[idxB].addOverlap(entities[idxA].getId(), entities[idxA].getEntityType());
 
-                std::string key = (entities[i].getId() < entities[j].getId()) ?
-                                  (entities[i].getId() + "_" + entities[j].getId()) :
-                                  (entities[j].getId() + "_" + entities[i].getId());
-                currentOverlapPairs.insert(key);
+                // 将两者的 ID 按照字母表小到大排序拼接成一个唯一的键，避免 (A, B) 和 (B, A) 产生多余判断
+                std::string key = (entities[idxA].getId() < entities[idxB].getId()) ?
+                                  (entities[idxA].getId() + "_" + entities[idxB].getId()) :
+                                  (entities[idxB].getId() + "_" + entities[idxA].getId());
+                
+                // 登记在当前帧的碰撞名单上
+                currentOverlapPairs.push_back(key);
 
-                if (entityManager.lastOverlapPairs.find(key) == entityManager.lastOverlapPairs.end())
+                // 如果上一帧并没有碰过它，才打印日志（防止控制台疯狂刷屏）
+                if (!contains(lastOverlapPairs, key))
                 {
-                    cout << "Entity ID: " << entities[i].getId() << " overlaps with Entity ID: " << entities[j].getId() << endl;
+                    cout << "检测到新重叠事件：实体 ID [" << entities[idxA].getId() 
+                         << "] 碰到了 实体 ID [" << entities[idxB].getId() << "]" << endl;
                 }
             }
         }
     }
-    entityManager.lastOverlapPairs = currentOverlapPairs;
+    // 交接棒：将本帧数据存入历史，留待下一帧作为“上一帧”使用
+    lastOverlapPairs = currentOverlapPairs;
 }
 
+// 步骤功能：通知活着的实体自己去处理刚才发生的碰撞。
+// 因为上一阶段已经把碰到的所有人塞进了 entities[idx].currentOverlaps，
+// 这里就是通知每个实体自治响应（金币吃掉自毁、旗帜遇到玩家升旗）。
 void Level::resolveEntityOverlaps()
 {
     auto& entities = entityManager.getEntities();
-    // 让所有存活实体各自独立响应处理这一帧发生的重叠反馈逻辑
-    for (size_t i = 0; i < entities.size(); i++)
+    const auto& activeIndices = entityManager.getActiveIndices();
+    for (size_t idx : activeIndices)
     {
-        if (entities[i].getIsAlive())
+        if (entities[idx].getIsAlive())
         {
-            entities[i].resolveOverlaps(entities, animationClips);
+            // 实体自治逻辑
+            entities[idx].resolveOverlaps(entityManager, animationClips);
         }
     }
 }

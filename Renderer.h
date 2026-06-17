@@ -118,8 +118,11 @@ public:
     // 功能：根据 sprite 自身保存的世界绘制数据绘制单帧图像。
     bool drawSprite(const sprite& targetSprite, COLORREF renderBoundsColor = RGB(0, 220, 255));
 
-    // 功能：绘制实体列表中的所有存活实体，并返回真实绘制成功的 entity sprite 数量。
-    int drawEntities(vector<Entity>& entitys);
+    // 核心绘制：画出对象池中所有的活跃实体
+    // 参数意义：
+    //   entitys: 对象池大数组
+    //   activeIndices: 活跃实体索引表，只画处于这个名单中的实体
+    int drawEntities(std::vector<Entity>& entitys, const std::vector<size_t>& activeIndices);
 
     // 功能：绘制一个通用 UIElement 面板。
     void drawUIElementPanel(const UIElement& element);

@@ -161,8 +161,9 @@ int Renderer::drawBackgroundObjects(BackgroundManager& backgroundManager)
     int renderedBackgroundCount = 0;
 
     vector<BackgroundObject>& backgroundObjects = backgroundManager.getRenderObjects();
+    int activeCount = backgroundManager.getActiveRenderCount();
 
-    for (int i = 0; i < (int)backgroundObjects.size(); i++)
+    for (int i = 0; i < activeCount; i++)
     {
         BackgroundObject& object = backgroundObjects[i];
 
@@ -284,29 +285,38 @@ bool Renderer::drawSprite(const sprite& targetSprite, COLORREF renderBoundsColor
     return true;
 }
 
-int Renderer::drawEntities(vector<Entity>& entitys)
+// 核心绘制功能：绘制大舞台上所有的活跃演员
+// 
+// 它是怎么运行的？
+// 我们不再遍历整个大 vector，而是仅仅循环 activeIndices 活跃名单。
+// 对名单里的每一个演员，先做安全检查（万一刚才死了但还没来得及清出 activeIndices，跳过它）。
+// 然后调用 drawSprite() 绘制它的动作贴图，如果开启了碰撞调试框，则顺便用红色/绿色画出碰撞范围框。
+int Renderer::drawEntities(vector<Entity>& entitys, const vector<size_t>& activeIndices)
 {
-    int renderedEntityCount = 0;
+    int renderedEntityCount = 0; // 记录本帧一共画了多少个实体
 
-    for (int i = 0; i < (int)entitys.size(); i++)
+    for (size_t idx : activeIndices)
     {
-        if (!entitys[i].getIsAlive())
+        // 如果演员已经被标记为死亡，不画它，留待帧末被回收
+        if (!entitys[idx].getIsAlive())
         {
             continue;
         }
 
-        if (drawSprite(entitys[i].getSprite()))
+        // 调用 EasyX 绘制实体的精灵动作贴图
+        if (drawSprite(entitys[idx].getSprite()))
         {
-            renderedEntityCount++;
+            renderedEntityCount++; // 画图计数累加
         }
 
+        // 如果用户按了 F5 开启了碰撞盒显示
         if (showCollisionBox)
         {
-            drawEntityCollisionBox(entitys[i]);
+            drawEntityCollisionBox(entitys[idx]); // 在实体外圈用红线/绿线画一圈碰撞盒框
         }
     }
 
-    return renderedEntityCount;
+    return renderedEntityCount; // 返回总绘制个数
 }
 
 void Renderer::drawUIElementPanel(const UIElement& element)

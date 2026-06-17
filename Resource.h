@@ -1,8 +1,19 @@
 ﻿#pragma once
 #include "Config.h"
 
-#include "Image2D.h"
+// 引入标准库的 map (红黑树字典) 和 memory (智能指针库)。
+// 1. map：为什么用它？因为资源表是用枚举（ImageResourceId / TextResourceId）做 Key 的。
+//    使用 std::map 能实现“从 ID 到图片路径”或“从 ID 到已加载对象”的结构化映射，
+//    它自动按照 Key 排序，提供了非常稳定（时间复杂度 O(log N)）的检索性能，使用极其方便。
+// 2. memory (特别是 std::unique_ptr)：为什么用它？因为加载的 Image2D 图像资源需要动态分配。
+//    使用 std::unique_ptr 独占型智能指针来接管动态分配出来的 Image2D 实例，
+//    借助 C++ 的 RAII 机制，在 map 被 clear 或是 ResourceManager 析构时自动完成 delete 析构，
+//    不再需要手写 delete 循环，从根本上杜绝了内存泄漏隐患。
+#include <map>
+#include <memory>
 #include <string>
+
+#include "Image2D.h"
 
 // ImageResourceId：
 // ResourceManager 中通用图片资源的索引 ID。
@@ -37,12 +48,25 @@ enum ImageResourceId
     IMG_COIN_SILVER,
     IMG_COIN_COPPER,
 
+
+
     IMG_COIN_COLLECTED,
 
     IMG_CHECKPOINT_NO_FLAG,
     IMG_CHECKPOINT_FLAG_OUT,
     IMG_CHECKPOINT_FLAG_IDLE,
 
+	IMAGE_ENDPOINT_IDLE,
+	IMAGE_ENDPOINT_PRESSED,
+
+    IMG_APPLE,
+    IMG_BANANA,
+    IMG_MELON,
+    IMG_ORANGE,
+    IMG_PINEAPPLE,
+    IMG_STRAWBERRY,
+    IMG_KIWI,
+    IMG_CHERRY,
     IMG_RESOURCE_COUNT
 };
 
@@ -61,10 +85,19 @@ enum TextResourceId
 class ResourceManager
 {
 private:
+    // 注册表：存储“图片资源 ID”到“图片相对路径”的字典映射。
+    // 使用 std::map 能够在加载资源前，先建立清晰的文件定位关联。
     map<ImageResourceId, basic_string<TCHAR>> imagePaths;
+
+    // 缓存表：存储“图片资源 ID”到“智能指针所托管的 Image2D 图像对象”的映射。
+    // 用 unique_ptr 智能指针管理动态生成的对象，它对持有的堆内存具有绝对所有权（Exclusive ownership）。
+    // 在 map 被 clear 或是 ResourceManager 销毁时，所有被智能指针托管的对象都会被自动释放，安全无痛。
     map<ImageResourceId, unique_ptr<Image2D>> images;
 
+    // 注册表：存储“文本资源 ID”到“文本相对路径”的映射。
     map<TextResourceId, basic_string<TCHAR>> textPaths;
+
+    // 缓存表：存储“文本资源 ID”到“已读取的文本具体内容（std::string）”的映射。
     map<TextResourceId, string> textContents;
 
 public:

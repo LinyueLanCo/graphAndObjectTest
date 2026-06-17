@@ -11,6 +11,7 @@
 
 class CollisionHandle;
 class MovementHandle;
+class EntityManager;
 
 // Entity：
 // 实体数据容器 + 组件持有者，保存真实游戏状态并提供碰撞、动画、绘制接口。
@@ -135,6 +136,30 @@ public:
     void setIsAlive(bool value);
     void killEntity();
 
+    // 重置大复活术：擦除槽位中实体上辈子的各种状态残留，直接将新的参数重新装载到当前对象上
+    // 参数意义：
+    //   entityId: 赋予实体的新 ID 名字
+    //   startX, startY: 新生出的世界坐标位置
+    //   isControlled: 新生后是否允许被键盘控制
+    //   isCollidable: 新生后是否能够重叠交互
+    //   isBlocking: 新生后是否具有阻挡墙壁体积
+    //   isGod: 是否开启上帝无敌模式
+    //   Type: 实体类型标识（PLAYER, COIN 等）
+    //   animationSet: 绑定的动画包包 ID
+    //   alive: 初始生存标记
+    void reset(
+        std::string entityId,
+        double startX,
+        double startY,
+        bool isControlled,
+        bool isCollidable,
+        bool isBlocking,
+        bool isGod,
+        EntityType Type,
+        AnimationSetId animationSet,
+        bool alive = 1
+    );
+
     double getX();
     double getY();
 
@@ -144,7 +169,12 @@ public:
     void setOverlapping(bool value);
     void addOverlap(const std::string& otherId, EntityType otherType);
     const std::vector<OverlapInfo>& getCurrentOverlaps() const;
-    void resolveOverlaps(std::vector<Entity>& allEntities, AnimationClipManager& animationClips);
+
+    // 实体自治逻辑：让实体自己去处理本帧记录在 currentOverlaps 里的碰撞对象并执行动作（吃硬币、升旗帜等）
+    // 参数意义：
+    //   entityManager: 统一实体管理器引用，利用 O(1) 字典查找对方实体
+    //   animationClips: 动画片段管理器，用于切换金币“被吃动画”或者旗帜“升旗动画”
+    void resolveOverlaps(EntityManager& entityManager, AnimationClipManager& animationClips);
     void setCollisionState(bool value);
     void clearFrameState();
 

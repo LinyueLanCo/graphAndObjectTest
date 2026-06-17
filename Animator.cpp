@@ -41,6 +41,16 @@ void Animator::changeAnimation(Entity& entity, AnimationState newState, Animatio
 // 功能：读取实体真实状态并决定 idle / walk / run / jumpStart / jumpLoop / jumpEnd。
 void Animator::update(Entity& entity, BehaviorIntent intent, AnimationClipManager& animationClips)
 {
+    if (animationSetId == ANIM_SET_ENDPOINT)
+    {
+        // 改为判断当前是否处于 Pressed 状态，且该非循环动画已经播放结束
+        if (currentAnimState == ANIM_ENDPOINT_PRESSED && entity.isAnimationFinished())
+        {
+            changeAnimation(entity, ANIM_COLLECTED, animationClips);
+        }
+        return;
+    }
+
     if (animationSetId == ANIM_SET_CHECKPOINT)
     {
         if (currentAnimState == ANIM_CHECKPOINT_FLAG_OUT && entity.isAnimationFinished())

@@ -1,4 +1,5 @@
 ﻿#include "Entity.h"
+#include "EntityManager.h"
 
 static int gNextEntityId = 1;
 
@@ -181,6 +182,55 @@ Entity::Entity(
         alive
     )
 {
+}
+
+// 功能：重置实体的所有属性以重用槽位。
+void Entity::reset(
+    std::string entityId,
+    double startX,
+    double startY,
+    bool isControlled,
+    bool isCollidable,
+    bool isBlocking,
+    bool isGod,
+    EntityType Type,
+    AnimationSetId animationSet,
+    bool alive
+)
+{
+    id = entityId;
+    x = startX;
+    y = startY;
+    controlled = isControlled;
+    collidable = isCollidable;
+    blocking = isBlocking;
+    god = isGod;
+    entityType = Type;
+    isAlive = alive;
+
+    speed = 5;
+    velocityY = 0;
+    overlapping = false;
+    collisionState = false;
+    onGround = false;
+    sprinting = false;
+    InAir = false;
+    jumping = false;
+    blockedByEntity = false;
+    blockedByWorld = false;
+    currentFacingDirection = RIGHT;
+
+    currentOverlaps.clear();
+
+    animator.configure(animationSet, ANIM_IDLE_R);
+
+    lastCollisionState = false;
+    lastGroundState = false;
+    lastSprintState = false;
+    lastInAirState = false;
+    lastJumpingState = false;
+    lastAliveState = alive;
+    flagActivatedJustNow = false;
 }
 
 // 功能：获取实体唯一标识 ID。
@@ -370,73 +420,101 @@ const std::vector<OverlapInfo>& Entity::getCurrentOverlaps() const
 }
 
 // 功能：实体自治处理自身重叠反应逻辑。
-void Entity::resolveOverlaps(std::vector<Entity>& allEntities, AnimationClipManager& animationClips)
+// 核心自治反应功能：实体自己去读取本帧被塞进来的重叠记录，自己决定干嘛。
+// 
+// 参数意义：
+//   entityManager: 统一实体管理器引用，利用 O(1) 字典查找对方实体
+//   animationClips: 动画片段管理器，用于切换金币被吃动画或升旗动画
+void Entity::resolveOverlaps(EntityManager& entityManager, AnimationClipManager& animationClips)
 {
+    // 如果我已经挂了，那就没必要做出任何碰撞反馈了
     if (!isAlive)
     {
         return;
     }
 
+    // 循环遍历我这帧碰到的所有对象
     for (int i = 0; i < (int)currentOverlaps.size(); i++)
     {
         std::string otherId = currentOverlaps[i].otherEntityId;
         EntityType otherType = currentOverlaps[i].otherType;
 
-        // 1. Player 侧重叠逻辑：只进行加分调试打印，不直接操作金币实体死亡，静待金币自毁。
+        // 1. 如果我是玩家操控的主角：
+        //    我们只进行加分日志打印，具体消灭金币的事情交给金币自己去判定和自毁。
         if (controlled)
         {
             if (otherType == COIN)
             {
-                cout << "Player (ID: " << id << ") detected overlap with Coin (ID: " << otherId << ") - [Add Score Placeholder]" << endl;
+                cout << "主角 (ID: " << id << ") 碰到了金币 (ID: " << otherId << ") - [准备执行加分]" << endl;
             }
         }
 
-        // 2. Coin 侧重叠逻辑：金币发现碰触受控角色后进入被收集动画，并在动画播放后自毁
+        // 2. 如果我是可拾取物（COIN）：
         if (entityType == COIN)
         {
-            Entity* otherEntity = nullptr;
-            for (auto& e : allEntities)
-            {
-                if (e.getId() == otherId)
-                {
-                    otherEntity = &e;
-                    break;
-                }
-            }
+            Entity* otherEntity = entityManager.getEntityById(otherId);
 
             if (otherEntity != nullptr && otherEntity->isControlled())
             {
+                // 核心防呆：立刻关闭碰撞
+                collidable = false;
+
+                // 通用调试日志：直接输出本实体的具体 ID
+                std::cout << "玩家拾取了物品: [ID: " << id << "]" << std::endl;
+
+                // --- 特判区 ---
+                // 如果你需要对某些特殊物品进行特判逻辑，可以直接根据 ID 判定：
+                if (id == "SpecialGoldApple")
+                {
+                    // 比如吃到了特殊的黄金苹果，触发回满血或者无敌逻辑
+                    std::cout << "【特殊事件】吃到了黄金苹果，主角获得无敌状态！" << std::endl;
+                    // otherEntity->setGod(true); 等等
+                }
+                else if (id.rfind("Apple", 0) == 0) // 以 "Apple" 开头的实体
+                {
+                    // 普通苹果的行为
+                }
+
+                // 播放收集音效并切换至消失爆裂动画
                 PlaySoundW(
                     _T("assets\\sound\\entities\\item\\coin_pickup.wav"),
                     NULL,
                     SND_ASYNC | SND_NOSTOP
                 );
-                collidable = false; // 禁用后续碰撞，避免重复响应
                 animator.changeAnimation(*this, ANIM_COLLECTED, animationClips);
-                std::cout << "Coin (ID: " << id << ") triggered collected animation." << std::endl;
             }
         }
-
-        // 3. Checkpoint 侧重叠逻辑：受控角色碰触后从 No Flag 切换为 Flag Out 播放升旗动画
+        // 3. 如果我是旗杆（CHECKPOINT）：
+        //    一旦玩家操控的角色碰到了我，只要我还没升过旗，我就开始切换升旗动画。
         if (entityType == CHECKPOINT)
         {
-            Entity* otherEntity = nullptr;
-            for (auto& e : allEntities)
-            {
-                if (e.getId() == otherId)
-                {
-                    otherEntity = &e;
-                    break;
-                }
-            }
+            Entity* otherEntity = entityManager.getEntityById(otherId);
 
+            // 如果确实碰到了主角，并且我还没升过旗（不处于 FLAG_OUT 和 FLAG_IDLE 状态）
             if (otherEntity != nullptr && otherEntity->isControlled())
             {
                 if (getAnimationState() != ANIM_CHECKPOINT_FLAG_OUT && getAnimationState() != ANIM_CHECKPOINT_FLAG_IDLE)
                 {
+                    // 切换到升旗动画
                     animator.changeAnimation(*this, ANIM_CHECKPOINT_FLAG_OUT, animationClips);
-                    std::cout << "Checkpoint (ID: " << id << ") activated! Flag raising." << std::endl;
+                    std::cout << "旗杆 (ID: " << id << ") 被玩家触碰，开始升旗！" << std::endl;
                 }
+            }
+        }
+        // 4. 如果我是终点（ENDPOINT）：
+        if (entityType == ENDPOINT)
+        {
+            Entity* otherEntity = entityManager.getEntityById(otherId);
+
+            if (otherEntity != nullptr && otherEntity->isControlled())
+            {
+                if (getAnimationState() != ANIM_ENDPOINT_PRESSED && getAnimationState() != ANIM_COLLECTED)
+                {
+                    collidable = false;
+                    animator.changeAnimation(*this, ANIM_ENDPOINT_PRESSED, animationClips);
+                }
+                std::cout << "玩家触碰到了终点 (ID: " << id << ")" << std::endl;
+                // 这里可以添加过关逻辑，比如切换到下一关或者显示胜利界面
             }
         }
     }
@@ -528,6 +606,13 @@ void Entity::updateAnimatedSprite()
     if (entityType == CHECKPOINT && getAnimationState() == ANIM_CHECKPOINT_FLAG_OUT && isAnimationFinished())
     {
         flagActivatedJustNow = true;
+    }
+
+    // 如果是终点且播放完了收集爆裂动画，则将其真正自毁
+    if (entityType == ENDPOINT && getAnimationState() == ANIM_COLLECTED && isAnimationFinished())
+    {
+        killEntity();
+        std::cout << "Endpoint (ID: " << id << ") collected and processed." << std::endl;
     }
 }
 

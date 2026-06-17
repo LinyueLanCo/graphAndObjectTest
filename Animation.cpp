@@ -105,6 +105,51 @@ AnimationId getAnimationId(AnimationSetId setId, AnimationState state)
 		if (state == ANIM_CHECKPOINT_FLAG_IDLE) return ANIM_ID_CHECKPOINT_FLAG_IDLE;
 		return ANIM_ID_CHECKPOINT_NO_FLAG;
 	}
-
+	else if (setId == ANIM_SET_ENDPOINT)
+	{
+		if (state == ANIM_ENDPOINT_PRESSED) return ANIM_ID_ENDPOINT_PRESSED;
+		if (state == ANIM_COLLECTED) return ANIM_ID_COIN_COLLECTED; // 复用金币被收集爆裂的 Collected 动画
+		return ANIM_ID_ENDPOINT_IDLE; // 默认状态播放 End (Idle)
+	}
+	else if (setId == ANIM_SET_APPLE)
+	{
+		if (state == ANIM_COLLECTED) return ANIM_ID_COIN_COLLECTED;
+		return ANIM_ID_APPLE;
+	}
+	else if (setId == ANIM_SET_BANANA)
+	{
+		if (state == ANIM_COLLECTED) return ANIM_ID_COIN_COLLECTED;
+		return ANIM_ID_BANANA;
+	}
+	else if (setId == ANIM_SET_CHERRY)
+	{
+		if (state == ANIM_COLLECTED) return ANIM_ID_COIN_COLLECTED;
+		return ANIM_ID_CHERRY;
+	}
+	else if (setId == ANIM_SET_KIWI)
+	{
+		if (state == ANIM_COLLECTED) return ANIM_ID_COIN_COLLECTED;
+		return ANIM_ID_KIWI;
+	}
+	else if (setId == ANIM_SET_MELON)
+	{
+		if (state == ANIM_COLLECTED) return ANIM_ID_COIN_COLLECTED;
+		return ANIM_ID_MELON;
+	}
+	else if (setId == ANIM_SET_ORANGE)
+	{
+		if (state == ANIM_COLLECTED) return ANIM_ID_COIN_COLLECTED;
+		return ANIM_ID_ORANGE;
+	}
+	else if (setId == ANIM_SET_PINEAPPLE)
+	{
+		if (state == ANIM_COLLECTED) return ANIM_ID_COIN_COLLECTED;
+		return ANIM_ID_PINEAPPLE;
+	}
+	else if (setId == ANIM_SET_STRAWBERRY)
+	{
+		if (state == ANIM_COLLECTED) return ANIM_ID_COIN_COLLECTED;
+		return ANIM_ID_STRAWBERRY;
+	}
 	return ANIM_ID_COUNT;
 }

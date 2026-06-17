@@ -1,22 +1,35 @@
 ﻿#include "BackgroundManager.h"
 #include "Camera.h"
 
+// 构造函数：预置渲染池的大小并初始化计数器
+BackgroundManager::BackgroundManager()
+{
+    renderPool.resize(32);
+    activeRenderCount = 0;
+}
+
 // 功能：获取本帧实际参与绘制的背景对象列表。
 vector<BackgroundObject>& BackgroundManager::getRenderObjects()
 {
-    return renderObjects;
+    return renderPool;
 }
 
 // 功能：获取本帧实际参与绘制的背景对象只读列表。
 const vector<BackgroundObject>& BackgroundManager::getRenderObjects() const
 {
-    return renderObjects;
+    return renderPool;
+}
+
+// 功能：获取本帧当前激活的背景实例总数。
+int BackgroundManager::getActiveRenderCount() const
+{
+    return activeRenderCount;
 }
 
 // 功能：根据背景对象列表重建本帧实际参与绘制的背景对象列表。
 void BackgroundManager::rebuildRenderObjects()
 {
-    renderObjects.clear();
+    activeRenderCount = 0;
 
     for (int i = 0; i < (int)objects.size(); i++)
     {
@@ -29,7 +42,10 @@ void BackgroundManager::rebuildRenderObjects()
 
         if (object.drawMode != BACKGROUND_REPEAT_X)
         {
-            renderObjects.push_back(object);
+            if (activeRenderCount < (int)renderPool.size())
+            {
+                renderPool[activeRenderCount++] = object;
+            }
             continue;
         }
 
@@ -52,7 +68,13 @@ void BackgroundManager::rebuildRenderObjects()
 
         while (currentCenterX - repeatDrawW / 2.0 <= viewRight + repeatDrawW)
         {
-            BackgroundObject repeatedObject = object;
+            if (activeRenderCount >= (int)renderPool.size())
+            {
+                break;
+            }
+
+            BackgroundObject& repeatedObject = renderPool[activeRenderCount++];
+            repeatedObject = object;
 
             repeatedObject.generatedByTiling = true;
 
@@ -66,15 +88,13 @@ void BackgroundManager::rebuildRenderObjects()
                 repeatDrawH
             );
 
-            renderObjects.push_back(repeatedObject);
-
             currentCenterX += repeatDrawW;
         }
     }
 
     sort(
-        renderObjects.begin(),
-        renderObjects.end(),
+        renderPool.begin(),
+        renderPool.begin() + activeRenderCount,
         [](const BackgroundObject& a, const BackgroundObject& b)
         {
             return a.renderOrder < b.renderOrder;
@@ -86,7 +106,7 @@ void BackgroundManager::rebuildRenderObjects()
 void BackgroundManager::clear()
 {
     objects.clear();
-    renderObjects.clear();
+    activeRenderCount = 0;
 }
 
 // 功能：根据已加载的图片资源创建一个背景对象。

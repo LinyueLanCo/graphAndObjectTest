@@ -10,7 +10,9 @@ enum EntityType
     ENTITY = 2,
     COIN = 3,
     DEFAULT = 4,
-    CHECKPOINT = 5
+    CHECKPOINT = 5,
+    ENDPOINT = 6,
+    FRUIT = 7
 };
 
 // facingDirection：

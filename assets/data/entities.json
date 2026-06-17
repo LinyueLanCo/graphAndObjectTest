@@ -9,5 +9,9 @@
   { "id": "Coin4", "x": 5662, "y": 1312, "controlled": false, "collidable": true, "blocking": false, "god": true, "type": 3, "animSet": 5, "scaleX": 4.0, "scaleY": 4.0 },
   { "id": "Coin5", "x": 5662, "y": 1392, "controlled": false, "collidable": true, "blocking": false, "god": true, "type": 3, "animSet": 5, "scaleX": 4.0, "scaleY": 4.0 },
   { "id": "Coin6", "x": 5662, "y": 1472, "controlled": false, "collidable": true, "blocking": false, "god": true, "type": 3, "animSet": 5, "scaleX": 4.0, "scaleY": 4.0 },
-  { "id": "Checkpoint", "x": 1500, "y": 232, "controlled": false, "collidable": true, "blocking": false, "god": true, "type": 5, "animSet": 8, "scaleX": 2.0, "scaleY": 2.0 }
+  { "id": "Checkpoint", "x": 1500, "y": 932, "controlled": false, "collidable": true, "blocking": false, "god": false, "type": 5, "animSet": 8, "scaleX": 4.0, "scaleY": 4.0 ,"colScaleX": 2.0, "colScaleY": 3.0, "animSpeed": 3 },
+  { "id": "endpoint", "x": 5164, "y": 1600, "controlled": false, "collidable": true, "blocking": false, "god": false, "type": 6, "animSet": 9, "scaleX": 4.0, "scaleY": 4.0 ,"colScaleX": 2.0, "colScaleY": 3.0, "animSpeed": 3 },
+  { "id": "Apple_1", "x": 2000, "y": 532, "controlled": false, "collidable": true, "blocking": false, "god": true, "type": 3, "animSet": 10, "scaleX": 4.0, "scaleY": 4.0, "animSpeed": 3 },
+  { "id": "Banana_1", "x": 2200, "y": 532, "controlled": false, "collidable": true, "blocking": false, "god": true, "type": 3, "animSet": 11, "scaleX": 4.0, "scaleY": 4.0, "animSpeed": 3 },
+  { "id": "Cherry_1", "x": 2400, "y": 532, "controlled": false, "collidable": true, "blocking": false, "god": true, "type": 3, "animSet": 12, "scaleX": 4.0, "scaleY": 4.0, "animSpeed": 3 }
 ]

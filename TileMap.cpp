@@ -1,4 +1,8 @@
 ﻿#include "TileMap.h"
+// 引入 std::stringstream（字符串输入输出流模板类）。
+// 为什么用它？因为在解析地图文件文本数据（rows, cols, 以及具体的二维瓦片网格 ID）时，
+// 将地图文本字符串封装进 std::stringstream 中，能让我们像操作 std::ifstream 文件流一样，
+// 直接使用流提取操作符 `>>` 来逐个提取整型和字符串，极大地方便了文本格式的解析工作。
 #include <sstream>
 
 // 功能：初始化 tile map 的尺寸、偏移和地图数据指针。
@@ -451,10 +455,13 @@ void TileMap::rebuildTileInstances()
 // 功能：从文本文件读取地图行列数和 tile id 数据。
 bool TileMap::loadFromText(const std::string& mapContent)
 {
+    // 实例化 std::stringstream 模板流对象，将整个 mapContent 文本封入流中，
+    // 以便后续可以直接利用 `>>` 操作符按照空格/换行符过滤并解析出整数。
     std::stringstream inFile(mapContent);
 
     release();
 
+    // 从流中以对空白符敏感的格式读取地图的总行数和总列数
     inFile >> rows >> cols;
 
     if (rows <= 0 || cols <= 0)
@@ -471,6 +478,7 @@ bool TileMap::loadFromText(const std::string& mapContent)
 
         for (int col = 0; col < cols; col++)
         {
+            // 通过 std::stringstream 流提取操作符，将字符形式的数字转换并赋值给二维整型网格
             inFile >> tiles[row][col];
         }
     }

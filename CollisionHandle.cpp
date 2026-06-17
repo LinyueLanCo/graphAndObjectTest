@@ -1,135 +1,101 @@
 ﻿#include "CollisionHandle.h"
+#include <cmath>
+#include <iostream>
+#include <algorithm>
 
-// 功能：判断两个 AABB 矩形是否真正重叠。
+// 检查两个二维矩形（a 和 b）有没有叠在一起
+// 核心逻辑：
+// 如果 a 已经在 b 的右边，或者 a 在 b 的左边，或者 a 在 b 的上方，或者 a 在 b 的下方，
+// 只要满足其中一个，就说明绝对不可能重叠。
+// 我们把它取反，就是“重叠”的条件。
 bool CollisionHandle::isRectOverlapping(RectBox a, RectBox b)
 {
-    if (a.right <= b.left + EPS)
-    {
-        return false;
-    }
-
-    if (a.left >= b.right - EPS)
-    {
-        return false;
-    }
-
-    if (a.top <= b.bottom + EPS)
-    {
-        return false;
-    }
-
-    if (a.bottom >= b.top - EPS)
-    {
-        return false;
-    }
-
-    return true;
+    return !(a.left >= b.right ||  // a在b右侧
+             a.right <= b.left ||  // a在b左侧
+             a.bottom >= b.top ||  // a在b上方
+             a.top <= b.bottom);   // a在b下方
 }
 
-// 功能：判断两个一维区间是否真正重叠。
-bool CollisionHandle::isRangeOverlapping(
-    double aMin,
-    double aMax,
-    double bMin,
-    double bMax
-)
+// 检查两个一维线段（[aMin, aMax] 和 [bMin, bMax]）有没有重叠
+// 核心逻辑：
+// 比如判定垂直撞墙时，我们要看两个人在水平 X 轴上的投影区间有没有交集。
+// 如果 aMax <= bMin 或者 bMax <= aMin，说明两者完全错开了。
+// 取反即代表有交集。
+bool CollisionHandle::isRangeOverlapping(double aMin, double aMax, double bMin, double bMax)
 {
-    if (aMax <= bMin + EPS)
-    {
-        return false;
-    }
-
-    if (aMin >= bMax - EPS)
-    {
-        return false;
-    }
-
-    return true;
+    return !(aMax <= bMin || bMax <= aMin);
 }
 
-// 功能：计算实体在 X 轴上不会穿透阻挡物的最大允许位移。
+// 计算实体在水平 X 轴上，能走多远而不会穿墙
 double CollisionHandle::getAllowedMoveX(
     Entity& self,
     double moveX,
-    vector<Entity>& entitys,
+    std::vector<Entity>& entitys,
+    const std::vector<size_t>& activeIndices,
     int selfIndex,
     TileMap& tileMap
 )
 {
-    /*
-    X 轴阻挡修正逻辑：
-        输入：moveX = 本帧期望水平位移
-        输出：allowedMove = 本帧真正允许移动的水平距离
-
-    核心思路：
-        1. 先取得当前实体的 AABB：myBox
-        2. 遍历所有 blocking 实体
-        3. 如果 Y 轴范围不重叠，说明上下错开，不可能水平撞到，跳过
-        4. 如果向右移动，只看位于右侧的障碍：
-              distance = other.left - myBox.right
-              allowedMove = min(allowedMove, distance)
-        5. 如果向左移动，只看位于左侧的障碍：
-              distance = other.right - myBox.left
-              allowedMove = max(allowedMove, distance)  // moveX 为负数，所以取更接近 0 的限制值
-
-    它和 overlap 有关，但不是简单地“先移动到下一帧再判断 overlap”。
-    它是在当前帧提前计算到障碍边缘的距离，防止下一帧真正重叠。
-    */
+    // 如果本来就没打算动，直接回 0
     if (moveX == 0)
     {
         return 0;
     }
 
-    RectBox myBox = self.getWorldCollisionBox();
-    double allowedMove = moveX;
+    RectBox myBox = self.getWorldCollisionBox(); // 当前实体的碰撞盒子
+    double allowedMove = moveX;                  // 假设没人挡，默认能走期望的距离
 
-    for (int i = 0; i < (int)entitys.size(); i++)
+    // 先算算和其它“活跃且有阻挡”的实体之间的水平碰撞
+    for (size_t idx : activeIndices)
     {
-        if (i == selfIndex)
+        if (idx == (size_t)selfIndex)
+        {
+            continue; // 排除自己和自己撞的乌龙
+        }
+
+        // 死亡实体或者没有阻挡属性的实体直接忽略
+        if (!entitys[idx].getIsAlive() || !entitys[idx].isBlocking())
         {
             continue;
         }
 
-        // 死亡实体不再参与阻挡计算。
-        // 否则被 killEntity() 的阻挡物仍可能继续挡住玩家。
-        if (!entitys[i].getIsAlive())
-        {
-            continue;
-        }
+        RectBox otherBox = entitys[idx].getWorldCollisionBox();
 
-        if (!entitys[i].isBlocking())
-        {
-            continue;
-        }
-
-        RectBox otherBox = entitys[i].getWorldCollisionBox();
-
+        // 核心判定：水平相撞的前提是，两个人在垂直 Y 轴上的范围必须是重叠的！
+        // 如果垂直方向错开了（比如一个在天上一只在地上），水平怎么走都不会撞到，直接忽略
         if (!this->isRangeOverlapping(myBox.bottom, myBox.top, otherBox.bottom, otherBox.top))
         {
             continue;
         }
 
+        // 1. 如果我们往右走（moveX > 0）
         if (moveX > 0)
         {
+            // 只有当障碍物在我们的右侧，才可能会撞上
             if (otherBox.left >= myBox.right - EPS)
             {
+                // 核心计算公式：两人的空隙距离 = 障碍物的左边界 - 我们的右边界
                 double distance = otherBox.left - myBox.right;
 
                 if (distance < 0)
                 {
-                    distance = 0;
+                    distance = 0; // 防止数值误差产生的微小重叠
                 }
 
+                // 允许移动的距离取“目前最窄的空隙”
                 if (distance < allowedMove)
                 {
                     allowedMove = distance;
                 }
             }
         }
+        // 2. 如果我们往左走（moveX < 0，注意此时位移和距离都是负数）
         else if (moveX < 0)
         {
+            // 只有当障碍物在我们的左侧，才可能会撞上
             if (otherBox.right <= myBox.left + EPS)
             {
+                // 核心计算公式：空隙距离 = 障碍物的右边界 - 我们的左边界
                 double distance = otherBox.right - myBox.left;
 
                 if (distance > 0)
@@ -137,6 +103,7 @@ double CollisionHandle::getAllowedMoveX(
                     distance = 0;
                 }
 
+                // 负数越大（越接近0），说明限制越死，所以我们要用 max
                 if (distance > allowedMove)
                 {
                     allowedMove = distance;
@@ -145,18 +112,16 @@ double CollisionHandle::getAllowedMoveX(
         }
     }
 
+    // 再算算和瓦片地图上的格子墙壁之间的水平碰撞
     for (int row = 0; row < tileMap.getRows(); row++)
     {
         for (int col = 0; col < tileMap.getCols(); col++)
         {
             TileCollisionType collisionType = tileMap.getTileCollisionType(row, col);
 
-            if (collisionType == TILE_COLLISION_NONE)
-            {
-                continue;
-            }
-
-            if (collisionType == TILE_COLLISION_FULL_ONE_WAY ||
+            // 如果是空气或者单向平台，水平方向是不阻挡的，直接跳过
+            if (collisionType == TILE_COLLISION_NONE ||
+                collisionType == TILE_COLLISION_FULL_ONE_WAY ||
                 collisionType == TILE_COLLISION_TOP_HALF_ONE_WAY ||
                 collisionType == TILE_COLLISION_TOP_LEFT_HALF_ONE_WAY ||
                 collisionType == TILE_COLLISION_TOP_RIGHT_HALF_ONE_WAY)
@@ -166,22 +131,19 @@ double CollisionHandle::getAllowedMoveX(
 
             RectBox tileBox = tileMap.getTileCollisionWorldBox(row, col);
 
+            // 同样，看垂直范围是否有交集
             if (!isRangeOverlapping(myBox.bottom, myBox.top, tileBox.bottom, tileBox.top))
             {
                 continue;
             }
 
+            // 计算方式和上面实体相撞完全一致
             if (moveX > 0)
             {
                 if (tileBox.left >= myBox.right - EPS)
                 {
                     double distance = tileBox.left - myBox.right;
-
-                    if (distance < 0)
-                    {
-                        distance = 0;
-                    }
-
+                    if (distance < 0) distance = 0;
                     if (distance < allowedMove)
                     {
                         allowedMove = distance;
@@ -193,12 +155,7 @@ double CollisionHandle::getAllowedMoveX(
                 if (tileBox.right <= myBox.left + EPS)
                 {
                     double distance = tileBox.right - myBox.left;
-
-                    if (distance > 0)
-                    {
-                        distance = 0;
-                    }
-
+                    if (distance > 0) distance = 0;
                     if (distance > allowedMove)
                     {
                         allowedMove = distance;
@@ -211,34 +168,16 @@ double CollisionHandle::getAllowedMoveX(
     return allowedMove;
 }
 
-// 功能：计算实体在 Y 轴上不会穿透阻挡物的最大允许位移。
+// 计算实体在垂直 Y 轴上，能走多远而不会卡进天花板或地下
 double CollisionHandle::getAllowedMoveY(
     Entity& self,
     double moveY,
-    vector<Entity>& entitys,
+    std::vector<Entity>& entitys,
+    const std::vector<size_t>& activeIndices,
     int selfIndex,
     TileMap& tileMap
 )
 {
-    /*
-    Y 轴阻挡修正逻辑：
-        输入：moveY = 本帧期望垂直位移，通常来自 velocityY
-        输出：allowedMove = 本帧真正允许移动的垂直距离
-
-    核心思路：
-        1. 先取得当前实体的 AABB：myBox
-        2. 遍历所有 blocking 实体
-        3. 如果 X 轴范围不重叠，说明左右错开，不可能垂直撞到，跳过
-        4. 如果向上移动，只看位于上方的障碍：
-              distance = other.bottom - myBox.top
-              allowedMove = min(allowedMove, distance)
-        5. 如果向下移动，只看位于下方的障碍：
-              distance = other.top - myBox.bottom
-              allowedMove = max(allowedMove, distance)  // moveY 为负数
-
-    下落时 allowedMoveY 与 wantMoveY 不一致，通常意味着落地；
-    上升时不一致，通常意味着撞到上方阻挡物。
-    */
     if (moveY == 0)
     {
         return 0;
@@ -247,60 +186,51 @@ double CollisionHandle::getAllowedMoveY(
     RectBox myBox = self.getWorldCollisionBox();
     double allowedMove = moveY;
 
-    for (int i = 0; i < (int)entitys.size(); i++)
+    // 先算算和其它“活跃且有阻挡”的实体之间的垂直碰撞
+    for (size_t idx : activeIndices)
     {
-        if (i == selfIndex)
+        if (idx == (size_t)selfIndex)
         {
             continue;
         }
 
-        // 死亡实体不再参与阻挡计算。
-        // 否则被 killEntity() 的阻挡物仍可能继续挡住玩家。
-        if (!entitys[i].getIsAlive())
+        if (!entitys[idx].getIsAlive() || !entitys[idx].isBlocking())
         {
             continue;
         }
 
-        if (!entitys[i].isBlocking())
-        {
-            continue;
-        }
+        RectBox otherBox = entitys[idx].getWorldCollisionBox();
 
-        RectBox otherBox = entitys[i].getWorldCollisionBox();
-
+        // 核心判定：垂直相撞的前提是，两个人在水平 X 轴上的范围必须是重叠的！
         if (!this->isRangeOverlapping(myBox.left, myBox.right, otherBox.left, otherBox.right))
         {
             continue;
         }
 
+        // 1. 如果我们向上移动（跳起，moveY > 0）
         if (moveY > 0)
         {
+            // 只有当障碍物在头顶上时
             if (otherBox.bottom >= myBox.top - EPS)
             {
+                // 核心公式：头顶间距 = 障碍物下边缘 - 我们头顶上边缘
                 double distance = otherBox.bottom - myBox.top;
-
-                if (distance < 0)
-                {
-                    distance = 0;
-                }
-
+                if (distance < 0) distance = 0;
                 if (distance < allowedMove)
                 {
                     allowedMove = distance;
                 }
             }
         }
+        // 2. 如果我们向下落（下坠，moveY < 0）
         else if (moveY < 0)
         {
+            // 只有当障碍物在脚底下时
             if (otherBox.top <= myBox.bottom + EPS)
             {
+                // 核心公式：脚底间距 = 障碍物上边缘 - 我们的脚底边缘
                 double distance = otherBox.top - myBox.bottom;
-
-                if (distance > 0)
-                {
-                    distance = 0;
-                }
-
+                if (distance > 0) distance = 0;
                 if (distance > allowedMove)
                 {
                     allowedMove = distance;
@@ -309,6 +239,7 @@ double CollisionHandle::getAllowedMoveY(
         }
     }
 
+    // 再算算和瓦片地图格子（包括实心墙、单向平台等）之间的垂直碰撞
     for (int row = 0; row < tileMap.getRows(); row++)
     {
         for (int col = 0; col < tileMap.getCols(); col++)
@@ -320,52 +251,60 @@ double CollisionHandle::getAllowedMoveY(
                 continue;
             }
 
-            if (collisionType == TILE_COLLISION_FULL_ONE_WAY ||
-                collisionType == TILE_COLLISION_TOP_HALF_ONE_WAY ||
-                collisionType == TILE_COLLISION_TOP_LEFT_HALF_ONE_WAY ||
-                collisionType == TILE_COLLISION_TOP_RIGHT_HALF_ONE_WAY)
-            {
-                if (moveY >= 0)
-                {
-                    continue;
-                }
-            }
-
             RectBox tileBox = tileMap.getTileCollisionWorldBox(row, col);
 
+            // 检查水平 X 轴区间是否有投影交集
             if (!isRangeOverlapping(myBox.left, myBox.right, tileBox.left, tileBox.right))
             {
                 continue;
             }
 
+            // 1. 如果我们向上跳（moveY > 0）
             if (moveY > 0)
             {
+                // 特别注意：单向平台（只能从下往上跳穿过去，但能踩在上面）在往上跳时是不阻挡的！
+                if (collisionType == TILE_COLLISION_FULL_ONE_WAY ||
+                    collisionType == TILE_COLLISION_TOP_HALF_ONE_WAY ||
+                    collisionType == TILE_COLLISION_TOP_LEFT_HALF_ONE_WAY ||
+                    collisionType == TILE_COLLISION_TOP_RIGHT_HALF_ONE_WAY)
+                {
+                    continue;
+                }
+
                 if (tileBox.bottom >= myBox.top - EPS)
                 {
                     double distance = tileBox.bottom - myBox.top;
-
-                    if (distance < 0)
-                    {
-                        distance = 0;
-                    }
-
+                    if (distance < 0) distance = 0;
                     if (distance < allowedMove)
                     {
                         allowedMove = distance;
                     }
                 }
             }
+            // 2. 如果我们向下落（moveY < 0）
             else if (moveY < 0)
             {
+                // 核心：单向平台的单向判定逻辑！
+                // 只有当玩家在“上一帧”的脚底，高于平台顶端时，才代表它是从天上下落踩上来的，我们才阻挡它。
+                if (collisionType == TILE_COLLISION_FULL_ONE_WAY ||
+                    collisionType == TILE_COLLISION_TOP_HALF_ONE_WAY ||
+                    collisionType == TILE_COLLISION_TOP_LEFT_HALF_ONE_WAY ||
+                    collisionType == TILE_COLLISION_TOP_RIGHT_HALF_ONE_WAY)
+                {
+                    // 获取未更新前的脚底高度值
+                    double prevFootY = myBox.bottom - moveY; 
+                    
+                    // 如果上一帧的脚底已经在平台高度之下了，说明他原本就在穿透中，这帧不应该挡他
+                    if (prevFootY < tileBox.top - EPS)
+                    {
+                        continue;
+                    }
+                }
+
                 if (tileBox.top <= myBox.bottom + EPS)
                 {
                     double distance = tileBox.top - myBox.bottom;
-
-                    if (distance > 0)
-                    {
-                        distance = 0;
-                    }
-
+                    if (distance > 0) distance = 0;
                     if (distance > allowedMove)
                     {
                         allowedMove = distance;
@@ -378,28 +317,12 @@ double CollisionHandle::getAllowedMoveY(
     return allowedMove;
 }
 
-// 功能：把实体限制在世界边界内并修正相关物理状态。
-void CollisionHandle::limitInWorld(
-    Entity& self,
-    int worldWidth,
-    int worldHeight
-)
+// 步骤功能：强行锁边，防止演员掉出关卡下方或走到地图最左侧外面
+void CollisionHandle::limitInWorld(Entity& self, int worldWidth, int worldHeight)
 {
-    /*
-    世界边界修正：
-        这个函数把实体限制在 [0, worldWidth] x [0, worldHeight] 内。
-        如果实体超出边界，就把它推回边界内。
-
-    重要状态反馈：
-        - 撞到世界边界时 blockedByWorld = true
-        - 撞到底部边界时，视为站在地面：
-              onGround = true
-              InAir = false
-              jumping = false
-              向下速度 velocityY 清零
-    */
     RectBox box = self.getWorldCollisionBox();
 
+    // 1. 如果左出界了，强行推回来
     if (box.left < 0)
     {
         self.x += 0 - box.left;
@@ -408,6 +331,7 @@ void CollisionHandle::limitInWorld(
 
     box = self.getWorldCollisionBox();
 
+    // 2. 如果右出界了，推回来
     if (box.right > worldWidth)
     {
         self.x -= box.right - worldWidth;
@@ -416,22 +340,22 @@ void CollisionHandle::limitInWorld(
 
     box = self.getWorldCollisionBox();
 
+    // 3. 核心：如果落到底部深渊出界了，强行留在地上，并清空下坠速度
     if (box.bottom < 0)
     {
         self.y += 0 - box.bottom;
         self.blockedByWorld = true;
-        self.onGround = true;
-        self.InAir = false;
-        self.jumping = false;
+        self.onGround = true; // 强行标记踩在地面上
 
         if (self.velocityY < 0)
         {
-            self.velocityY = 0;
+            self.velocityY = 0; // 下坠速度归零
         }
     }
 
     box = self.getWorldCollisionBox();
 
+    // 4. 如果撞到世界上方天花板了，推下来并清空上升冲劲
     if (box.top > worldHeight)
     {
         self.y -= box.top - worldHeight;
@@ -439,7 +363,7 @@ void CollisionHandle::limitInWorld(
 
         if (self.velocityY > 0)
         {
-            self.velocityY = 0;
+            self.velocityY = 0; // 上升速度归零
         }
     }
 }

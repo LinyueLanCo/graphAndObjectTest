@@ -10,11 +10,15 @@ class BackgroundManager
 {
 private:
     vector<BackgroundObject> objects;
-    vector<BackgroundObject> renderObjects;
+    vector<BackgroundObject> renderPool;                 // 预分配的背景渲染对象池，避免每一帧 push_back 造成动态内存扩容和结构体拷贝
+    int activeRenderCount;                               // 本帧当前激活并参与实际绘制的背景图块实例数量
 
 public:
+    BackgroundManager();                                 // 构造函数：预置渲染池的大小
+
     vector<BackgroundObject>& getRenderObjects();
     const vector<BackgroundObject>& getRenderObjects() const;
+    int getActiveRenderCount() const;                    // 获取当前活跃的背景实例总数
 
     void rebuildRenderObjects();
     void clear();
