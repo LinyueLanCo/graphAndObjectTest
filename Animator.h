@@ -29,4 +29,5 @@ public:
     void update(Entity& entity, BehaviorIntent intent, AnimationClipManager& animationClips);
     void initAnimation(Entity& entity, AnimationClipManager& animationClips);
     void configure(AnimationSetId newSetId, AnimationState newInitialState);
+    AnimationState getCurrentState() const { return currentAnimState; }
 };

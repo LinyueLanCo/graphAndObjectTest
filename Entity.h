@@ -108,6 +108,7 @@ public:
     void setFacingDirection(facingDirection direction);
 
     bool isAnimationFinished();
+    AnimationState getAnimationState() const;
     void setAnimationClip(AnimationClip clip);
     void updateAnimator(BehaviorIntent intent, AnimationClipManager& animationClips);
 
@@ -128,7 +129,7 @@ public:
     void setOverlapping(bool value);
     void addOverlap(int otherId, EntityType otherType);
     const std::vector<OverlapInfo>& getCurrentOverlaps() const;
-    void resolveOverlaps(std::vector<Entity>& allEntities);
+    void resolveOverlaps(std::vector<Entity>& allEntities, AnimationClipManager& animationClips);
     void setCollisionState(bool value);
     void clearFrameState();
 

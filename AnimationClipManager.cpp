@@ -58,6 +58,9 @@ void AnimationClipManager::init(ResourceManager& resources)
 
     clips[ANIM_ID_COIN_COPPER] =
         AnimationClip(resources.getImage2D(IMG_COIN_COPPER), 5, 5, true);
+
+    clips[ANIM_ID_COIN_COLLECTED] =
+        AnimationClip(resources.getImage2D(IMG_COIN_COLLECTED), 6, 4, false);
 }
 
 // 功能：根据动画资源 ID 获取动画片段描述。

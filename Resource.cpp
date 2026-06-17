@@ -84,6 +84,8 @@ void ResourceManager::initImageResourceTable()
     imagePaths[IMG_COIN_GOLD] = _T("assets\\tex\\entities\\items\\MonedaD.png");
     imagePaths[IMG_COIN_SILVER] = _T("assets\\tex\\entities\\items\\MonedaP.png");
     imagePaths[IMG_COIN_COPPER] = _T("assets\\tex\\entities\\items\\MonedaR.png");
+
+    imagePaths[IMG_COIN_COLLECTED] = _T("assets\\tex\\entities\\items\\Collected.png");
 }
 
 void ResourceManager::loadImage2D(ImageResourceId id)

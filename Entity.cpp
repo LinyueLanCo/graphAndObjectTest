@@ -239,6 +239,11 @@ bool Entity::isAnimationFinished()
     return animation.isFinished();
 }
 
+AnimationState Entity::getAnimationState() const
+{
+    return animator.getCurrentState();
+}
+
 // 功能：把新的动画片段绑定到实体的动画播放器。
 void Entity::setAnimationClip(AnimationClip clip)
 {
@@ -338,7 +343,7 @@ const std::vector<OverlapInfo>& Entity::getCurrentOverlaps() const
 }
 
 // 功能：实体自治处理自身重叠反应逻辑。
-void Entity::resolveOverlaps(std::vector<Entity>& allEntities)
+void Entity::resolveOverlaps(std::vector<Entity>& allEntities, AnimationClipManager& animationClips)
 {
     if (!isAlive)
     {
@@ -359,7 +364,7 @@ void Entity::resolveOverlaps(std::vector<Entity>& allEntities)
             }
         }
 
-        // 2. Coin 侧重叠逻辑：金币自治，发现碰触 Player 后自行播放音效并自毁。
+        // 2. Coin 侧重叠逻辑：金币发现碰触 Player 后进入被收集动画，并在动画播放后自毁
         if (entityType == COIN)
         {
             if (otherType == PLAYER)
@@ -369,8 +374,9 @@ void Entity::resolveOverlaps(std::vector<Entity>& allEntities)
                     NULL,
                     SND_ASYNC | SND_NOSTOP
                 );
-                killEntity();
-                cout << "Coin (ID: " << id << ") self-destructed due to collision with Player (ID: " << otherId << ")" << endl;
+                collidable = false; // 禁用后续碰撞，避免重复响应
+                animator.changeAnimation(*this, ANIM_COLLECTED, animationClips);
+                std::cout << "Coin (ID: " << id << ") triggered collected animation." << std::endl;
             }
         }
     }
@@ -450,6 +456,13 @@ void Entity::updateAnimatedSprite()
     animation.update();
     animation.writeCurrentFrameTo(renderSprite);
     syncRenderSpriteWorldDrawData();
+
+    // 如果是金币且播放完了收集爆裂动画，则将其真正自毁
+    if (entityType == COIN && getAnimationState() == ANIM_COLLECTED && isAnimationFinished())
+    {
+        killEntity();
+        std::cout << "Coin (ID: " << id << ") destroyed after collected animation finished." << std::endl;
+    }
 }
 
 // 功能：设置实体 sprite 绘制缩放和偏移。

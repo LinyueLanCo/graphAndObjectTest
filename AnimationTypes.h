@@ -19,6 +19,8 @@ enum AnimationState
 	ANIM_JUMP_END_L,
 	ANIM_JUMP_END_R,
 
+	ANIM_COLLECTED,
+
 	ANIM_COUNT
 };
 
@@ -64,6 +66,7 @@ enum AnimationId
 	ANIM_ID_COIN_SILVER,
 	ANIM_ID_COIN_COPPER,
 
+	ANIM_ID_COIN_COLLECTED,
+
 	ANIM_ID_COUNT
 };
-

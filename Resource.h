@@ -65,6 +65,8 @@ enum ImageResourceId
     IMG_COIN_SILVER,
     IMG_COIN_COPPER,
 
+    IMG_COIN_COLLECTED,
+
     IMG_RESOURCE_COUNT
 };
 

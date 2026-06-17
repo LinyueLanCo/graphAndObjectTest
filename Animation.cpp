@@ -86,14 +86,17 @@ AnimationId getAnimationId(AnimationSetId setId, AnimationState state)
 	}
 	else if (setId == ANIM_SET_COIN_GOLD)
 	{
+		if (state == ANIM_COLLECTED) return ANIM_ID_COIN_COLLECTED;
 		return ANIM_ID_COIN_GOLD;
 	}
 	else if (setId == ANIM_SET_COIN_SILVER)
 	{
+		if (state == ANIM_COLLECTED) return ANIM_ID_COIN_COLLECTED;
 		return ANIM_ID_COIN_SILVER;
 	}
 	else if (setId == ANIM_SET_COIN_COPPER)
 	{
+		if (state == ANIM_COLLECTED) return ANIM_ID_COIN_COLLECTED;
 		return ANIM_ID_COIN_COPPER;
 	}
 

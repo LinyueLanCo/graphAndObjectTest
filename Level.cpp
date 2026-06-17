@@ -870,7 +870,7 @@ void Level::resolveEntityOverlaps()
     {
         if (entitys[i].getIsAlive())
         {
-            entitys[i].resolveOverlaps(entitys);
+            entitys[i].resolveOverlaps(entitys, animationClips);
         }
     }
 }
