@@ -5,7 +5,7 @@ static int gNextEntityId = 1;
 // 功能：初始化一个默认实体及其基础状态。
 Entity::Entity()
 {
-    id = gNextEntityId++;
+    id = "Entity_" + std::to_string(gNextEntityId++);
     x = 0;
     y = 0;
     speed = 5;
@@ -30,6 +30,13 @@ Entity::Entity()
 
     entityType = DEFAULT;
     isAlive = 1;
+
+    lastCollisionState = false;
+    lastGroundState = false;
+    lastSprintState = false;
+    lastInAirState = false;
+    lastJumpingState = false;
+    lastAliveState = true;
 }
 
 // 功能：按资源路径和初始属性创建一个可用实体。
@@ -46,7 +53,7 @@ Entity::Entity(
     bool alive
 )
 {
-    id = gNextEntityId++;
+    id = "Entity_" + std::to_string(gNextEntityId++);
     animation.load(imagePath, frameCount);
     animation.setSpeed(4);
     animation.setLoop(true);
@@ -81,10 +88,18 @@ Entity::Entity(
 
     entityType = Type;
     isAlive = alive;
+
+    lastCollisionState = false;
+    lastGroundState = false;
+    lastSprintState = false;
+    lastInAirState = false;
+    lastJumpingState = false;
+    lastAliveState = alive;
 }
 
 // 功能：按初始逻辑状态和动画资源组创建实体，不再直接从构造函数加载图片路径。
 Entity::Entity(
+    std::string entityId,
     double startX,
     double startY,
     bool isControlled,
@@ -98,7 +113,7 @@ Entity::Entity(
     bool alive
 )
 {
-    id = gNextEntityId++;
+    id = entityId;
     x = startX;
     y = startY;
 
@@ -126,10 +141,18 @@ Entity::Entity(
     isAlive = alive;
 
     animator.configure(animationSet, initialAnim);
+
+    lastCollisionState = false;
+    lastGroundState = false;
+    lastSprintState = false;
+    lastInAirState = false;
+    lastJumpingState = false;
+    lastAliveState = alive;
 }
 
 // 功能：按默认朝向和默认待机状态创建绑定动画资源组的实体。
 Entity::Entity(
+    std::string entityId,
     double startX,
     double startY,
     bool isControlled,
@@ -141,6 +164,7 @@ Entity::Entity(
     bool alive
 )
     : Entity(
+        entityId,
         startX,
         startY,
         isControlled,
@@ -157,7 +181,7 @@ Entity::Entity(
 }
 
 // 功能：获取实体唯一标识 ID。
-int Entity::getId() const
+std::string Entity::getId() const
 {
     return id;
 }
@@ -328,7 +352,7 @@ void Entity::setOverlapping(bool value)
 }
 
 // 功能：向实体中追加一条重叠对象记录。
-void Entity::addOverlap(int otherId, EntityType otherType)
+void Entity::addOverlap(const std::string& otherId, EntityType otherType)
 {
     OverlapInfo info;
     info.otherEntityId = otherId;
@@ -352,7 +376,7 @@ void Entity::resolveOverlaps(std::vector<Entity>& allEntities, AnimationClipMana
 
     for (int i = 0; i < (int)currentOverlaps.size(); i++)
     {
-        int otherId = currentOverlaps[i].otherEntityId;
+        std::string otherId = currentOverlaps[i].otherEntityId;
         EntityType otherType = currentOverlaps[i].otherType;
 
         // 1. Player 侧重叠逻辑：只进行加分调试打印，不直接操作金币实体死亡，静待金币自毁。

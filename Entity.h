@@ -1,5 +1,6 @@
 ﻿#pragma once
 
+#include <string>
 #include "Animator.h"
 #include "Animation.h"
 #include "Collision.h"
@@ -20,7 +21,7 @@ class Entity
     friend class Animator;
 
 private:
-    int id;
+    std::string id;
     std::vector<OverlapInfo> currentOverlaps;
 
     animatedSprite animation;
@@ -54,6 +55,15 @@ private:
     Animator animator;
 
 public:
+    // State cache for transition logging (formerly in Level)
+    bool lastCollisionState;
+    bool lastGroundState;
+    bool lastSprintState;
+    bool lastInAirState;
+    bool lastJumpingState;
+    bool lastAliveState;
+
+public:
     Entity();
     Entity(
         const TCHAR* imagePath,
@@ -68,6 +78,7 @@ public:
         bool alive = 1
     );
     Entity(
+        std::string entityId,
         double startX,
         double startY,
         bool isControlled,
@@ -81,6 +92,7 @@ public:
         bool alive = 1
     );
     Entity(
+        std::string entityId,
         double startX,
         double startY,
         bool isControlled,
@@ -92,7 +104,7 @@ public:
         bool alive = 1
     );
 
-    int getId() const;
+    std::string getId() const;
     EntityType getEntityType();
     bool isCollidable();
     bool isBlocking();
@@ -127,7 +139,7 @@ public:
     const sprite& getSprite() const;
 
     void setOverlapping(bool value);
-    void addOverlap(int otherId, EntityType otherType);
+    void addOverlap(const std::string& otherId, EntityType otherType);
     const std::vector<OverlapInfo>& getCurrentOverlaps() const;
     void resolveOverlaps(std::vector<Entity>& allEntities, AnimationClipManager& animationClips);
     void setCollisionState(bool value);

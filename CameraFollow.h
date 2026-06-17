@@ -1,17 +1,17 @@
 ﻿#pragma once
 
-#include "Entity.h"
+#include <string>
+#include "EntityManager.h"
 
-// 当前相机跟随目标下标。
-// 这是一个临时全局变量，后续可以继续迁移到 CameraHandle 或 Level 内部。
-extern int gCameraFollowTargetIndex;
+// 当前相机跟随目标 ID。
+extern std::string gCameraFollowTargetId;
 
-// 功能：切换相机当前跟随的实体下标。
-void setCameraFollowTarget(int newTargetIndex, vector<Entity>& entitys);
+// 功能：切换相机当前跟随的实体 ID。
+void setCameraFollowTarget(const std::string& newTargetId, const EntityManager& entityManager);
 
 // 功能：根据跟随目标、鼠标偏移和缩放输入更新相机。
 void updateCameraFollow(
-    vector<Entity>& entitys,
+    EntityManager& entityManager,
     int worldWidth,
     int worldHeight,
     int mouseOffsetX,

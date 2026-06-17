@@ -6,7 +6,7 @@
 #include "CollisionHandle.h"
 #include "Config.h"
 #include "Controller.h"
-#include "Entity.h"
+#include "EntityManager.h"
 #include "Input.h"
 #include "MovementHandle.h"
 #include "Renderer.h"
@@ -27,8 +27,8 @@ private:
     TileMap tileMap;
     BackgroundManager backgroundManager;
 
-    // 当前关卡实体列表。使用 vector 方便后续动态生成、清理和扩容。
-    vector<Entity> entitys;
+    // 关卡实体管理器，管理实体列表及加载
+    EntityManager entityManager;
 
     // 当前关卡 UI 管理器，维护 UIElement 的父子关系、位置和可见状态。
     UIManager uiManager;
@@ -42,7 +42,7 @@ private:
     RenderFrameStats renderFrameStats;
     Renderer renderer;
 
-    int controlTargerIndex;
+    std::string controlledEntityName;
 
     PlayerController playerController;
     MovementHandle movementHandle;
@@ -59,15 +59,6 @@ private:
     double parallaxOriginX;
     double parallaxOriginY;
 
-    // 以下历史状态缓存必须与 entitys.size() 同步，用于检测状态变化和重叠事件首次触发。
-    vector<vector<bool>> lastOverlap;
-    vector<bool> lastCollisionState;
-    vector<bool> lastGroundState;
-    vector<bool> lastSprintState;
-    vector<bool> lastInAirState;
-    vector<bool> lastJumpingState;
-    vector<bool> lastAliveState;
-
     // 功能：根据当前相机跟随目标生成 Debug 面板数据。
     DebugPanelData buildDebugPanelData();
 
@@ -83,20 +74,14 @@ private:
     // 功能：初始化当前关卡使用的 Debug UI 面板。
     void initUI();
 
-    // 功能：设置实体 sprite 缩放、动画速度和碰撞盒缩放。
-    void initEntitySettings();
-
-    // 功能：初始化用于检测状态变化的历史缓存。
-    void initLastStates();
-
     // 功能：清理所有存活实体的本帧临时状态。
     void clearEntityFrameState();
 
     // 功能：为实体生成行为意图，并执行移动、碰撞和动画更新。
     void updateEntities(InputManager& input);
 
-    // 功能：切换当前由玩家输入控制的实体下标。
-    void setControlTarget(int newTargetIndex);
+    // 功能：切换当前由玩家输入控制的实体 ID。
+    void setControlTarget(const std::string& name);
 
     // 功能：处理玩家输入控制目标切换。
     void handleControlInput(InputManager& input);

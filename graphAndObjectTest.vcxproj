@@ -162,6 +162,7 @@
     <ClCompile Include="Renderer.cpp" />
     <ClCompile Include="Resource.cpp" />
     <ClCompile Include="Image2D.cpp" />
+    <ClCompile Include="EntityManager.cpp" />
     <ClCompile Include="TileMap.cpp" />
     <ClCompile Include="TileTypes.cpp" />
     <ClCompile Include="UI.cpp" />
@@ -184,6 +185,7 @@
     <ClInclude Include="Config.h" />
     <ClInclude Include="Controller.h" />
     <ClInclude Include="Entity.h" />
+    <ClInclude Include="EntityManager.h" />
     <ClInclude Include="GameTypes.h" />
     <ClInclude Include="GraphicsUtils.h" />
     <ClInclude Include="Input.h" />

@@ -7,20 +7,16 @@ DebugPanelData Level::buildDebugPanelData()
 {
     DebugPanelData data;
 
-    data.targetIndex = gCameraFollowTargetIndex;
+    data.targetId = gCameraFollowTargetId;
 
-    if (
-        gCameraFollowTargetIndex >= 0 &&
-        gCameraFollowTargetIndex < (int)entitys.size()
-        )
+    Entity* target = entityManager.getEntityById(gCameraFollowTargetId);
+    if (target)
     {
-        Entity& target = entitys[gCameraFollowTargetIndex];
+        data.entityX = target->getX();
+        data.entityY = target->getY();
 
-        data.entityX = target.getX();
-        data.entityY = target.getY();
-
-        data.entityScreenX = gCamera.worldToScreenX(target.getX());
-        data.entityScreenY = gCamera.worldToScreenY(target.getY());
+        data.entityScreenX = gCamera.worldToScreenX(target->getX());
+        data.entityScreenY = gCamera.worldToScreenY(target->getY());
     }
 
     data.renderedBackgroundSprites = renderFrameStats.backgroundSpriteCount;
@@ -42,8 +38,7 @@ DebugPanelData Level::buildDebugPanelData()
 
 Level::Level()
 {
-
-    controlTargerIndex = 0;
+    controlledEntityName = "Player1";
 
     // 初始化 UI 元素下标；-1 表示当前还没有创建对应元素。
     debugPanelIndex = -1;
@@ -51,34 +46,6 @@ Level::Level()
     debugEntitySectionIndex = -1;
     debugRenderSectionIndex = -1;
     debugCameraSectionIndex = -1;
-
-    // 预留当前测试关卡的实体数量，避免初始化期间 vector 扩容搬移 Entity。
-    entitys.reserve(20);
-
-    ifstream f("assets/data/entities.json");
-    if (!f.is_open())
-    {
-        cout << "Failed to open entities.json" << endl;
-        return;
-    }
-
-    nlohmann::json data;
-    f >> data;
-    f.close();
-
-    for (auto& item : data)
-    {
-        double x = item["x"];
-        double y = item["y"];
-        bool controlled = item["controlled"];
-        bool collidable = item["collidable"];
-        bool blocking = item["blocking"];
-        bool god = item["god"];
-        EntityType type = (EntityType)item["type"].get<int>();
-        AnimationSetId animSet = (AnimationSetId)item["animSet"].get<int>();
-
-        entitys.emplace_back(x, y, controlled, collidable, blocking, god, type, animSet, 1);
-    }
 
     worldWidth = WINDOW_WIDTH;
     worldHeight = WINDOW_HEIGHT;
@@ -91,9 +58,9 @@ Level::Level()
 
 void Level::initEntityAnimations()
 {
-    for (int i = 0; i < (int)entitys.size(); i++)
+    for (auto& ent : entityManager.getEntities())
     {
-        entitys[i].initAnimationFromAnimator(animationClips);
+        ent.initAnimationFromAnimator(animationClips);
     }
 }
 
@@ -102,15 +69,17 @@ void Level::init()
     initResources();
 
     initMap();
+
+    // 从 JSON 配置文件加载并初始化实体
+    entityManager.loadEntities("assets/data/entities.json", animationClips);
+
     initUI();
-    initEntityAnimations();
-    initEntitySettings();
-    initLastStates();
 
     // 初始化相机位置，避免第一帧背景原点和真实相机位置不同。
-    if (!entitys.empty())
+    auto& entities = entityManager.getEntities();
+    if (!entities.empty())
     {
-        gCamera.followInstant(entitys[0].getX(), entitys[0].getY(), worldWidth, worldHeight);
+        gCamera.followInstant(entities[0].getX(), entities[0].getY(), worldWidth, worldHeight);
     }
 
     parallaxCameraX = getParallaxCameraCenterX();
@@ -119,10 +88,7 @@ void Level::init()
     parallaxOriginY = parallaxCameraY;
 
     // 同步实体的初始控制状态
-    for (int i = 0; i < (int)entitys.size(); i++)
-    {
-        entitys[i].setControlled(i == controlTargerIndex);
-    }
+    setControlTarget(controlledEntityName);
 
     initBackground();
 }
@@ -183,7 +149,7 @@ void Level::draw()
         renderer.drawTileMap(tileMap);
 
     renderFrameStats.entitySpriteCount =
-        renderer.drawEntities(entitys);
+        renderer.drawEntities(entityManager.getEntities());
 
     renderFrameStats.refreshTotal();
 
@@ -345,58 +311,16 @@ void Level::initUI()
     debugCameraSection.snapToTarget();
     debugCameraSectionIndex = uiManager.addElement(debugCameraSection);
 }
-
-void Level::initEntitySettings()
-{
-    entitys[0].setSpriteTransform(2.0, 2.0, 0, 0);
-
-    entitys[3].setSpriteTransform(2.0, 2.0, 0, 0);
-
-    entitys[4].setSpriteTransform(4.0, 4.0, 0, 0);
-    entitys[5].setSpriteTransform(4.0, 4.0, 0, 0);
-    entitys[6].setSpriteTransform(4.0, 4.0, 0, 0);
-    entitys[7].setSpriteTransform(4.0, 4.0, 0, 0);
-    entitys[8].setSpriteTransform(4.0, 4.0, 0, 0);
-    entitys[9].setSpriteTransform(4.0, 4.0, 0, 0);
-    entitys[10].setSpriteTransform(2.0, 2.0, 0, 0);
-
-
-
-    entitys[0].setAnimationSpeed(3);
-    entitys[4].setAnimationSpeed(3);
-
-    entitys[0].setCollisionScale(1.2, 2);
-}
-
-void Level::initLastStates()
-{
-    int entityCount = (int)entitys.size();
-
-    // 根据当前实体数量重建缓存；以后真正 erase 实体后也需要重新同步这些容器。
-    lastCollisionState.assign(entityCount, false);
-    lastGroundState.assign(entityCount, false);
-    lastSprintState.assign(entityCount, false);
-    lastInAirState.assign(entityCount, false);
-    lastJumpingState.assign(entityCount, false);
-    lastAliveState.assign(entityCount, false);
-    lastOverlap.assign(entityCount, vector<bool>(entityCount, false));
-
-    for (int i = 0; i < entityCount; i++)
-    {
-        lastAliveState[i] = entitys[i].getIsAlive();
-    }
-}
-
 void Level::clearEntityFrameState()
 {
-    for (int i = 0; i < (int)entitys.size(); i++)
+    for (auto& ent : entityManager.getEntities())
     {
-        if (!entitys[i].getIsAlive())
+        if (!ent.getIsAlive())
         {
             continue;
         }
 
-        entitys[i].clearFrameState();
+        ent.clearFrameState();
     }
 }
 
@@ -406,80 +330,77 @@ void Level::updateEntities(InputManager& input)
     实体更新数据流：
         对每个存活实体：
             1. 创建默认空 BehaviorIntent
-            2. 如果是玩家 i == 0，则由 PlayerController 根据输入生成 intent
+            2. 如果是当前玩家控制的对象，则由 PlayerController 根据输入生成 intent
             3. MovementHandle 根据 intent 更新移动/物理
             4. MovementHandle 内部调用 CollisionHandle 进行阻挡修正
             5. Entity 根据 intent 和 sprinting 等状态切换动画
             6. 推进动画帧
     */
 
-    if (
-        controlTargerIndex < 0 ||
-        controlTargerIndex >= (int)entitys.size() ||
-        !entitys[controlTargerIndex].getIsAlive()
-        )
+    Entity* controlTarget = entityManager.getEntityById(controlledEntityName);
+    if (!controlTarget || !controlTarget->getIsAlive())
     {
-        controlTargerIndex = 0;
+        // 尝试默认恢复到 Player1
+        controlTarget = entityManager.getEntityById("Player1");
+        if (controlTarget && controlTarget->getIsAlive())
+        {
+            controlledEntityName = "Player1";
+        }
+        else
+        {
+            controlledEntityName = "";
+        }
     }
 
-
-    for (int i = 0; i < (int)entitys.size(); i++)
+    auto& entities = entityManager.getEntities();
+    for (size_t i = 0; i < entities.size(); i++)
     {
-        if (!entitys[i].getIsAlive())
+        if (!entities[i].getIsAlive())
         {
             continue;
         }
 
         BehaviorIntent intent;
 
-        if (
-            controlTargerIndex >= 0 &&
-            controlTargerIndex < (int)entitys.size() &&
-            i == controlTargerIndex
-            )
+        if (entities[i].isControlled())
         {
-            intent = playerController.makeIntent(input, entitys[i].isGod());
+            intent = playerController.makeIntent(input, entities[i].isGod());
         }
+
         movementHandle.update(
-            entitys[i],
+            entities[i],
             intent,
-            entitys,
-            i,
+            entities,
+            (int)i,
             tileMap,
             worldWidth,
             worldHeight,
             collisionHandle
         );
 
-		entitys[i].updateAnimator(intent, animationClips);
-		entitys[i].updateAnimatedSprite();
+        entities[i].updateAnimator(intent, animationClips);
+        entities[i].updateAnimatedSprite();
     }
 }
 
-void Level::setControlTarget(int newTargetIndex)
+void Level::setControlTarget(const std::string& name)
 {
-    int entityCount = (int)entitys.size();
-
-    if (newTargetIndex < 0 || newTargetIndex >= entityCount)
+    Entity* target = entityManager.getEntityById(name);
+    if (!target || !target->getIsAlive())
     {
         return;
     }
 
-    if (!entitys[newTargetIndex].getIsAlive())
-    {
-        return;
-    }
-
-    controlTargerIndex = newTargetIndex;
+    controlledEntityName = name;
 
     // 动态同步每个实体的控制状态
-    for (int i = 0; i < entityCount; i++)
+    for (auto& ent : entityManager.getEntities())
     {
-        entitys[i].setControlled(i == controlTargerIndex);
+        ent.setControlled(ent.getId() == controlledEntityName);
     }
 
     cout << "Control target changed to Entity "
-        << controlTargerIndex
+        << controlledEntityName
         << endl;
 }
 
@@ -487,22 +408,22 @@ void Level::handleControlInput(InputManager& input)
 {
     if (input.isKeyPressed('1'))
     {
-        setControlTarget(0);
+        setControlTarget("Player1");
     }
 
     if (input.isKeyPressed('2'))
     {
-        setControlTarget(1);
+        setControlTarget("Player2");
     }
 
     if (input.isKeyPressed('3'))
     {
-        setControlTarget(2);
+        setControlTarget("Player3");
     }
 
     if (input.isKeyPressed('4'))
     {
-        setControlTarget(3);
+        setControlTarget("Player4");
     }
 }
 
@@ -510,22 +431,22 @@ void Level::handleCameraInput(InputManager& input)
 {
     if (input.isKeyPressed(VK_F1))
     {
-        setCameraFollowTarget(0, entitys);
+        setCameraFollowTarget("Player1", entityManager);
     }
 
     if (input.isKeyPressed(VK_F2))
     {
-        setCameraFollowTarget(1, entitys);
+        setCameraFollowTarget("Player2", entityManager);
     }
 
     if (input.isKeyPressed(VK_F3))
     {
-        setCameraFollowTarget(2, entitys);
+        setCameraFollowTarget("Player3", entityManager);
     }
 
     if (input.isKeyPressed(VK_F4))
     {
-        setCameraFollowTarget(3, entitys);
+        setCameraFollowTarget("Player4", entityManager);
     }
 }
 
@@ -649,26 +570,22 @@ void Level::handleRendererInput(InputManager& input)
 void Level::updateCamera(InputManager& input)
 {
     updateCameraFollow(
-        entitys,
+        entityManager,
         worldWidth,
         worldHeight,
-        //input.getMouseOffsetX(),
-        //input.getMouseOffsetY()
         0,0
     );
 }
 
 double Level::getParallaxCameraCenterX()
 {
-    if (
-        gCameraFollowTargetIndex < 0 ||
-        gCameraFollowTargetIndex >= (int)entitys.size()
-        )
+    Entity* target = entityManager.getEntityById(gCameraFollowTargetId);
+    if (!target)
     {
         return parallaxCameraX;
     }
 
-    double targetX = entitys[gCameraFollowTargetIndex].getX();
+    double targetX = target->getX();
 
     // 视差背景的横向锚点使用 zoom = 1 时的窗口宽度作为参考视口。
     double referenceVisibleW = WINDOW_WIDTH;
@@ -694,15 +611,13 @@ double Level::getParallaxCameraCenterX()
 
 double Level::getParallaxCameraCenterY()
 {
-    if (
-        gCameraFollowTargetIndex < 0 ||
-        gCameraFollowTargetIndex >= (int)entitys.size()
-        )
+    Entity* target = entityManager.getEntityById(gCameraFollowTargetId);
+    if (!target)
     {
         return parallaxCameraY;
     }
 
-    double targetY = entitys[gCameraFollowTargetIndex].getY();
+    double targetY = target->getY();
 
     // 视差背景的纵向锚点使用 zoom = 1 时的窗口高度作为参考视口。
     double referenceVisibleH = WINDOW_HEIGHT;
@@ -738,80 +653,68 @@ void Level::updateParallaxCamera()
 
 void Level::updateDebugStates()
 {
-    for (int i = 0; i < (int)entitys.size(); i++)
+    for (auto& ent : entityManager.getEntities())
     {
-        if (entitys[i].hasCollisionState() && !lastCollisionState[i])
+        if (!ent.getIsAlive())
         {
-            cout << "Entity " << i << " collision state started." << endl;
+            continue;
         }
 
-        lastCollisionState[i] = entitys[i].hasCollisionState();
+        // Collision State
+        if (ent.hasCollisionState() && !ent.lastCollisionState)
+        {
+            cout << "Entity " << ent.getId() << " collision state started." << endl;
+        }
+        ent.lastCollisionState = ent.hasCollisionState();
+
+        // On Ground State
+        if (ent.isOnGround() && !ent.lastGroundState)
+        {
+            cout << "Entity " << ent.getId() << " is on ground." << endl;
+        }
+        ent.lastGroundState = ent.isOnGround();
+
+        // In Air State
+        if (ent.isInAir() && !ent.lastInAirState)
+        {
+            cout << "Entity " << ent.getId() << " is in air." << endl;
+        }
+        ent.lastInAirState = ent.isInAir();
+
+        // Jumping State
+        bool nowJumping = ent.isJumping();
+        if (nowJumping && !ent.lastJumpingState)
+        {
+            cout << "Entity " << ent.getId() << " started jumping." << endl;
+        }
+        if (!nowJumping && ent.lastJumpingState)
+        {
+            cout << "Entity " << ent.getId() << " ended jumping." << endl;
+        }
+        ent.lastJumpingState = nowJumping;
+
+        // Sprinting State
+        bool nowSprinting = ent.isSprinting();
+        if (nowSprinting && !ent.lastSprintState)
+        {
+            cout << "Entity " << ent.getId() << " started sprinting." << endl;
+        }
+        if (!nowSprinting && ent.lastSprintState)
+        {
+            cout << "Entity " << ent.getId() << " ended sprinting." << endl;
+        }
+        ent.lastSprintState = nowSprinting;
     }
 
-    for (int i = 0; i < (int)entitys.size(); i++)
+    // Dying Log
+    for (auto& ent : entityManager.getEntities())
     {
-        bool nowAlive = entitys[i].getIsAlive();
-
-        if (!nowAlive && lastAliveState[i])
+        bool nowAlive = ent.getIsAlive();
+        if (!nowAlive && ent.lastAliveState)
         {
-            cout << "Entity " << i << " died." << endl;
+            cout << "Entity " << ent.getId() << " died." << endl;
         }
-
-        lastAliveState[i] = nowAlive;
-    }
-
-    for (int i = 0; i < (int)entitys.size(); i++)
-    {
-        if (entitys[i].isOnGround() && !lastGroundState[i])
-        {
-            cout << "Entity " << i << " is on ground." << endl;
-        }
-
-        lastGroundState[i] = entitys[i].isOnGround();
-    }
-
-    for (int i = 0; i < (int)entitys.size(); i++)
-    {
-        if (entitys[i].isInAir() && !lastInAirState[i])
-        {
-            cout << "Entity " << i << " is in air." << endl;
-        }
-
-        lastInAirState[i] = entitys[i].isInAir();
-    }
-
-    for (int i = 0; i < (int)entitys.size(); i++)
-    {
-        bool nowJumping = entitys[i].isJumping();
-
-        if (nowJumping && !lastJumpingState[i])
-        {
-            cout << "Entity " << i << " started jumping." << endl;
-        }
-
-        if (!nowJumping && lastJumpingState[i])
-        {
-            cout << "Entity " << i << " ended jumping." << endl;
-        }
-
-        lastJumpingState[i] = nowJumping;
-    }
-
-    for (int i = 0; i < (int)entitys.size(); i++)
-    {
-        bool nowSprinting = entitys[i].isSprinting();
-
-        if (nowSprinting && !lastSprintState[i])
-        {
-            cout << "Entity " << i << " started sprinting." << endl;
-        }
-
-        if (!nowSprinting && lastSprintState[i])
-        {
-            cout << "Entity " << i << " ended sprinting." << endl;
-        }
-
-        lastSprintState[i] = nowSprinting;
+        ent.lastAliveState = nowAlive;
     }
 }
 
@@ -821,58 +724,61 @@ void Level::updateOverlapEvents()
     重叠事件检测：
         只负责计算两个 AABB 是否重叠，并将重叠信息填充进双方实体的重叠列表。
     */
-    for (int i = 0; i < (int)entitys.size(); i++)
+    auto& entities = entityManager.getEntities();
+    std::unordered_set<std::string> currentOverlapPairs;
+
+    for (size_t i = 0; i < entities.size(); i++)
     {
-        for (int j = i + 1; j < (int)entitys.size(); j++)
+        for (size_t j = i + 1; j < entities.size(); j++)
         {
-            if (!entitys[i].getIsAlive() || !entitys[j].getIsAlive())
+            if (!entities[i].getIsAlive() || !entities[j].getIsAlive())
             {
                 continue;
             }
 
-            if (!entitys[i].isCollidable() || !entitys[j].isCollidable())
+            if (!entities[i].isCollidable() || !entities[j].isCollidable())
             {
                 continue;
             }
 
-            RectBox a = entitys[i].getWorldCollisionBox();
-            RectBox b = entitys[j].getWorldCollisionBox();
+            RectBox a = entities[i].getWorldCollisionBox();
+            RectBox b = entities[j].getWorldCollisionBox();
 
             bool overlapping = collisionHandle.isRectOverlapping(a, b);
 
             if (overlapping)
             {
-                entitys[i].setOverlapping(true);
-                entitys[j].setOverlapping(true);
+                entities[i].setOverlapping(true);
+                entities[j].setOverlapping(true);
 
                 // 填充重叠双方实体的重叠列表（记录对方的唯一 ID 和类型）
-                entitys[i].addOverlap(entitys[j].getId(), entitys[j].getEntityType());
-                entitys[j].addOverlap(entitys[i].getId(), entitys[i].getEntityType());
+                entities[i].addOverlap(entities[j].getId(), entities[j].getEntityType());
+                entities[j].addOverlap(entities[i].getId(), entities[i].getEntityType());
 
-                if (!lastOverlap[i][j])
+                std::string key = (entities[i].getId() < entities[j].getId()) ?
+                                  (entities[i].getId() + "_" + entities[j].getId()) :
+                                  (entities[j].getId() + "_" + entities[i].getId());
+                currentOverlapPairs.insert(key);
+
+                if (entityManager.lastOverlapPairs.find(key) == entityManager.lastOverlapPairs.end())
                 {
-                    cout << "Entity ID: " << entitys[i].getId() << " overlaps with Entity ID: " << entitys[j].getId() << endl;
+                    cout << "Entity ID: " << entities[i].getId() << " overlaps with Entity ID: " << entities[j].getId() << endl;
                 }
             }
-
-            if (!entitys[i].getIsAlive() || !entitys[j].getIsAlive())
-            {
-                continue;
-            }
-
-            lastOverlap[i][j] = overlapping;
         }
     }
+    entityManager.lastOverlapPairs = currentOverlapPairs;
 }
 
 void Level::resolveEntityOverlaps()
 {
+    auto& entities = entityManager.getEntities();
     // 让所有存活实体各自独立响应处理这一帧发生的重叠反馈逻辑
-    for (int i = 0; i < (int)entitys.size(); i++)
+    for (size_t i = 0; i < entities.size(); i++)
     {
-        if (entitys[i].getIsAlive())
+        if (entities[i].getIsAlive())
         {
-            entitys[i].resolveOverlaps(entitys, animationClips);
+            entities[i].resolveOverlaps(entities, animationClips);
         }
     }
 }

@@ -20,7 +20,7 @@ void RenderFrameStats::refreshTotal()
 
 DebugPanelData::DebugPanelData()
 {
-    targetIndex = -1;
+    targetId = "";
 
     entityX = 0;
     entityY = 0;
@@ -346,7 +346,7 @@ void Renderer::drawDebugEntitySectionText(const UIElement& content, DebugPanelDa
     outtextxy(x, y, text);
     y += lineH;
 
-    _stprintf_s(text, _T("Entity Index: %d"), data.targetIndex);
+    _stprintf_s(text, _T("Entity ID: %hs"), data.targetId.c_str());
     outtextxy(x, y, text);
     y += lineH;
 

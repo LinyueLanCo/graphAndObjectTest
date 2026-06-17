@@ -1,52 +1,69 @@
 ﻿#include "CameraFollow.h"
-
+#include <iostream>
 #include "Camera.h"
 
-int gCameraFollowTargetIndex = 0;
+std::string gCameraFollowTargetId = "Player1";
 
-void setCameraFollowTarget(int newTargetIndex, vector<Entity>& entitys)
+void setCameraFollowTarget(const std::string& newTargetId, const EntityManager& entityManager)
 {
-    int entityCount = (int)entitys.size();
-
-    if (newTargetIndex < 0 || newTargetIndex >= entityCount)
+    const Entity* target = entityManager.getEntityById(newTargetId);
+    if (!target)
     {
         return;
     }
 
-    if (!entitys[newTargetIndex].getIsAlive())
+    if (!target->getIsAlive())
     {
         return;
     }
 
-    gCameraFollowTargetIndex = newTargetIndex;
+    gCameraFollowTargetId = newTargetId;
 
-    cout << "Camera follow target changed to Entity "
-        << gCameraFollowTargetIndex << endl;
+    std::cout << "Camera follow target changed to Entity "
+        << gCameraFollowTargetId << std::endl;
 }
 
 void updateCameraFollow(
-    vector<Entity>& entitys,
+    EntityManager& entityManager,
     int worldWidth,
     int worldHeight,
     int mouseOffsetX,
     int mouseOffsetY
 )
 {
-    int entityCount = (int)entitys.size();
-
-    if (entityCount <= 0)
+    const std::vector<Entity>& entities = entityManager.getEntities();
+    if (entities.empty())
     {
         return;
     }
 
-    if (gCameraFollowTargetIndex < 0 || gCameraFollowTargetIndex >= entityCount)
+    Entity* target = entityManager.getEntityById(gCameraFollowTargetId);
+    if (!target || !target->getIsAlive())
     {
-        gCameraFollowTargetIndex = 0;
+        // 尝试回退到默认的 Player1
+        target = entityManager.getEntityById("Player1");
+        if (target && target->getIsAlive())
+        {
+            gCameraFollowTargetId = "Player1";
+        }
+        else
+        {
+            // 回退到第一个存活的实体
+            for (auto& e : entityManager.getEntities())
+            {
+                if (e.getIsAlive())
+                {
+                    target = &e;
+                    gCameraFollowTargetId = e.getId();
+                    break;
+                }
+            }
+        }
     }
 
-    if (!entitys[gCameraFollowTargetIndex].getIsAlive())
+    if (!target)
     {
-        gCameraFollowTargetIndex = 0;
+        return;
     }
 
     if (GetAsyncKeyState('B') & 0x8000)
@@ -88,8 +105,8 @@ void updateCameraFollow(
     double offsetWorldY = -mouseOffsetY / gCamera.zoom * lookStrength;
 
     gCamera.followSmooth(
-        entitys[gCameraFollowTargetIndex].getX(),
-        entitys[gCameraFollowTargetIndex].getY(),
+        target->getX(),
+        target->getY(),
         worldWidth,
         worldHeight,
         offsetWorldX,

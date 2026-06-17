@@ -1,5 +1,6 @@
 ﻿#pragma once
 
+#include <string>
 #include "Background.h"
 #include "Config.h"
 #include "Entity.h"
@@ -26,7 +27,7 @@ struct RenderFrameStats
 // Debug 面板一帧要显示的数据快照，数据由 Level 在当前帧收集后交给 Renderer 显示。
 struct DebugPanelData
 {
-    int targetIndex;
+    std::string targetId;
 
     double entityX;
     double entityY;
