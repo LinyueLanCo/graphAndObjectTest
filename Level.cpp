@@ -101,7 +101,6 @@ void Level::init()
     initResources();
 
     initMap();
-    initBackground();
     initUI();
     initEntityAnimations();
     initEntitySettings();
@@ -117,6 +116,8 @@ void Level::init()
     parallaxCameraY = getParallaxCameraCenterY();
     parallaxOriginX = parallaxCameraX;
     parallaxOriginY = parallaxCameraY;
+
+    initBackground();
 }
 
 void Level::update(InputManager& input)
