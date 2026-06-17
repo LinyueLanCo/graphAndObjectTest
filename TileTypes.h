@@ -44,5 +44,7 @@ struct TileInstance
 
     bool visible;
 
+    TileCollisionType collisionType;
+
     TileInstance();
 };

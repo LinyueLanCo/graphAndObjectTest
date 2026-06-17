@@ -20,4 +20,6 @@ TileInstance::TileInstance()
     layer = 0;
 
     visible = true;
+
+    collisionType = TILE_COLLISION_NONE;
 }

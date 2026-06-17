@@ -447,9 +447,76 @@ void TileMap::rebuildTileInstances()
 
             instance.layer = 0;
             instance.visible = true;
+            instance.collisionType = getDefaultCollisionTypeByTileId(tileId);
             tileInstances.push_back(instance);
         }
     }
+}
+
+RectBox TileMap::getTileInstanceCollisionWorldBox(const TileInstance& tile) const
+{
+    double worldDrawW = drawTileWidth * tile.scaleX;
+    double worldDrawH = drawTileHeight * tile.scaleY;
+
+    double worldCenterX = tile.centerX + tile.offsetX;
+    double worldCenterY = tile.centerY + tile.offsetY;
+
+    RectBox box;
+    box.left = worldCenterX - worldDrawW / 2.0;
+    box.right = worldCenterX + worldDrawW / 2.0;
+    box.bottom = worldCenterY - worldDrawH / 2.0;
+    box.top = worldCenterY + worldDrawH / 2.0;
+
+    TileCollisionType collisionType = tile.collisionType;
+
+    if (collisionType == TILE_COLLISION_TOP_HALF_ONE_WAY)
+    {
+        box.bottom = box.top - worldDrawH * 0.5;
+    }
+    else if (collisionType == TILE_COLLISION_TOP_LEFT_HALF_ONE_WAY)
+    {
+        box.right = box.left + worldDrawW * 0.5;
+        box.bottom = box.top - worldDrawH * 0.5;
+    }
+    else if (collisionType == TILE_COLLISION_TOP_RIGHT_HALF_ONE_WAY)
+    {
+        box.left = box.left + worldDrawW * 0.5;
+        box.bottom = box.top - worldDrawH * 0.5;
+    }
+
+    return box;
+}
+
+const TileInstance* TileMap::getTileInstanceUnder(const RectBox& entityBox, double checkDistance) const
+{
+    const TileInstance* result = nullptr;
+    double highestY = -999999.0;
+
+    for (const TileInstance& tile : tileInstances)
+    {
+        if (!tile.visible || tile.tileId == TILE_EMPTY || tile.collisionType == TILE_COLLISION_NONE)
+        {
+            continue;
+        }
+
+        RectBox tileBox = getTileInstanceCollisionWorldBox(tile);
+
+        if (entityBox.right <= tileBox.left + EPS || entityBox.left >= tileBox.right - EPS)
+        {
+            continue;
+        }
+
+        if (entityBox.bottom >= tileBox.top - EPS && entityBox.bottom <= tileBox.top + checkDistance + EPS)
+        {
+            if (tileBox.top > highestY)
+            {
+                highestY = tileBox.top;
+                result = &tile;
+            }
+        }
+    }
+
+    return result;
 }
 
 // 功能：从文本文件读取地图行列数和 tile id 数据。
@@ -567,37 +634,30 @@ RectBox TileMap::getTileCollisionWorldBox(int row, int col)
 // 功能：绘制所有拥有地图碰撞类型的 tile 调试碰撞框。
 void TileMap::drawDebugCollisionBoxes()
 {
-    setlinecolor(YELLOW);
-
-    for (int row = 0; row < rows; row++)
+    for (const TileInstance& tile : tileInstances)
     {
-        for (int col = 0; col < cols; col++)
+        if (!tile.visible || tile.tileId == TILE_EMPTY || tile.collisionType == TILE_COLLISION_NONE)
         {
-            if (!hasTileCollision(row, col))
-            {
-                continue;
-            }
-
-            TileCollisionType collisionType = getTileCollisionType(row, col);
-
-            if (collisionType == TILE_COLLISION_FULL_SOLID)
-            {
-                setlinecolor(YELLOW);
-            }
-            else
-            {
-                setlinecolor(GREEN);
-            }
-
-            RectBox box = getTileCollisionWorldBox(row, col);
-
-            int screenLeft = worldToScreenX(box.left);
-            int screenRight = worldToScreenX(box.right);
-            int screenTop = worldToScreenY(box.top);
-            int screenBottom = worldToScreenY(box.bottom);
-
-            rectangle(screenLeft, screenTop, screenRight, screenBottom);
+            continue;
         }
+
+        if (tile.collisionType == TILE_COLLISION_FULL_SOLID)
+        {
+            setlinecolor(YELLOW);
+        }
+        else
+        {
+            setlinecolor(GREEN);
+        }
+
+        RectBox box = getTileInstanceCollisionWorldBox(tile);
+
+        int screenLeft = worldToScreenX(box.left);
+        int screenRight = worldToScreenX(box.right);
+        int screenTop = worldToScreenY(box.top);
+        int screenBottom = worldToScreenY(box.bottom);
+
+        rectangle(screenLeft, screenTop, screenRight, screenBottom);
     }
 }
 

@@ -112,54 +112,56 @@ double CollisionHandle::getAllowedMoveX(
         }
     }
 
-    // 再算算和瓦片地图上的格子墙壁之间的水平碰撞
-    for (int row = 0; row < tileMap.getRows(); row++)
+    // 再算算和瓦片地图上的活跃瓦片之间的水平碰撞
+    for (const TileInstance& tile : tileMap.getTileInstances())
     {
-        for (int col = 0; col < tileMap.getCols(); col++)
+        if (!tile.visible || tile.tileId == TILE_EMPTY)
         {
-            TileCollisionType collisionType = tileMap.getTileCollisionType(row, col);
+            continue;
+        }
 
-            // 如果是空气或者单向平台，水平方向是不阻挡的，直接跳过
-            if (collisionType == TILE_COLLISION_NONE ||
-                collisionType == TILE_COLLISION_FULL_ONE_WAY ||
-                collisionType == TILE_COLLISION_TOP_HALF_ONE_WAY ||
-                collisionType == TILE_COLLISION_TOP_LEFT_HALF_ONE_WAY ||
-                collisionType == TILE_COLLISION_TOP_RIGHT_HALF_ONE_WAY)
+        TileCollisionType collisionType = tile.collisionType;
+
+        // 如果是空气或者单向平台，水平方向是不阻挡的，直接跳过
+        if (collisionType == TILE_COLLISION_NONE ||
+            collisionType == TILE_COLLISION_FULL_ONE_WAY ||
+            collisionType == TILE_COLLISION_TOP_HALF_ONE_WAY ||
+            collisionType == TILE_COLLISION_TOP_LEFT_HALF_ONE_WAY ||
+            collisionType == TILE_COLLISION_TOP_RIGHT_HALF_ONE_WAY)
+        {
+            continue;
+        }
+
+        RectBox tileBox = tileMap.getTileInstanceCollisionWorldBox(tile);
+
+        // 同样，看垂直范围是否有交集
+        if (!isRangeOverlapping(myBox.bottom, myBox.top, tileBox.bottom, tileBox.top))
+        {
+            continue;
+        }
+
+        // 计算方式和上面实体相撞完全一致
+        if (moveX > 0)
+        {
+            if (tileBox.left >= myBox.right - EPS)
             {
-                continue;
-            }
-
-            RectBox tileBox = tileMap.getTileCollisionWorldBox(row, col);
-
-            // 同样，看垂直范围是否有交集
-            if (!isRangeOverlapping(myBox.bottom, myBox.top, tileBox.bottom, tileBox.top))
-            {
-                continue;
-            }
-
-            // 计算方式和上面实体相撞完全一致
-            if (moveX > 0)
-            {
-                if (tileBox.left >= myBox.right - EPS)
+                double distance = tileBox.left - myBox.right;
+                if (distance < 0) distance = 0;
+                if (distance < allowedMove)
                 {
-                    double distance = tileBox.left - myBox.right;
-                    if (distance < 0) distance = 0;
-                    if (distance < allowedMove)
-                    {
-                        allowedMove = distance;
-                    }
+                    allowedMove = distance;
                 }
             }
-            else if (moveX < 0)
+        }
+        else if (moveX < 0)
+        {
+            if (tileBox.right <= myBox.left + EPS)
             {
-                if (tileBox.right <= myBox.left + EPS)
+                double distance = tileBox.right - myBox.left;
+                if (distance > 0) distance = 0;
+                if (distance > allowedMove)
                 {
-                    double distance = tileBox.right - myBox.left;
-                    if (distance > 0) distance = 0;
-                    if (distance > allowedMove)
-                    {
-                        allowedMove = distance;
-                    }
+                    allowedMove = distance;
                 }
             }
         }
@@ -240,75 +242,77 @@ double CollisionHandle::getAllowedMoveY(
     }
 
     // 再算算和瓦片地图格子（包括实心墙、单向平台等）之间的垂直碰撞
-    for (int row = 0; row < tileMap.getRows(); row++)
+    for (const TileInstance& tile : tileMap.getTileInstances())
     {
-        for (int col = 0; col < tileMap.getCols(); col++)
+        if (!tile.visible || tile.tileId == TILE_EMPTY)
         {
-            TileCollisionType collisionType = tileMap.getTileCollisionType(row, col);
+            continue;
+        }
 
-            if (collisionType == TILE_COLLISION_NONE)
+        TileCollisionType collisionType = tile.collisionType;
+
+        if (collisionType == TILE_COLLISION_NONE)
+        {
+            continue;
+        }
+
+        RectBox tileBox = tileMap.getTileInstanceCollisionWorldBox(tile);
+
+        // 检查水平 X 轴区间是否有投影交集
+        if (!isRangeOverlapping(myBox.left, myBox.right, tileBox.left, tileBox.right))
+        {
+            continue;
+        }
+
+        // 1. 如果我们向上跳（moveY > 0）
+        if (moveY > 0)
+        {
+            // 特别注意：单向平台（只能从下往上跳穿过去，但能踩在上面）在往上跳时是不阻挡的！
+            if (collisionType == TILE_COLLISION_FULL_ONE_WAY ||
+                collisionType == TILE_COLLISION_TOP_HALF_ONE_WAY ||
+                collisionType == TILE_COLLISION_TOP_LEFT_HALF_ONE_WAY ||
+                collisionType == TILE_COLLISION_TOP_RIGHT_HALF_ONE_WAY)
             {
                 continue;
             }
 
-            RectBox tileBox = tileMap.getTileCollisionWorldBox(row, col);
-
-            // 检查水平 X 轴区间是否有投影交集
-            if (!isRangeOverlapping(myBox.left, myBox.right, tileBox.left, tileBox.right))
+            if (tileBox.bottom >= myBox.top - EPS)
             {
-                continue;
+                double distance = tileBox.bottom - myBox.top;
+                if (distance < 0) distance = 0;
+                if (distance < allowedMove)
+                {
+                    allowedMove = distance;
+                }
             }
-
-            // 1. 如果我们向上跳（moveY > 0）
-            if (moveY > 0)
+        }
+        // 2. 如果我们向下落（moveY < 0）
+        else if (moveY < 0)
+        {
+            // 核心：单向平台的单向判定逻辑！
+            // 只有当玩家在“上一帧”的脚底，高于平台顶端时，才代表它是从天上下落踩上来的，我们才阻挡它。
+            if (collisionType == TILE_COLLISION_FULL_ONE_WAY ||
+                collisionType == TILE_COLLISION_TOP_HALF_ONE_WAY ||
+                collisionType == TILE_COLLISION_TOP_LEFT_HALF_ONE_WAY ||
+                collisionType == TILE_COLLISION_TOP_RIGHT_HALF_ONE_WAY)
             {
-                // 特别注意：单向平台（只能从下往上跳穿过去，但能踩在上面）在往上跳时是不阻挡的！
-                if (collisionType == TILE_COLLISION_FULL_ONE_WAY ||
-                    collisionType == TILE_COLLISION_TOP_HALF_ONE_WAY ||
-                    collisionType == TILE_COLLISION_TOP_LEFT_HALF_ONE_WAY ||
-                    collisionType == TILE_COLLISION_TOP_RIGHT_HALF_ONE_WAY)
+                // 获取未更新前的脚底高度值
+                double prevFootY = myBox.bottom - moveY; 
+                
+                // 如果上一帧的脚底已经在平台高度之下了，说明他原本就在穿透中，这帧不应该挡他
+                if (prevFootY < tileBox.top - EPS)
                 {
                     continue;
                 }
-
-                if (tileBox.bottom >= myBox.top - EPS)
-                {
-                    double distance = tileBox.bottom - myBox.top;
-                    if (distance < 0) distance = 0;
-                    if (distance < allowedMove)
-                    {
-                        allowedMove = distance;
-                    }
-                }
             }
-            // 2. 如果我们向下落（moveY < 0）
-            else if (moveY < 0)
-            {
-                // 核心：单向平台的单向判定逻辑！
-                // 只有当玩家在“上一帧”的脚底，高于平台顶端时，才代表它是从天上下落踩上来的，我们才阻挡它。
-                if (collisionType == TILE_COLLISION_FULL_ONE_WAY ||
-                    collisionType == TILE_COLLISION_TOP_HALF_ONE_WAY ||
-                    collisionType == TILE_COLLISION_TOP_LEFT_HALF_ONE_WAY ||
-                    collisionType == TILE_COLLISION_TOP_RIGHT_HALF_ONE_WAY)
-                {
-                    // 获取未更新前的脚底高度值
-                    double prevFootY = myBox.bottom - moveY; 
-                    
-                    // 如果上一帧的脚底已经在平台高度之下了，说明他原本就在穿透中，这帧不应该挡他
-                    if (prevFootY < tileBox.top - EPS)
-                    {
-                        continue;
-                    }
-                }
 
-                if (tileBox.top <= myBox.bottom + EPS)
+            if (tileBox.top <= myBox.bottom + EPS)
+            {
+                double distance = tileBox.top - myBox.bottom;
+                if (distance > 0) distance = 0;
+                if (distance > allowedMove)
                 {
-                    double distance = tileBox.top - myBox.bottom;
-                    if (distance > 0) distance = 0;
-                    if (distance > allowedMove)
-                    {
-                        allowedMove = distance;
-                    }
+                    allowedMove = distance;
                 }
             }
         }

@@ -78,6 +78,8 @@ public:
     TileCollisionType getDefaultCollisionTypeByTileId(int tileId);
     void generateDefaultCollisionFromTiles();
     void rebuildTileInstances();
+    RectBox getTileInstanceCollisionWorldBox(const TileInstance& tile) const;
+    const TileInstance* getTileInstanceUnder(const RectBox& entityBox, double checkDistance = 2.0) const;
     bool loadFromText(const std::string& mapContent);
 
     TileCollisionType getTileCollisionType(int row, int col);
