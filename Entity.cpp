@@ -216,6 +216,11 @@ bool Entity::isControlled()
     return controlled;
 }
 
+void Entity::setControlled(bool value)
+{
+    controlled = value;
+}
+
 // 功能：返回实体当前朝向。
 facingDirection Entity::getFacingDirection()
 {

@@ -102,6 +102,7 @@ public:
     bool isSprinting();
     bool isJumping();
     bool isControlled();
+    void setControlled(bool value);
 
     facingDirection getFacingDirection();
     void setFacingDirection(facingDirection direction);

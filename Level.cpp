@@ -56,23 +56,23 @@ Level::Level()
 
     entitys.emplace_back(200, 700, true, true, true, false, PLAYER, ANIM_SET_PLAYER1, 1);
 
-    entitys.emplace_back(_T("assets\\tex\\entities\\characters\\player2.png"), 600, 1300, false, true, false, false, ENTITY, 1);
+    entitys.emplace_back(600, 1300, false, true, false, false, ENTITY, ANIM_SET_PLAYER2, 1);
 
-    entitys.emplace_back(_T("assets\\tex\\entities\\characters\\player3.png"), 950, 1300, false, true, true, false, ENTITY, 1);
+    entitys.emplace_back(950, 1300, false, true, true, false, ENTITY, ANIM_SET_PLAYER3, 1);
 
-    entitys.emplace_back(_T("assets\\tex\\entities\\characters\\player4.png"), 1300, 1300, false, true, false, false, ENTITY, 1);
+    entitys.emplace_back(1300, 1300, false, true, false, false, ENTITY, ANIM_SET_PLAYER4, 1);
 
-    entitys.emplace_back(_T("assets\\tex\\entities\\items\\MonedaD.png"), 256, 256, false, true, false, true, COIN, 5, 1);
+    entitys.emplace_back(256, 256, false, true, false, true, COIN, ANIM_SET_COIN_GOLD, 1);
 
-    entitys.emplace_back(_T("assets\\tex\\entities\\items\\MonedaP.png"), 256 + 48 + 16, 256, false, true, false, true, COIN, 5, 1);
+    entitys.emplace_back(256 + 48 + 16, 256, false, true, false, true, COIN, ANIM_SET_COIN_SILVER, 1);
 
-    entitys.emplace_back(_T("assets\\tex\\entities\\items\\MonedaR.png"), 256 + (48 * 2) + (16 * 2), 256, false, true, false, true, COIN, 5, 1);
+    entitys.emplace_back(256 + (48 * 2) + (16 * 2), 256, false, true, false, true, COIN, ANIM_SET_COIN_COPPER, 1);
 
-    entitys.emplace_back(_T("assets\\tex\\entities\\items\\MonedaD.png"), 5662, 1312, false, true, false, true, COIN, 5, 1);
+    entitys.emplace_back(5662, 1312, false, true, false, true, COIN, ANIM_SET_COIN_GOLD, 1);
 
-    entitys.emplace_back(_T("assets\\tex\\entities\\items\\MonedaD.png"), 5662, 1312 + 64 + 16, false, true, false, true, COIN, 5, 1);
+    entitys.emplace_back(5662, 1312 + 64 + 16, false, true, false, true, COIN, ANIM_SET_COIN_GOLD, 1);
 
-    entitys.emplace_back(_T("assets\\tex\\entities\\items\\MonedaD.png"), 5662, 1312 + 64 + 16 + 64 + 16, false, true, false, true, COIN, 5, 1);
+    entitys.emplace_back(5662, 1312 + 64 + 16 + 64 + 16, false, true, false, true, COIN, ANIM_SET_COIN_GOLD, 1);
 
 
 
@@ -116,6 +116,12 @@ void Level::init()
     parallaxCameraY = getParallaxCameraCenterY();
     parallaxOriginX = parallaxCameraX;
     parallaxOriginY = parallaxCameraY;
+
+    // 同步实体的初始控制状态
+    for (int i = 0; i < (int)entitys.size(); i++)
+    {
+        entitys[i].setControlled(i == controlTargerIndex);
+    }
 
     initBackground();
 }
@@ -463,6 +469,12 @@ void Level::setControlTarget(int newTargetIndex)
     }
 
     controlTargerIndex = newTargetIndex;
+
+    // 动态同步每个实体的控制状态
+    for (int i = 0; i < entityCount; i++)
+    {
+        entitys[i].setControlled(i == controlTargerIndex);
+    }
 
     cout << "Control target changed to Entity "
         << controlTargerIndex

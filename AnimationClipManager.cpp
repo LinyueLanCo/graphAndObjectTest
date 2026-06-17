@@ -40,6 +40,24 @@ void AnimationClipManager::init(ResourceManager& resources)
 
     clips[ANIM_ID_PLAYER_JUMP_END_R] =
         AnimationClip(resources.getImage2D(IMG_PLAYER_JUMP_END_R), 8, 2, false);
+
+    clips[ANIM_ID_PLAYER2_STATIC] =
+        AnimationClip(resources.getImage2D(IMG_PLAYER2_STATIC), 1, 4, true);
+
+    clips[ANIM_ID_PLAYER3_STATIC] =
+        AnimationClip(resources.getImage2D(IMG_PLAYER3_STATIC), 1, 4, true);
+
+    clips[ANIM_ID_PLAYER4_STATIC] =
+        AnimationClip(resources.getImage2D(IMG_PLAYER4_STATIC), 1, 4, true);
+
+    clips[ANIM_ID_COIN_GOLD] =
+        AnimationClip(resources.getImage2D(IMG_COIN_GOLD), 5, 5, true);
+
+    clips[ANIM_ID_COIN_SILVER] =
+        AnimationClip(resources.getImage2D(IMG_COIN_SILVER), 5, 5, true);
+
+    clips[ANIM_ID_COIN_COPPER] =
+        AnimationClip(resources.getImage2D(IMG_COIN_COPPER), 5, 5, true);
 }
 
 // 功能：根据动画资源 ID 获取动画片段描述。

@@ -72,6 +72,30 @@ AnimationId getAnimationId(AnimationSetId setId, AnimationState state)
 	{
 		return getPlayerAnimationId(state);
 	}
+	else if (setId == ANIM_SET_PLAYER2)
+	{
+		return ANIM_ID_PLAYER2_STATIC;
+	}
+	else if (setId == ANIM_SET_PLAYER3)
+	{
+		return ANIM_ID_PLAYER3_STATIC;
+	}
+	else if (setId == ANIM_SET_PLAYER4)
+	{
+		return ANIM_ID_PLAYER4_STATIC;
+	}
+	else if (setId == ANIM_SET_COIN_GOLD)
+	{
+		return ANIM_ID_COIN_GOLD;
+	}
+	else if (setId == ANIM_SET_COIN_SILVER)
+	{
+		return ANIM_ID_COIN_SILVER;
+	}
+	else if (setId == ANIM_SET_COIN_COPPER)
+	{
+		return ANIM_ID_COIN_COPPER;
+	}
 
 	return ANIM_ID_COUNT;
 }

@@ -76,6 +76,14 @@ void ResourceManager::initImageResourceTable()
     imagePaths[IMG_PLAYER_JUMP_LOOP_R] = _T("assets\\tex\\entities\\characters\\player1_jumpLoop_R.png");
     imagePaths[IMG_PLAYER_JUMP_END_L] = _T("assets\\tex\\entities\\characters\\player1_jumpEnd_L.png");
     imagePaths[IMG_PLAYER_JUMP_END_R] = _T("assets\\tex\\entities\\characters\\player1_jumpEnd_R.png");
+
+    imagePaths[IMG_PLAYER2_STATIC] = _T("assets\\tex\\entities\\characters\\player2.png");
+    imagePaths[IMG_PLAYER3_STATIC] = _T("assets\\tex\\entities\\characters\\player3.png");
+    imagePaths[IMG_PLAYER4_STATIC] = _T("assets\\tex\\entities\\characters\\player4.png");
+
+    imagePaths[IMG_COIN_GOLD] = _T("assets\\tex\\entities\\items\\MonedaD.png");
+    imagePaths[IMG_COIN_SILVER] = _T("assets\\tex\\entities\\items\\MonedaP.png");
+    imagePaths[IMG_COIN_COPPER] = _T("assets\\tex\\entities\\items\\MonedaR.png");
 }
 
 void ResourceManager::loadImage2D(ImageResourceId id)
