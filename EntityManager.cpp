@@ -115,6 +115,7 @@ void EntityManager::clear()
 {
     entities.clear();
     nameToIndex.clear();
+    spawnQueue.clear();
     lastOverlapPairs.clear();
 }
 
@@ -125,4 +126,81 @@ void EntityManager::rebuildMap()
     {
         nameToIndex[entities[i].getId()] = i;
     }
+}
+
+void EntityManager::queueSpawnEntity(
+    const std::string& id,
+    double x,
+    double y,
+    bool controlled,
+    bool collidable,
+    bool blocking,
+    bool god,
+    EntityType type,
+    AnimationSetId animSet,
+    double scaleX,
+    double scaleY,
+    double colScaleX,
+    double colScaleY,
+    int animSpeed
+)
+{
+    SpawnRequest req;
+    req.id = id;
+    req.x = x;
+    req.y = y;
+    req.controlled = controlled;
+    req.collidable = collidable;
+    req.blocking = blocking;
+    req.god = god;
+    req.type = type;
+    req.animSet = animSet;
+    req.scaleX = scaleX;
+    req.scaleY = scaleY;
+    req.colScaleX = colScaleX;
+    req.colScaleY = colScaleY;
+    req.animSpeed = animSpeed;
+
+    spawnQueue.push_back(req);
+}
+
+void EntityManager::processSpawns(AnimationClipManager& animationClips)
+{
+    if (spawnQueue.empty())
+    {
+        return;
+    }
+
+    for (const auto& req : spawnQueue)
+    {
+        entities.emplace_back(
+            req.id,
+            req.x,
+            req.y,
+            req.controlled,
+            req.collidable,
+            req.blocking,
+            req.god,
+            req.type,
+            req.animSet,
+            1 // alive = 1
+        );
+
+        Entity& ent = entities.back();
+        ent.setSpriteTransform(req.scaleX, req.scaleY, 0.0, 0.0);
+        ent.setCollisionScale(req.colScaleX, req.colScaleY);
+
+        if (req.animSpeed != -1)
+        {
+            ent.setAnimationSpeed(req.animSpeed);
+        }
+
+        // 初始化动画
+        ent.initAnimationFromAnimator(animationClips);
+
+        std::cout << "Dynamic Spawn: Entity ID \"" << req.id << "\" spawned at (" << req.x << ", " << req.y << ")." << std::endl;
+    }
+
+    spawnQueue.clear();
+    rebuildMap();
 }

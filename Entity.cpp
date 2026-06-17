@@ -37,6 +37,7 @@ Entity::Entity()
     lastInAirState = false;
     lastJumpingState = false;
     lastAliveState = true;
+    flagActivatedJustNow = false;
 }
 
 // 功能：按资源路径和初始属性创建一个可用实体。
@@ -95,6 +96,7 @@ Entity::Entity(
     lastInAirState = false;
     lastJumpingState = false;
     lastAliveState = alive;
+    flagActivatedJustNow = false;
 }
 
 // 功能：按初始逻辑状态和动画资源组创建实体，不再直接从构造函数加载图片路径。
@@ -148,6 +150,7 @@ Entity::Entity(
     lastInAirState = false;
     lastJumpingState = false;
     lastAliveState = alive;
+    flagActivatedJustNow = false;
 }
 
 // 功能：按默认朝向和默认待机状态创建绑定动画资源组的实体。
@@ -519,6 +522,12 @@ void Entity::updateAnimatedSprite()
     {
         killEntity();
         std::cout << "Coin (ID: " << id << ") destroyed after collected animation finished." << std::endl;
+    }
+
+    // 如果是旗帜且播放完了升旗动画，标记以动态生成金币
+    if (entityType == CHECKPOINT && getAnimationState() == ANIM_CHECKPOINT_FLAG_OUT && isAnimationFinished())
+    {
+        flagActivatedJustNow = true;
     }
 }
 

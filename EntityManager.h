@@ -7,11 +7,30 @@
 #include "Entity.h"
 #include "AnimationClipManager.h"
 
+struct SpawnRequest
+{
+    std::string id;
+    double x;
+    double y;
+    bool controlled;
+    bool collidable;
+    bool blocking;
+    bool god;
+    EntityType type;
+    AnimationSetId animSet;
+    double scaleX;
+    double scaleY;
+    double colScaleX;
+    double colScaleY;
+    int animSpeed;
+};
+
 class EntityManager
 {
 private:
     std::vector<Entity> entities;
     std::unordered_map<std::string, size_t> nameToIndex;
+    std::vector<SpawnRequest> spawnQueue;
 
 public:
     // 缓存重叠历史，防止重复打印（取代 Level 的 2D vector 缓存）
@@ -21,6 +40,27 @@ public:
 
     // 从 JSON 配置文件加载所有实体
     bool loadEntities(const std::string& filepath, AnimationClipManager& animationClips);
+
+    // 实时动态生成实体的请求入队
+    void queueSpawnEntity(
+        const std::string& id,
+        double x,
+        double y,
+        bool controlled,
+        bool collidable,
+        bool blocking,
+        bool god,
+        EntityType type,
+        AnimationSetId animSet,
+        double scaleX = 1.0,
+        double scaleY = 1.0,
+        double colScaleX = 1.0,
+        double colScaleY = 1.0,
+        int animSpeed = -1
+    );
+
+    // 帧末安全处理生成列表，避免迭代器失效
+    void processSpawns(AnimationClipManager& animationClips);
 
     // 根据实体 ID 获取实体指针
     Entity* getEntityById(const std::string& id);

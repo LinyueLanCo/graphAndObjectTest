@@ -63,6 +63,9 @@ public:
     bool lastJumpingState;
     bool lastAliveState;
 
+    // 动态生成触发标记（在旗帜等升旗动画完毕时触发）
+    bool flagActivatedJustNow;
+
 public:
     Entity();
     Entity(

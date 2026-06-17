@@ -138,6 +138,36 @@ void Level::update(InputManager& input)
 
     updateOverlapEvents();
     resolveEntityOverlaps();
+
+    // 检测旗帜是否刚刚完成升旗动画，并在逻辑中心上方 64 像素生成一个 Coin2 对象
+    static int spawnedCoinCounter = 1;
+    for (auto& ent : entityManager.getEntities())
+    {
+        if (ent.getEntityType() == CHECKPOINT && ent.flagActivatedJustNow)
+        {
+            ent.flagActivatedJustNow = false; // 重置标记
+
+            std::string coinId = "SpawnedCoin_" + std::to_string(spawnedCoinCounter++);
+            entityManager.queueSpawnEntity(
+                coinId,
+                ent.getX(),
+                ent.getY() - 64.0,
+                false,                 // controlled
+                true,                  // collidable
+                false,                 // blocking
+                true,                  // god
+                COIN,                  // type
+                ANIM_SET_COIN_SILVER,  // animSet (Coin2)
+                4.0, 4.0,              // scaleX, scaleY
+                1.0, 1.0,              // colScaleX, colScaleY
+                3                      // animSpeed
+            );
+        }
+    }
+
+    // 帧末安全执行所有的动态实体生成
+    entityManager.processSpawns(animationClips);
+
     uiManager.update();
 }
 
