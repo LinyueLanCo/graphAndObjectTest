@@ -74,6 +74,8 @@ Level::Level()
 
     entitys.emplace_back(5662, 1312 + 64 + 16 + 64 + 16, false, true, false, true, COIN, ANIM_SET_COIN_GOLD, 1);
 
+    entitys.emplace_back(1500, 232, false, true, false, true, CHECKPOINT, ANIM_SET_CHECKPOINT, 1);
+
 
 
 
@@ -357,6 +359,7 @@ void Level::initEntitySettings()
     entitys[7].setSpriteTransform(4.0, 4.0, 0, 0);
     entitys[8].setSpriteTransform(4.0, 4.0, 0, 0);
     entitys[9].setSpriteTransform(4.0, 4.0, 0, 0);
+    entitys[10].setSpriteTransform(2.0, 2.0, 0, 0);
 
 
 

@@ -86,6 +86,10 @@ void ResourceManager::initImageResourceTable()
     imagePaths[IMG_COIN_COPPER] = _T("assets\\tex\\entities\\items\\MonedaR.png");
 
     imagePaths[IMG_COIN_COLLECTED] = _T("assets\\tex\\entities\\items\\Collected.png");
+
+    imagePaths[IMG_CHECKPOINT_NO_FLAG] = _T("assets\\tex\\entities\\items\\Checkpoint (No Flag).png");
+    imagePaths[IMG_CHECKPOINT_FLAG_OUT] = _T("assets\\tex\\entities\\items\\Checkpoint (Flag Out) (64x64).png");
+    imagePaths[IMG_CHECKPOINT_FLAG_IDLE] = _T("assets\\tex\\entities\\items\\Checkpoint (Flag Idle)(64x64).png");
 }
 
 void ResourceManager::loadImage2D(ImageResourceId id)

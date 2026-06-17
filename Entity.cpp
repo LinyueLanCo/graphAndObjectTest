@@ -379,6 +379,19 @@ void Entity::resolveOverlaps(std::vector<Entity>& allEntities, AnimationClipMana
                 std::cout << "Coin (ID: " << id << ") triggered collected animation." << std::endl;
             }
         }
+
+        // 3. Checkpoint 侧重叠逻辑：玩家碰触后从 No Flag 切换为 Flag Out 播放升旗动画
+        if (entityType == CHECKPOINT)
+        {
+            if (otherType == PLAYER)
+            {
+                if (getAnimationState() != ANIM_CHECKPOINT_FLAG_OUT && getAnimationState() != ANIM_CHECKPOINT_FLAG_IDLE)
+                {
+                    animator.changeAnimation(*this, ANIM_CHECKPOINT_FLAG_OUT, animationClips);
+                    std::cout << "Checkpoint (ID: " << id << ") activated! Flag raising." << std::endl;
+                }
+            }
+        }
     }
 }
 

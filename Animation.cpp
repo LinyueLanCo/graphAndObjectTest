@@ -99,6 +99,12 @@ AnimationId getAnimationId(AnimationSetId setId, AnimationState state)
 		if (state == ANIM_COLLECTED) return ANIM_ID_COIN_COLLECTED;
 		return ANIM_ID_COIN_COPPER;
 	}
+	else if (setId == ANIM_SET_CHECKPOINT)
+	{
+		if (state == ANIM_CHECKPOINT_FLAG_OUT) return ANIM_ID_CHECKPOINT_FLAG_OUT;
+		if (state == ANIM_CHECKPOINT_FLAG_IDLE) return ANIM_ID_CHECKPOINT_FLAG_IDLE;
+		return ANIM_ID_CHECKPOINT_NO_FLAG;
+	}
 
 	return ANIM_ID_COUNT;
 }

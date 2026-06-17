@@ -7,7 +7,8 @@ enum EntityType
     PLAYER = 1,
     ENTITY = 2,
     COIN = 3,
-    DEFAULT = 4
+    DEFAULT = 4,
+    CHECKPOINT = 5
 };
 
 // facingDirection：

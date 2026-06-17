@@ -61,6 +61,15 @@ void AnimationClipManager::init(ResourceManager& resources)
 
     clips[ANIM_ID_COIN_COLLECTED] =
         AnimationClip(resources.getImage2D(IMG_COIN_COLLECTED), 6, 4, false);
+
+    clips[ANIM_ID_CHECKPOINT_NO_FLAG] =
+        AnimationClip(resources.getImage2D(IMG_CHECKPOINT_NO_FLAG), 1, 4, true);
+
+    clips[ANIM_ID_CHECKPOINT_FLAG_OUT] =
+        AnimationClip(resources.getImage2D(IMG_CHECKPOINT_FLAG_OUT), 26, 4, false);
+
+    clips[ANIM_ID_CHECKPOINT_FLAG_IDLE] =
+        AnimationClip(resources.getImage2D(IMG_CHECKPOINT_FLAG_IDLE), 10, 4, true);
 }
 
 // 功能：根据动画资源 ID 获取动画片段描述。
