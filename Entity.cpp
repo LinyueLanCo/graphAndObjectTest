@@ -302,7 +302,7 @@ bool Entity::isBlockedByWorld()
 }
 
 // 功能：获取实体当前是否存活。
-bool Entity::getIsAlive()
+bool Entity::getIsAlive() const
 {
     return isAlive;
 }

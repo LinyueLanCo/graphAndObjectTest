@@ -131,7 +131,7 @@ public:
     bool isBlockedByEntity();
     bool isBlockedByWorld();
 
-    bool getIsAlive();
+    bool getIsAlive() const;
     void setIsAlive(bool value);
     void killEntity();
 
