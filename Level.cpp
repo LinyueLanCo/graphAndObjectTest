@@ -83,7 +83,9 @@ Level::Level()
     worldHeight = WINDOW_HEIGHT;
 
     parallaxCameraX = 0.0;
+    parallaxCameraY = 0.0;
     parallaxOriginX = 0.0;
+    parallaxOriginY = 0.0;
 }
 
 void Level::initEntityAnimations()
@@ -112,7 +114,9 @@ void Level::init()
     }
 
     parallaxCameraX = getParallaxCameraCenterX();
+    parallaxCameraY = getParallaxCameraCenterY();
     parallaxOriginX = parallaxCameraX;
+    parallaxOriginY = parallaxCameraY;
 }
 
 void Level::update(InputManager& input)
@@ -152,7 +156,9 @@ void Level::update(InputManager& input)
     updateParallaxCamera();
 
     double parallaxOffsetX = parallaxCameraX - parallaxOriginX;
-    backgroundManager.updateRuntimeTransforms(parallaxOffsetX);
+    // Y 方向直接使用真实相机中心变化量，避免背景抢在 followSmooth 相机之前移动。
+    double parallaxOffsetY = gCamera.centerY - parallaxOriginY;
+    backgroundManager.updateRuntimeTransforms(parallaxOffsetX, parallaxOffsetY);
 
     updateDebugStates();
 
@@ -242,58 +248,60 @@ void Level::initBackground()
     Image2D* flora1Image = resources.getImage2D(IMG_BG_FLORA1);
     Image2D* flora2Image = resources.getImage2D(IMG_BG_FLORA2);
 
+    double backgroundCenterX = parallaxOriginX;
+    double backgroundCenterY = parallaxOriginY;
 
     backgroundManager.addObjectFromImage2D(
         skyImage,
         0,
-        0.11,
+        0.0,
         0.0,
         false,
         BACKGROUND_REPEAT_X,
-        800,
-        450,
-        WINDOW_WIDTH,
-        WINDOW_HEIGHT
+        backgroundCenterX,
+        backgroundCenterY,
+        skyImage != NULL ? skyImage->getWidth() : WINDOW_WIDTH,
+        skyImage != NULL ? skyImage->getHeight() : WINDOW_HEIGHT
     );
 
 
     backgroundManager.addObjectFromImage2D(
         cloudsImage,
         1,
-        0.26,
+        0.15,
         0.15,
         true,
         BACKGROUND_REPEAT_X,
-        800,
-        450,
-        WINDOW_WIDTH,
-        WINDOW_HEIGHT
+        backgroundCenterX,
+        backgroundCenterY,
+        cloudsImage != NULL ? cloudsImage->getWidth() : WINDOW_WIDTH,
+        cloudsImage != NULL ? cloudsImage->getHeight() : WINDOW_HEIGHT
     );
 
     backgroundManager.addObjectFromImage2D(
         flora1Image,
         2,
-        0.5,
+        0.35,
         0.35,
         true,
         BACKGROUND_REPEAT_X,
-        800,
-        450,
-        WINDOW_WIDTH,
-        WINDOW_HEIGHT
+        backgroundCenterX,
+        backgroundCenterY,
+        flora1Image != NULL ? flora1Image->getWidth() : WINDOW_WIDTH,
+        flora1Image != NULL ? flora1Image->getHeight() : WINDOW_HEIGHT
     );
 
     backgroundManager.addObjectFromImage2D(
         flora2Image,
         3,
-        0.73,
+        0.65,
         0.65,
         true,
         BACKGROUND_REPEAT_X,
-        800,
-        450,
-        WINDOW_WIDTH,
-        WINDOW_HEIGHT
+        backgroundCenterX,
+        backgroundCenterY,
+        flora2Image != NULL ? flora2Image->getWidth() : WINDOW_WIDTH,
+        flora2Image != NULL ? flora2Image->getHeight() : WINDOW_HEIGHT
     );
 }
 
@@ -669,12 +677,48 @@ double Level::getParallaxCameraCenterX()
     return targetX;
 }
 
+double Level::getParallaxCameraCenterY()
+{
+    if (
+        gCameraFollowTargetIndex < 0 ||
+        gCameraFollowTargetIndex >= (int)entitys.size()
+        )
+    {
+        return parallaxCameraY;
+    }
+
+    double targetY = entitys[gCameraFollowTargetIndex].getY();
+
+    // 视差背景的纵向锚点使用 zoom = 1 时的窗口高度作为参考视口。
+    double referenceVisibleH = WINDOW_HEIGHT;
+    double referenceHalfH = referenceVisibleH / 2.0;
+
+    if (worldHeight <= referenceVisibleH)
+    {
+        return worldHeight / 2.0;
+    }
+
+    if (targetY < referenceHalfH)
+    {
+        return referenceHalfH;
+    }
+
+    if (targetY > worldHeight - referenceHalfH)
+    {
+        return worldHeight - referenceHalfH;
+    }
+
+    return targetY;
+}
+
 void Level::updateParallaxCamera()
 {
     double targetParallaxCameraX = getParallaxCameraCenterX();
+    double targetParallaxCameraY = getParallaxCameraCenterY();
 
     double followSpeed = 0.16;
     parallaxCameraX += (targetParallaxCameraX - parallaxCameraX) * followSpeed;
+    parallaxCameraY += (targetParallaxCameraY - parallaxCameraY) * followSpeed;
 }
 
 void Level::updateDebugStates()
