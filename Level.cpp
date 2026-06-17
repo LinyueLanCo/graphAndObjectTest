@@ -158,7 +158,12 @@ void Level::update(InputManager& input)
 
     // 更新镜头和平滑背景视差
     updateCamera(input);
-    backgroundManager.updateRuntimeTransforms(gCamera.vx, gCamera.vy);
+    if (gCamera.dx != 0.0 || gCamera.dy != 0.0)
+    {
+        cout << "Camera Move: vx=" << gCamera.dx << ", vy=" << gCamera.dy 
+             << ", center=" << gCamera.centerX << ", " << gCamera.centerY << endl;
+    }
+    backgroundManager.updateRuntimeTransforms(gCamera.dx, gCamera.dy);
 
     // 轮询并打印状态转移日志
     updateDebugStates();
@@ -646,8 +651,8 @@ void Level::updateCamera(InputManager& input)
         0,0
     );
 
-    gCamera.vx = gCamera.centerX - oldCenterX;
-    gCamera.vy = gCamera.centerY - oldCenterY;
+    gCamera.dx = gCamera.centerX - oldCenterX;
+    gCamera.dy = gCamera.centerY - oldCenterY;
 }
 
 

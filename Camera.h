@@ -21,7 +21,11 @@ struct Camera
     double vx;
     double vy;
 
-    // 功能：初始化相机位置、目标位置和缩放参数。
+    // 逻辑用：每帧相机的实际逻辑位移，用于视差背景滚动计算和外部日志输出。
+    double dx;
+    double dy;
+
+    // 功能：初始化相机位置、目标位置 and 缩放参数。
     Camera()
     {
         centerX = 0;
@@ -36,6 +40,9 @@ struct Camera
 
         vx = 0.0;
         vy = 0.0;
+
+        dx = 0.0;
+        dy = 0.0;
     }
 
     // 功能：计算当前 zoom 下屏幕横向覆盖的世界宽度。
@@ -93,6 +100,9 @@ struct Camera
         vx = 0.0;
         vy = 0.0;
 
+        dx = 0.0;
+        dy = 0.0;
+
         limitInWorld(worldWidth, worldHeight);
     }
 
@@ -110,14 +120,14 @@ struct Camera
         targetCenterX = targetWorldX + offsetWorldX;
         targetCenterY = targetWorldY + offsetWorldY;
 
-        double springFactor = 0.08;
-        double friction = 0.82;
+        double springFactor = 0.12;
+        double friction = 0.55;
 
         // 计算目标速度 (引力拉动)
         double targetVx = (targetCenterX - centerX) * springFactor;
         double targetVy = (targetCenterY - centerY) * springFactor;
 
-        // 应用阻尼与速度更新 (实现平滑惯性)
+        // 应用阻尼与速度更新 (实现平滑惯性，这里调整为过阻尼参数以防止反复振荡)
         vx = vx * friction + targetVx * (1.0 - friction);
         vy = vy * friction + targetVy * (1.0 - friction);
 
@@ -125,14 +135,14 @@ struct Camera
         centerX += vx;
         centerY += vy;
 
-        // 微距对齐，结束无限逼近
-        if (fabs(targetCenterX - centerX) < 0.1 && fabs(vx) < 0.05)
+        // 微距对齐，结束无限逼近 (放宽对齐阈值，快速锁定位置)
+        if (fabs(targetCenterX - centerX) < 0.5 && fabs(vx) < 0.2)
         {
             centerX = targetCenterX;
             vx = 0.0;
         }
 
-        if (fabs(targetCenterY - centerY) < 0.1 && fabs(vy) < 0.05)
+        if (fabs(targetCenterY - centerY) < 0.5 && fabs(vy) < 0.2)
         {
             centerY = targetCenterY;
             vy = 0.0;
