@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 // EntityType：
 // 当前简易实体分类，用于区分玩家、普通实体、金币等基础逻辑分支。

@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include "Animator.h"
 #include "Animation.h"
