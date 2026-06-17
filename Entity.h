@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include "Animator.h"
 #include "Animation.h"
@@ -20,6 +20,9 @@ class Entity
     friend class Animator;
 
 private:
+    int id;
+    std::vector<OverlapInfo> currentOverlaps;
+
     animatedSprite animation;
     sprite renderSprite;
 
@@ -45,9 +48,6 @@ private:
 
     EntityType entityType;
     bool isAlive;
-
-    int id;
-    vector<OverlapInfo> currentOverlaps;
 
     CollisionBox collisionBox;
     facingDirection currentFacingDirection;
@@ -92,6 +92,7 @@ public:
         bool alive = 1
     );
 
+    int getId() const;
     EntityType getEntityType();
     bool isCollidable();
     bool isBlocking();
@@ -123,12 +124,10 @@ public:
     sprite& getRenderSprite();
     const sprite& getSprite() const;
 
-    int getId() const;
-    void addOverlap(int otherId, EntityType otherType);
-    const vector<OverlapInfo>& getCurrentOverlaps() const;
-    void resolveOverlaps(vector<Entity>& allEntities);
-
     void setOverlapping(bool value);
+    void addOverlap(int otherId, EntityType otherType);
+    const std::vector<OverlapInfo>& getCurrentOverlaps() const;
+    void resolveOverlaps(std::vector<Entity>& allEntities);
     void setCollisionState(bool value);
     void clearFrameState();
 

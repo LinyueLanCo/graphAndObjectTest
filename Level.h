@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include "AnimationClipManager.h"
 #include "Background.h"
@@ -140,11 +140,12 @@ private:
     // 功能：检测实体状态变化并输出调试信息。
     void updateDebugStates();
 
-    // 功能：检测实体重叠事件并向实体填充重叠列表。
+    // 功能：检测实体重叠事件并填充实体重叠状态列表。
     void updateOverlapEvents();
 
-    // 功能：让实体各自独立处理重叠事件的具体玩法反馈。
+    // 功能：让各实体自治处理本帧检测到的重叠反应逻辑。
     void resolveEntityOverlaps();
+
 
 public:
     // 功能：初始化关卡实体列表和默认世界尺寸。
