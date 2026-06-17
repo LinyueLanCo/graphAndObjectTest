@@ -23,6 +23,8 @@ struct BackgroundObject
     double runtimeCenterY;
     double drawW;
     double drawH;
+    double vx;
+    double vy;
 
     sprite renderSprite;
 
@@ -38,5 +40,5 @@ struct BackgroundObject
     );
     void setDrawData(double newCenterX, double newCenterY, double newDrawW, double newDrawH);
     void updateSprite();
-    void updateRuntimeTransform(double parallaxOffsetX, double parallaxOffsetY);
+    void updateRuntimeTransform(double cameraVx, double cameraVy);
 };

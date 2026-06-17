@@ -18,6 +18,9 @@ struct Camera
 
     double targetZoom;
 
+    double vx;
+    double vy;
+
     // 功能：初始化相机位置、目标位置和缩放参数。
     Camera()
     {
@@ -30,6 +33,9 @@ struct Camera
         targetCenterY = 0;
 
         targetZoom = 1.0;
+
+        vx = 0.0;
+        vy = 0.0;
     }
 
     // 功能：计算当前 zoom 下屏幕横向覆盖的世界宽度。
@@ -84,6 +90,9 @@ struct Camera
         targetCenterX = centerX;
         targetCenterY = centerY;
 
+        vx = 0.0;
+        vy = 0.0;
+
         limitInWorld(worldWidth, worldHeight);
     }
 
@@ -98,15 +107,36 @@ struct Camera
     )
     {
         // 目标中心点 = 跟随实体位置 + 鼠标观察偏移。
-        // 注意：这里不再减 visibleW / 2，也不再减 visibleH / 2。
         targetCenterX = targetWorldX + offsetWorldX;
         targetCenterY = targetWorldY + offsetWorldY;
 
-        double followSpeed = 0.16;
+        double springFactor = 0.08;
+        double friction = 0.82;
 
-        // 用中心点与目标中心点的差值乘以跟随系数，得到本帧平滑位移。
-        centerX += (targetCenterX - centerX) * followSpeed;
-        centerY += (targetCenterY - centerY) * followSpeed;
+        // 计算目标速度 (引力拉动)
+        double targetVx = (targetCenterX - centerX) * springFactor;
+        double targetVy = (targetCenterY - centerY) * springFactor;
+
+        // 应用阻尼与速度更新 (实现平滑惯性)
+        vx = vx * friction + targetVx * (1.0 - friction);
+        vy = vy * friction + targetVy * (1.0 - friction);
+
+        // 累加坐标
+        centerX += vx;
+        centerY += vy;
+
+        // 微距对齐，结束无限逼近
+        if (fabs(targetCenterX - centerX) < 0.1 && fabs(vx) < 0.05)
+        {
+            centerX = targetCenterX;
+            vx = 0.0;
+        }
+
+        if (fabs(targetCenterY - centerY) < 0.1 && fabs(vy) < 0.05)
+        {
+            centerY = targetCenterY;
+            vy = 0.0;
+        }
 
         limitInWorld(worldWidth, worldHeight);
     }
@@ -142,6 +172,9 @@ struct Camera
     // 功能：把相机中心限制在关卡世界边界允许的可见范围内。
     void limitInWorld(int worldWidth, int worldHeight)
     {
+        double oldX = centerX;
+        double oldY = centerY;
+
         double visibleW = getVisibleWorldWidth();
         double visibleH = getVisibleWorldHeight();
 
@@ -181,6 +214,10 @@ struct Camera
                 centerY = worldHeight - halfH;
             }
         }
+
+        // 撞墙物理反馈，将卡住方向的速度清零
+        if (centerX != oldX) vx = 0.0;
+        if (centerY != oldY) vy = 0.0;
     }
 
     // 功能：把世界坐标 X 转换为 EasyX 屏幕坐标 X。

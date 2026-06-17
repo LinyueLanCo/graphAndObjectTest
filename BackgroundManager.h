@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include "BackgroundObject.h"
 #include "Config.h"
@@ -34,7 +34,7 @@ public:
         double newDrawW,
         double newDrawH
     );
-    void updateRuntimeTransforms(double parallaxOffsetX, double parallaxOffsetY);
+    void updateRuntimeTransforms(double cameraVx, double cameraVy);
     void sortObjectsByRenderOrder();
     void clearObjects();
     void addObject(const BackgroundObject& object);

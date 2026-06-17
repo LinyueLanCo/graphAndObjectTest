@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include "AnimationClipManager.h"
 #include "Background.h"
@@ -51,13 +51,6 @@ private:
     int worldWidth;                          // 关卡世界的像素总宽度
     int worldHeight;                         // 关卡世界的像素总高度
 
-    // 背景视差专用相机位置，用来平滑背景卷动，防止相机剧烈颤抖时背景跟着抽搐
-    double parallaxCameraX;
-    double parallaxCameraY;
-
-    // 视差大本营的初始相机点，用来计算相机的位移差值量
-    double parallaxOriginX;
-    double parallaxOriginY;
 
     // 辅助功能：根据当前相机跟随的演员，组装当前帧的调试数据（坐标、像素、相机缩放等）
     DebugPanelData buildDebugPanelData();
@@ -107,12 +100,6 @@ private:
     // 步骤函数：更新相机的坐标（缓动跟随当前目标，并把它钳制在世界边界里）
     void updateCamera(InputManager& input);
 
-    // 视差坐标计算辅助：在 zoom 缩放状态下计算视差背景的参考视口中心点坐标
-    double getParallaxCameraCenterX();
-    double getParallaxCameraCenterY();
-
-    // 步骤函数：缓动推进背景相机的位置
-    void updateParallaxCamera();
 
     // 步骤函数：对比当前帧与上一帧的物理标记（如是否触碰、是否落地、是否起跳、死亡等），发生改变时在窗口打印日志
     void updateDebugStates();

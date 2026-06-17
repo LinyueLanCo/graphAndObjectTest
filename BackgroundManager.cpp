@@ -1,4 +1,4 @@
-﻿#include "BackgroundManager.h"
+#include "BackgroundManager.h"
 #include "Camera.h"
 
 // 构造函数：预置渲染池的大小并初始化计数器
@@ -155,11 +155,11 @@ void BackgroundManager::addObjectFromImage2D(
 }
 
 // 功能：更新所有背景对象本帧用于生成 sprite 的逻辑变换。
-void BackgroundManager::updateRuntimeTransforms(double parallaxOffsetX, double parallaxOffsetY)
+void BackgroundManager::updateRuntimeTransforms(double cameraVx, double cameraVy)
 {
     for (int i = 0; i < (int)objects.size(); i++)
     {
-        objects[i].updateRuntimeTransform(parallaxOffsetX, parallaxOffsetY);
+        objects[i].updateRuntimeTransform(cameraVx, cameraVy);
         objects[i].updateSprite();
     }
 
