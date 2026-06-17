@@ -635,12 +635,18 @@ void Level::handleRendererInput(InputManager& input)
 
 void Level::updateCamera(InputManager& input)
 {
+    double oldCenterX = gCamera.centerX;
+    double oldCenterY = gCamera.centerY;
+
     updateCameraFollow(
         entityManager,
         worldWidth,
         worldHeight,
         0,0
     );
+
+    gCamera.vx = gCamera.centerX - oldCenterX;
+    gCamera.vy = gCamera.centerY - oldCenterY;
 }
 
 
