@@ -25,6 +25,7 @@ struct BackgroundObject
     double drawH;
     double vx;
     double vy;
+    double autoScrollSpeedX;
 
     sprite renderSprite;
 

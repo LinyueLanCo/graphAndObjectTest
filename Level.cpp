@@ -310,7 +310,8 @@ void Level::initBackground()
         backgroundCenterX,
         backgroundCenterY,
         cloudsImage != NULL ? cloudsImage->getWidth() : WINDOW_WIDTH,
-        cloudsImage != NULL ? cloudsImage->getHeight() : WINDOW_HEIGHT
+        cloudsImage != NULL ? cloudsImage->getHeight() : WINDOW_HEIGHT,
+        0.5
     );
 
     backgroundManager.addObjectFromImage2D(

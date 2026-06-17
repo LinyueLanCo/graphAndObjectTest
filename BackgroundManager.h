@@ -32,7 +32,8 @@ public:
         double newCenterX,
         double newCenterY,
         double newDrawW,
-        double newDrawH
+        double newDrawH,
+        double newAutoScrollSpeedX = 0.0
     );
     void updateRuntimeTransforms(double cameraVx, double cameraVy);
     void sortObjectsByRenderOrder();

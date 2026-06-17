@@ -22,6 +22,7 @@ BackgroundObject::BackgroundObject()
     drawH = 0.0;
     vx = 0.0;
     vy = 0.0;
+    autoScrollSpeedX = 0.0;
 }
 
 // 功能：把背景对象的 sprite 绑定到指定图片资源。
@@ -112,6 +113,8 @@ void BackgroundObject::updateSprite()
 // 功能：根据背景模式更新本帧用于绘制的运行时逻辑中心点。
 void BackgroundObject::updateRuntimeTransform(double cameraVx, double cameraVy)
 {
+    centerX += autoScrollSpeedX;
+
     if (drawMode == BACKGROUND_FIXED_CAMERA)
     {
         // fixed 背景把运行时中心锁到 Camera 中心，使背景看起来固定在视口里。
@@ -138,7 +141,7 @@ void BackgroundObject::updateRuntimeTransform(double cameraVx, double cameraVy)
         // 0.0 接近固定在屏幕上，1.0 接近普通世界物体。
         vx = cameraVx * (1.0 - parallaxFactor);
         vy = cameraVy * (1.0 - parallaxFactor);
-        runtimeCenterX += vx;
+        runtimeCenterX += vx + autoScrollSpeedX;
         runtimeCenterY += vy;
         return;
     }

@@ -120,7 +120,8 @@ void BackgroundManager::addObjectFromImage2D(
     double newCenterX,
     double newCenterY,
     double newDrawW,
-    double newDrawH
+    double newDrawH,
+    double newAutoScrollSpeedX
 )
 {
     if (imageResource == NULL)
@@ -144,6 +145,8 @@ void BackgroundManager::addObjectFromImage2D(
         newDrawW,
         newDrawH
     );
+
+    object.autoScrollSpeedX = newAutoScrollSpeedX;
 
     object.bindSpriteSource(imageResource);
     object.updateRuntimeTransform(0.0, 0.0);
