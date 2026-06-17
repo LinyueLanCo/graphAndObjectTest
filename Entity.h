@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include "Animator.h"
 #include "Animation.h"
@@ -45,6 +45,9 @@ private:
 
     EntityType entityType;
     bool isAlive;
+
+    int id;
+    vector<OverlapInfo> currentOverlaps;
 
     CollisionBox collisionBox;
     facingDirection currentFacingDirection;
@@ -119,6 +122,11 @@ public:
 
     sprite& getRenderSprite();
     const sprite& getSprite() const;
+
+    int getId() const;
+    void addOverlap(int otherId, EntityType otherType);
+    const vector<OverlapInfo>& getCurrentOverlaps() const;
+    void resolveOverlaps(vector<Entity>& allEntities);
 
     void setOverlapping(bool value);
     void setCollisionState(bool value);

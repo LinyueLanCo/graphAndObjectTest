@@ -1,4 +1,6 @@
-﻿#include "Entity.h"
+#include "Entity.h"
+
+static int gNextEntityId = 1;
 
 // 功能：初始化一个默认实体及其基础状态。
 Entity::Entity()
@@ -27,6 +29,7 @@ Entity::Entity()
 
     entityType = DEFAULT;
     isAlive = 1;
+    id = gNextEntityId++;
 }
 
 // 功能：按资源路径和初始属性创建一个可用实体。
@@ -77,6 +80,7 @@ Entity::Entity(
 
     entityType = Type;
     isAlive = alive;
+    id = gNextEntityId++;
 }
 
 // 功能：按初始逻辑状态和动画资源组创建实体，不再直接从构造函数加载图片路径。
@@ -119,6 +123,7 @@ Entity::Entity(
 
     entityType = Type;
     isAlive = alive;
+    id = gNextEntityId++;
 
     animator.configure(animationSet, initialAnim);
 }
@@ -321,7 +326,81 @@ void Entity::clearFrameState()
     blockedByEntity = false;
     blockedByWorld = false;
 
+    currentOverlaps.clear();
     // onGround 是物理状态，不是单帧显示状态，会在移动阶段重新判断。
+}
+
+int Entity::getId() const
+{
+    return id;
+}
+
+void Entity::addOverlap(int otherId, EntityType otherType)
+{
+    OverlapInfo info;
+    info.otherEntityId = otherId;
+    info.otherType = otherType;
+    currentOverlaps.push_back(info);
+}
+
+const vector<OverlapInfo>& Entity::getCurrentOverlaps() const
+{
+    return currentOverlaps;
+}
+
+void Entity::resolveOverlaps(vector<Entity>& allEntities)
+{
+    if (!isAlive)
+    {
+        return;
+    }
+
+    for (int i = 0; i < (int)currentOverlaps.size(); i++)
+    {
+        int otherId = currentOverlaps[i].otherEntityId;
+        EntityType otherType = currentOverlaps[i].otherType;
+
+        // 根据 ID 在所有实体列表中查询对方引用的指针
+        Entity* other = nullptr;
+        for (int j = 0; j < (int)allEntities.size(); j++)
+        {
+            if (allEntities[j].getId() == otherId)
+            {
+                other = &allEntities[j];
+                break;
+            }
+        }
+
+        if (other == nullptr || !other->getIsAlive())
+        {
+            continue;
+        }
+
+        // 1. 如果自己是玩家 (PLAYER)
+        if (entityType == PLAYER)
+        {
+            if (otherType == COIN)
+            {
+                // 仅打印加分日志占位符，不处理实际分数属性
+                cout << "Player (ID: " << id << ") detected COIN (ID: " << other->getId() << "). Triggering Score Addition placeholder." << endl;
+            }
+        }
+        // 2. 如果自己是金币 (COIN)
+        else if (entityType == COIN)
+        {
+            if (otherType == PLAYER)
+            {
+                // 金币自治：播放金币拾取音效并自毁
+                PlaySoundW(
+                    _T("assets\\sound\\entities\\item\\coin_pickup.wav"),
+                    NULL,
+                    SND_ASYNC | SND_NOSTOP
+                );
+                killEntity();
+                cout << "Coin (ID: " << id << ") picked up by Player (ID: " << other->getId() << "). Destroying self." << endl;
+            }
+        }
+    }
 }
 
 // 功能：根据指定中心点计算实体碰撞盒的世界坐标范围。

@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 // EntityType：
 // 当前简易实体分类，用于区分玩家、普通实体、金币等基础逻辑分支。
@@ -19,3 +19,12 @@ enum facingDirection
     UP,
     DOWN
 };
+
+// OverlapInfo：
+// 记录与当前实体发生重叠的另一个实体的信息。
+struct OverlapInfo
+{
+    int otherEntityId;
+    EntityType otherType;
+};
+

@@ -30,7 +30,7 @@ public:
         double newDrawW,
         double newDrawH
     );
-    void updateRuntimeTransforms(double parallaxOffsetX);
+    void updateRuntimeTransforms(double parallaxOffsetX, double parallaxOffsetY);
     void sortObjectsByRenderOrder();
     void clearObjects();
     void addObject(const BackgroundObject& object);

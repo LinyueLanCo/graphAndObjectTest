@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include "AnimationClipManager.h"
 #include "Background.h"
@@ -53,9 +53,11 @@ private:
 
     // 背景视差使用的独立相机位置，避免直接使用被边界钳制后的渲染相机。
     double parallaxCameraX;
+    double parallaxCameraY;
 
     // 背景视差初始参考点，用于计算背景层相对位移。
     double parallaxOriginX;
+    double parallaxOriginY;
 
     // 以下历史状态缓存必须与 entitys.size() 同步，用于检测状态变化和重叠事件首次触发。
     vector<vector<bool>> lastOverlap;
@@ -129,14 +131,20 @@ private:
     // 功能：按固定参考视口宽度计算背景视差使用的横向相机中心。
     double getParallaxCameraCenterX();
 
+    // 功能：按固定参考视口高度计算背景视差使用的纵向相机中心。
+    double getParallaxCameraCenterY();
+
     // 功能：更新背景视差专用相机位置。
     void updateParallaxCamera();
 
     // 功能：检测实体状态变化并输出调试信息。
     void updateDebugStates();
 
-    // 功能：检测实体重叠事件并触发金币拾取等反馈。
+    // 功能：检测实体重叠事件并向实体填充重叠列表。
     void updateOverlapEvents();
+
+    // 功能：让实体各自独立处理重叠事件的具体玩法反馈。
+    void resolveEntityOverlaps();
 
 public:
     // 功能：初始化关卡实体列表和默认世界尺寸。

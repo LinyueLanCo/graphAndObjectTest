@@ -126,7 +126,7 @@ void BackgroundManager::addObjectFromImage2D(
     );
 
     object.bindSpriteSource(imageResource);
-    object.updateRuntimeTransform(0.0);
+    object.updateRuntimeTransform(0.0, 0.0);
     object.updateSprite();
 
     objects.push_back(object);
@@ -135,11 +135,11 @@ void BackgroundManager::addObjectFromImage2D(
 }
 
 // 功能：更新所有背景对象本帧用于生成 sprite 的逻辑变换。
-void BackgroundManager::updateRuntimeTransforms(double parallaxOffsetX)
+void BackgroundManager::updateRuntimeTransforms(double parallaxOffsetX, double parallaxOffsetY)
 {
     for (int i = 0; i < (int)objects.size(); i++)
     {
-        objects[i].updateRuntimeTransform(parallaxOffsetX);
+        objects[i].updateRuntimeTransform(parallaxOffsetX, parallaxOffsetY);
         objects[i].updateSprite();
     }
 

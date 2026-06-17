@@ -108,7 +108,7 @@ void BackgroundObject::updateSprite()
 }
 
 // 功能：根据背景模式更新本帧用于绘制的运行时逻辑中心点。
-void BackgroundObject::updateRuntimeTransform(double parallaxOffsetX)
+void BackgroundObject::updateRuntimeTransform(double parallaxOffsetX, double parallaxOffsetY)
 {
     if (drawMode == BACKGROUND_FIXED_CAMERA)
     {
@@ -128,10 +128,10 @@ void BackgroundObject::updateRuntimeTransform(double parallaxOffsetX)
 
     if (drawMode == BACKGROUND_REPEAT_X)
     {
-        // parallaxFactor 表示背景在屏幕上相对地图的横向移动比例。
+        // parallaxFactor 表示背景在屏幕上相对地图的移动比例。
         // 0.0 接近固定在屏幕上，1.0 接近普通世界物体。
         runtimeCenterX = centerX + parallaxOffsetX * (1.0 - parallaxFactor);
-        runtimeCenterY = centerY;
+        runtimeCenterY = centerY + parallaxOffsetY * (1.0 - parallaxFactor);
         return;
     }
 

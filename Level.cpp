@@ -1,4 +1,4 @@
-﻿#include "Level.h"
+#include "Level.h"
 
 #include "Camera.h"
 
@@ -157,6 +157,7 @@ void Level::update(InputManager& input)
     updateDebugStates();
 
     updateOverlapEvents();
+    resolveEntityOverlaps();
     uiManager.update();
 }
 
@@ -759,14 +760,7 @@ void Level::updateOverlapEvents()
 {
     /*
     重叠事件检测：
-        这里处理“已经发生重叠之后要做什么”。
-        例如：玩家碰到金币 -> 播放音效 -> 金币死亡。
-
-    它和阻挡碰撞不同：
-        - 阻挡碰撞：MovementHandle 想移动，CollisionHandle 计算 allowedMove，防止穿透
-        - 重叠事件：实体已经重叠，触发某种游戏事件
-
-    当前这里复用 CollisionHandle::isRectOverlapping() 作为底层 AABB 判断。
+        只负责计算两个 AABB 是否重叠，并将重叠信息填充进双方实体的重叠列表。
     */
     for (int i = 0; i < (int)entitys.size(); i++)
     {
@@ -792,45 +786,13 @@ void Level::updateOverlapEvents()
                 entitys[i].setOverlapping(true);
                 entitys[j].setOverlapping(true);
 
+                // 填充重叠双方实体的重叠列表（记录对方的唯一 ID 和类型）
+                entitys[i].addOverlap(entitys[j].getId(), entitys[j].getEntityType());
+                entitys[j].addOverlap(entitys[i].getId(), entitys[i].getEntityType());
+
                 if (!lastOverlap[i][j])
                 {
-                    cout << "Entity " << i << " overlaps with Entity " << j << endl;
-
-                    EntityType typeA = entitys[i].getEntityType();
-                    EntityType typeB = entitys[j].getEntityType();
-
-                    if (typeA == PLAYER && typeB == COIN)
-                    {
-                        cout << "Player picked coin: " << j << endl;
-
-                        PlaySoundW(
-                            _T("assets\\sound\\entities\\item\\coin_pickup.wav"),
-                            NULL,
-                            SND_ASYNC | SND_NOSTOP
-                        );
-
-                        entitys[j].killEntity();
-                    }
-                    else if (typeA == COIN && typeB == PLAYER)
-                    {
-                        cout << "Player picked coin: " << i << endl;
-
-                        PlaySoundW(
-                            _T("assets\\sound\\entities\\item\\coin_pickup.wav"),
-                            NULL,
-                            SND_ASYNC | SND_NOSTOP
-                        );
-
-                        entitys[i].killEntity();
-                    }
-                    else if (typeA == PLAYER && typeB == ENTITY)
-                    {
-                        cout << "Player touched normal entity: " << j << endl;
-                    }
-                    else if (typeA == ENTITY && typeB == PLAYER)
-                    {
-                        cout << "Player touched normal entity: " << i << endl;
-                    }
+                    cout << "Entity ID: " << entitys[i].getId() << " overlaps with Entity ID: " << entitys[j].getId() << endl;
                 }
             }
 
@@ -840,6 +802,18 @@ void Level::updateOverlapEvents()
             }
 
             lastOverlap[i][j] = overlapping;
+        }
+    }
+}
+
+void Level::resolveEntityOverlaps()
+{
+    // 让所有存活实体各自独立响应处理这一帧发生的重叠反馈逻辑
+    for (int i = 0; i < (int)entitys.size(); i++)
+    {
+        if (entitys[i].getIsAlive())
+        {
+            entitys[i].resolveOverlaps(entitys);
         }
     }
 }
