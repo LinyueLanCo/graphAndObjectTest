@@ -356,7 +356,7 @@ void Entity::resolveOverlaps(std::vector<Entity>& allEntities, AnimationClipMana
         EntityType otherType = currentOverlaps[i].otherType;
 
         // 1. Player 侧重叠逻辑：只进行加分调试打印，不直接操作金币实体死亡，静待金币自毁。
-        if (entityType == PLAYER)
+        if (controlled)
         {
             if (otherType == COIN)
             {
@@ -364,10 +364,20 @@ void Entity::resolveOverlaps(std::vector<Entity>& allEntities, AnimationClipMana
             }
         }
 
-        // 2. Coin 侧重叠逻辑：金币发现碰触 Player 后进入被收集动画，并在动画播放后自毁
+        // 2. Coin 侧重叠逻辑：金币发现碰触受控角色后进入被收集动画，并在动画播放后自毁
         if (entityType == COIN)
         {
-            if (otherType == PLAYER)
+            Entity* otherEntity = nullptr;
+            for (auto& e : allEntities)
+            {
+                if (e.getId() == otherId)
+                {
+                    otherEntity = &e;
+                    break;
+                }
+            }
+
+            if (otherEntity != nullptr && otherEntity->isControlled())
             {
                 PlaySoundW(
                     _T("assets\\sound\\entities\\item\\coin_pickup.wav"),
@@ -380,10 +390,20 @@ void Entity::resolveOverlaps(std::vector<Entity>& allEntities, AnimationClipMana
             }
         }
 
-        // 3. Checkpoint 侧重叠逻辑：玩家碰触后从 No Flag 切换为 Flag Out 播放升旗动画
+        // 3. Checkpoint 侧重叠逻辑：受控角色碰触后从 No Flag 切换为 Flag Out 播放升旗动画
         if (entityType == CHECKPOINT)
         {
-            if (otherType == PLAYER)
+            Entity* otherEntity = nullptr;
+            for (auto& e : allEntities)
+            {
+                if (e.getId() == otherId)
+                {
+                    otherEntity = &e;
+                    break;
+                }
+            }
+
+            if (otherEntity != nullptr && otherEntity->isControlled())
             {
                 if (getAnimationState() != ANIM_CHECKPOINT_FLAG_OUT && getAnimationState() != ANIM_CHECKPOINT_FLAG_IDLE)
                 {
