@@ -68,11 +68,6 @@ Level::Level()
 
     worldWidth = WINDOW_WIDTH;
     worldHeight = WINDOW_HEIGHT;
-
-    parallaxCameraX = 0.0;
-    parallaxCameraY = 0.0;
-    parallaxOriginX = 0.0;
-    parallaxOriginY = 0.0;
 }
 
 // 演员动画皮肤初始化：在关卡资源准备妥当后，给对象池中活着的实体同步绑定其动画包里的第一段待机动画
@@ -116,12 +111,6 @@ void Level::init()
     {
         gCamera.followInstant(entities[activeIndices[0]].getX(), entities[activeIndices[0]].getY(), worldWidth, worldHeight);
     }
-
-    // 7. 设定多层视差背景的参考相机起点
-    parallaxCameraX = getParallaxCameraCenterX();
-    parallaxCameraY = getParallaxCameraCenterY();
-    parallaxOriginX = parallaxCameraX;
-    parallaxOriginY = parallaxCameraY;
 
     // 8. 默认激活 Player1 的键盘操纵权限
     setControlTarget(controlledEntityName);
@@ -169,11 +158,7 @@ void Level::update(InputManager& input)
 
     // 更新镜头和平滑背景视差
     updateCamera(input);
-    updateParallaxCamera();
-
-    double parallaxOffsetX = parallaxCameraX - parallaxOriginX;
-    double parallaxOffsetY = gCamera.centerY - parallaxOriginY;
-    backgroundManager.updateRuntimeTransforms(parallaxOffsetX, parallaxOffsetY);
+    backgroundManager.updateRuntimeTransforms(gCamera.vx, gCamera.vy);
 
     // 轮询并打印状态转移日志
     updateDebugStates();
@@ -298,8 +283,8 @@ void Level::initBackground()
     Image2D* flora1Image = resources.getImage2D(IMG_BG_FLORA1);
     Image2D* flora2Image = resources.getImage2D(IMG_BG_FLORA2);
 
-    double backgroundCenterX = parallaxOriginX;
-    double backgroundCenterY = parallaxOriginY;
+    double backgroundCenterX = gCamera.centerX;
+    double backgroundCenterY = gCamera.centerY;
 
     backgroundManager.addObjectFromImage2D(
         skyImage,
@@ -658,79 +643,7 @@ void Level::updateCamera(InputManager& input)
     );
 }
 
-double Level::getParallaxCameraCenterX()
-{
-    Entity* target = entityManager.getEntityById(gCameraFollowTargetId);
-    if (!target)
-    {
-        return parallaxCameraX;
-    }
 
-    double targetX = target->getX();
-
-    // 视差背景的横向锚点使用 zoom = 1 时的窗口宽度作为参考视口。
-    double referenceVisibleW = WINDOW_WIDTH;
-    double referenceHalfW = referenceVisibleW / 2.0;
-
-    if (worldWidth <= referenceVisibleW)
-    {
-        return worldWidth / 2.0;
-    }
-
-    if (targetX < referenceHalfW)
-    {
-        return referenceHalfW;
-    }
-
-    if (targetX > worldWidth - referenceHalfW)
-    {
-        return worldWidth - referenceHalfW;
-    }
-
-    return targetX;
-}
-
-double Level::getParallaxCameraCenterY()
-{
-    Entity* target = entityManager.getEntityById(gCameraFollowTargetId);
-    if (!target)
-    {
-        return parallaxCameraY;
-    }
-
-    double targetY = target->getY();
-
-    // 视差背景的纵向锚点使用 zoom = 1 时的窗口高度作为参考视口。
-    double referenceVisibleH = WINDOW_HEIGHT;
-    double referenceHalfH = referenceVisibleH / 2.0;
-
-    if (worldHeight <= referenceVisibleH)
-    {
-        return worldHeight / 2.0;
-    }
-
-    if (targetY < referenceHalfH)
-    {
-        return referenceHalfH;
-    }
-
-    if (targetY > worldHeight - referenceHalfH)
-    {
-        return worldHeight - referenceHalfH;
-    }
-
-    return targetY;
-}
-
-void Level::updateParallaxCamera()
-{
-    double targetParallaxCameraX = getParallaxCameraCenterX();
-    double targetParallaxCameraY = getParallaxCameraCenterY();
-
-    double followSpeed = 0.16;
-    parallaxCameraX += (targetParallaxCameraX - parallaxCameraX) * followSpeed;
-    parallaxCameraY += (targetParallaxCameraY - parallaxCameraY) * followSpeed;
-}
 
 // 步骤功能：监测各种物理状态转移日志。
 // 每帧遍历活着的演员，对比他们本帧和上一帧的状态，一旦发生变化就打印提示。

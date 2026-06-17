@@ -1,4 +1,4 @@
-#include "BackgroundObject.h"
+﻿#include "BackgroundObject.h"
 #include "Camera.h"
 
 BackgroundObject::BackgroundObject()

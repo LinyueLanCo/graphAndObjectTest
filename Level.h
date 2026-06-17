@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include "AnimationClipManager.h"
 #include "Background.h"

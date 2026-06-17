@@ -1,4 +1,4 @@
-#include "BackgroundManager.h"
+﻿#include "BackgroundManager.h"
 #include "Camera.h"
 
 // 构造函数：预置渲染池的大小并初始化计数器
