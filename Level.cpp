@@ -1,4 +1,5 @@
 ﻿#include "Level.h"
+#include "json.hpp"
 
 #include "Camera.h"
 
@@ -54,32 +55,30 @@ Level::Level()
     // 预留当前测试关卡的实体数量，避免初始化期间 vector 扩容搬移 Entity。
     entitys.reserve(20);
 
-    entitys.emplace_back(200, 700, true, true, true, false, PLAYER, ANIM_SET_PLAYER1, 1);
+    ifstream f("assets/data/entities.json");
+    if (!f.is_open())
+    {
+        cout << "Failed to open entities.json" << endl;
+        return;
+    }
 
-    entitys.emplace_back(600, 1300, false, true, false, false, ENTITY, ANIM_SET_PLAYER2, 1);
+    nlohmann::json data;
+    f >> data;
+    f.close();
 
-    entitys.emplace_back(950, 1300, false, true, true, false, ENTITY, ANIM_SET_PLAYER3, 1);
+    for (auto& item : data)
+    {
+        double x = item["x"];
+        double y = item["y"];
+        bool controlled = item["controlled"];
+        bool collidable = item["collidable"];
+        bool blocking = item["blocking"];
+        bool god = item["god"];
+        EntityType type = (EntityType)item["type"].get<int>();
+        AnimationSetId animSet = (AnimationSetId)item["animSet"].get<int>();
 
-    entitys.emplace_back(1300, 1300, false, true, false, false, ENTITY, ANIM_SET_PLAYER4, 1);
-
-    entitys.emplace_back(256, 256, false, true, false, true, COIN, ANIM_SET_COIN_GOLD, 1);
-
-    entitys.emplace_back(256 + 48 + 16, 256, false, true, false, true, COIN, ANIM_SET_COIN_SILVER, 1);
-
-    entitys.emplace_back(256 + (48 * 2) + (16 * 2), 256, false, true, false, true, COIN, ANIM_SET_COIN_COPPER, 1);
-
-    entitys.emplace_back(5662, 1312, false, true, false, true, COIN, ANIM_SET_COIN_GOLD, 1);
-
-    entitys.emplace_back(5662, 1312 + 64 + 16, false, true, false, true, COIN, ANIM_SET_COIN_GOLD, 1);
-
-    entitys.emplace_back(5662, 1312 + 64 + 16 + 64 + 16, false, true, false, true, COIN, ANIM_SET_COIN_GOLD, 1);
-
-    entitys.emplace_back(1500, 232, false, true, false, true, CHECKPOINT, ANIM_SET_CHECKPOINT, 1);
-
-
-
-
-
+        entitys.emplace_back(x, y, controlled, collidable, blocking, god, type, animSet, 1);
+    }
 
     worldWidth = WINDOW_WIDTH;
     worldHeight = WINDOW_HEIGHT;

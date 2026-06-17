@@ -61,10 +61,10 @@ enum TextResourceId
 class ResourceManager
 {
 private:
-    map<ImageResourceId, const TCHAR*> imagePaths;
+    map<ImageResourceId, basic_string<TCHAR>> imagePaths;
     map<ImageResourceId, unique_ptr<Image2D>> images;
 
-    map<TextResourceId, const TCHAR*> textPaths;
+    map<TextResourceId, basic_string<TCHAR>> textPaths;
     map<TextResourceId, string> textContents;
 
 public:
