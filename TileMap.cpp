@@ -1,4 +1,5 @@
 ﻿#include "TileMap.h"
+#include <sstream>
 
 // 功能：初始化 tile map 的尺寸、偏移和地图数据指针。
 TileMap::TileMap()

@@ -110,9 +110,13 @@ void ResourceManager::loadTextFile(TextResourceId id)
         return;
     }
 
-    stringstream ss;
-    ss << inFile.rdbuf();
-    textContents[id] = ss.str();
+    string content = "";
+    string line;
+    while (getline(inFile, line))
+    {
+        content += line + "\n";
+    }
+    textContents[id] = content;
     inFile.close();
 }
 
