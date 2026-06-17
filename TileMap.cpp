@@ -3,6 +3,7 @@
 // 功能：初始化 tile map 的尺寸、偏移和地图数据指针。
 TileMap::TileMap()
 {
+    tileset = nullptr;
     rows = 0;
     cols = 0;
 
@@ -162,7 +163,13 @@ sprite TileMap::buildSpriteFromTileInstance(const TileInstance& tile)
         return tileSprite;
     }
 
-    int tilesetCols = tileset.getWidth() / sourceTileWidth;
+    if (tileset == nullptr)
+    {
+        tileSprite.visible = false;
+        return tileSprite;
+    }
+
+    int tilesetCols = tileset->getWidth() / sourceTileWidth;
 
     if (tilesetCols <= 0)
     {
@@ -177,7 +184,7 @@ sprite TileMap::buildSpriteFromTileInstance(const TileInstance& tile)
     int srcY = (realTileIndex / tilesetCols) * sourceTileHeight;
 
     tileSprite.setSource(
-        &tileset,
+        tileset,
         srcX,
         srcY,
         sourceTileWidth,
@@ -259,9 +266,9 @@ void TileMap::setOffset(double newOffsetX, double newOffsetY)
 }
 
 // 功能：加载 tile map 使用的 tileset 图片。
-void TileMap::loadTileset(const TCHAR* imagePath)
+void TileMap::loadTileset(Image2D* tilesetImage)
 {
-    tileset.load(imagePath);
+    tileset = tilesetImage;
 }
 
 // 功能：根据视觉 tile id 返回默认碰撞类型。
@@ -441,15 +448,9 @@ void TileMap::rebuildTileInstances()
 }
 
 // 功能：从文本文件读取地图行列数和 tile id 数据。
-bool TileMap::loadFromFile(const char* mapPath)
+bool TileMap::loadFromText(const std::string& mapContent)
 {
-    ifstream inFile(mapPath);
-
-    if (!inFile.is_open())
-    {
-        cout << "Failed to open map file: " << mapPath << endl;
-        return false;
-    }
+    std::stringstream inFile(mapContent);
 
     release();
 
@@ -472,8 +473,6 @@ bool TileMap::loadFromFile(const char* mapPath)
             inFile >> tiles[row][col];
         }
     }
-
-    inFile.close();
 
     generateDefaultCollisionFromTiles();
     rebuildTileInstances();

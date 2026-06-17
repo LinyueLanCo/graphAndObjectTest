@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|Win32">
@@ -161,6 +161,7 @@
     <ClCompile Include="MovementHandle.cpp" />
     <ClCompile Include="Renderer.cpp" />
     <ClCompile Include="Resource.cpp" />
+    <ClCompile Include="Image2D.cpp" />
     <ClCompile Include="TileMap.cpp" />
     <ClCompile Include="TileTypes.cpp" />
     <ClCompile Include="UI.cpp" />
@@ -190,6 +191,7 @@
     <ClInclude Include="MovementHandle.h" />
     <ClInclude Include="Renderer.h" />
     <ClInclude Include="Resource.h" />
+    <ClInclude Include="Image2D.h" />
     <ClInclude Include="Sound.h" />
     <ClInclude Include="Sprite.h" />
     <ClInclude Include="TileMap.h" />

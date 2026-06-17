@@ -1,45 +1,6 @@
 ﻿#include "Resource.h"
 
-Image2D::Image2D()
-{
-    width = 0;
-    height = 0;
-}
 
-bool Image2D::load(const TCHAR* path)
-{
-    loadimage(&image, path);
-
-    width = image.getwidth();
-    height = image.getheight();
-
-    return width > 0 && height > 0;
-}
-
-bool Image2D::load(const TCHAR* path, int loadW, int loadH)
-{
-    loadimage(&image, path, loadW, loadH, true);
-
-    width = image.getwidth();
-    height = image.getheight();
-
-    return width > 0 && height > 0;
-}
-
-IMAGE* Image2D::getImage()
-{
-    return &image;
-}
-
-int Image2D::getWidth() const
-{
-    return width;
-}
-
-int Image2D::getHeight() const
-{
-    return height;
-}
 
 IMAGE* ResourceManager::getRawImage(ImageResourceId id)
 {
@@ -129,8 +90,57 @@ Image2D* ResourceManager::getImage2D(ImageResourceId id)
     return images[id].get();
 }
 
+void ResourceManager::initTextResourceTable()
+{
+    textPaths.clear();
+    textPaths[TXT_MAP_MAIN] = _T("assets\\tex\\maps\\map.txt");
+}
+
+void ResourceManager::loadTextFile(TextResourceId id)
+{
+    if (textPaths.find(id) == textPaths.end())
+    {
+        return;
+    }
+
+    ifstream inFile(textPaths[id]);
+    if (!inFile.is_open())
+    {
+        cout << "Failed to open text resource file." << endl;
+        return;
+    }
+
+    stringstream ss;
+    ss << inFile.rdbuf();
+    textContents[id] = ss.str();
+    inFile.close();
+}
+
+void ResourceManager::loadTextResources()
+{
+    textContents.clear();
+    for (map<TextResourceId, const TCHAR*>::iterator it = textPaths.begin(); it != textPaths.end(); ++it)
+    {
+        loadTextFile(it->first);
+    }
+}
+
+const string& ResourceManager::getTextContent(TextResourceId id) const
+{
+    static const string emptyString = "";
+    map<TextResourceId, string>::const_iterator it = textContents.find(id);
+    if (it == textContents.end())
+    {
+        return emptyString;
+    }
+    return it->second;
+}
+
 void ResourceManager::loadLevelResources()
 {
     initImageResourceTable();
     loadImageResources();
+
+    initTextResourceTable();
+    loadTextResources();
 }

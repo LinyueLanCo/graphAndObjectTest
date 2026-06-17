@@ -231,8 +231,8 @@ void Level::initResources()
 void Level::initMap()
 {
     tileMap.setTileSize(16, 16, 48, 48);
-    tileMap.loadTileset(_T("assets\\tex\\maps\\tileset.png"));
-    tileMap.loadFromFile("assets\\tex\\maps\\map.txt");
+    tileMap.loadTileset(resources.getImage2D(IMG_TILESET_MAIN));
+    tileMap.loadFromText(resources.getTextContent(TXT_MAP_MAIN));
 
     worldWidth = tileMap.getworldWidth();
     worldHeight = tileMap.getWOrldHeight();

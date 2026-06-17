@@ -12,7 +12,7 @@
 class TileMap
 {
 private:
-    Image2D tileset;
+    Image2D* tileset;
 
     int rows;
     int cols;
@@ -73,12 +73,12 @@ public:
         int newDrawTileHeight
     );
     void setOffset(double newOffsetX, double newOffsetY);
-    void loadTileset(const TCHAR* imagePath);
+    void loadTileset(Image2D* tilesetImage);
 
     TileCollisionType getDefaultCollisionTypeByTileId(int tileId);
     void generateDefaultCollisionFromTiles();
     void rebuildTileInstances();
-    bool loadFromFile(const char* mapPath);
+    bool loadFromText(const std::string& mapContent);
 
     TileCollisionType getTileCollisionType(int row, int col);
     bool hasTileCollision(int row, int col);

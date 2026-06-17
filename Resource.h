@@ -1,36 +1,7 @@
 ﻿#pragma once
 #include "Config.h"
 
-// Image2D：
-// 包装一张 EasyX IMAGE，并记录图片基础信息。
-// 它只负责加载和提供图片资源，不负责绘制、不负责动画、不负责坐标。
-class Image2D
-{
-private:
-    IMAGE image;
-
-    int width;
-    int height;
-
-public:
-    // 功能：初始化一个空图片资源。
-    Image2D();
-
-    // 功能：从文件加载图片，并记录图片宽高。
-    bool load(const TCHAR* path);
-
-    // 功能：从文件加载图片，并按指定大小缩放到内存图片。
-    bool load(const TCHAR* path, int loadW, int loadH);
-
-    // 功能：获取 EasyX 原始图片指针，供底层绘制函数使用。
-    IMAGE* getImage();
-
-    // 功能：获取图片宽度。
-    int getWidth() const;
-
-    // 功能：获取图片高度。
-    int getHeight() const;
-};
+#include "Image2D.h"
 
 // ImageResourceId：
 // ResourceManager 中通用图片资源的索引 ID。
@@ -74,15 +45,26 @@ enum ImageResourceId
     IMG_RESOURCE_COUNT
 };
 
+// TextResourceId：
+// ResourceManager 中通用文本/数据资源的索引 ID。
+enum TextResourceId
+{
+    TXT_MAP_MAIN,
+
+    TXT_RESOURCE_COUNT
+};
+
 // ResourceManager：
-// 当前关卡图片资源管理器。
-// 它根据 ImageResourceId 注册和加载 Image2D，并提供稳定的图片资源查询接口。
-// 它不负责动画片段、地图 tile 规则、背景对象逻辑和绘制逻辑。
+// 当前关卡图片及数据资源管理器。
+// 它根据 ImageResourceId 和 TextResourceId 注册和加载图片与文本资源。
 class ResourceManager
 {
 private:
     map<ImageResourceId, const TCHAR*> imagePaths;
     map<ImageResourceId, unique_ptr<Image2D>> images;
+
+    map<TextResourceId, const TCHAR*> textPaths;
+    map<TextResourceId, string> textContents;
 
 public:
     // 功能：根据图片资源 ID 获取 EasyX 图片指针。
@@ -100,6 +82,18 @@ public:
     // 功能：根据图片资源 ID 获取已加载的 Image2D。
     Image2D* getImage2D(ImageResourceId id);
 
-    // 功能：加载当前关卡需要的图片资源。
+    // 功能：注册当前关卡需要的通用文本资源路径。
+    void initTextResourceTable();
+
+    // 功能：根据文本资源 ID 加载文本文件，并保存到缓存表。
+    void loadTextFile(TextResourceId id);
+
+    // 功能：加载当前资源表中注册的所有文本资源。
+    void loadTextResources();
+
+    // 功能：根据文本资源 ID 获取已加载的文本内容。
+    const string& getTextContent(TextResourceId id) const;
+
+    // 功能：加载当前关卡需要的所有资源（图片和文本）。
     void loadLevelResources();
 };
