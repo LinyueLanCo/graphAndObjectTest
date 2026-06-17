@@ -2,6 +2,7 @@
 #include "Config.h"
 
 #include "Image2D.h"
+#include <string>
 
 // ImageResourceId：
 // ResourceManager 中通用图片资源的索引 ID。
