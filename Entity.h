@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include "Animator.h"
 #include "Animation.h"
@@ -144,3 +144,4 @@ public:
     void setAnimationSpeed(int speed);
     void initAnimationFromAnimator(AnimationClipManager& animationClips);
 };
+

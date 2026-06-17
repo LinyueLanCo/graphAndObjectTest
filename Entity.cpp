@@ -1,4 +1,4 @@
-#include "Entity.h"
+﻿#include "Entity.h"
 
 static int gNextEntityId = 1;
 
@@ -476,3 +476,4 @@ void Entity::initAnimationFromAnimator(AnimationClipManager& animationClips)
         );
     }
 }
+

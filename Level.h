@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include "AnimationClipManager.h"
 #include "Background.h"
@@ -163,3 +163,4 @@ public:
     // 功能：委托 Renderer 绘制当前关卡画面。
     void draw();
 };
+
