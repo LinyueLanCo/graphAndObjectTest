@@ -241,6 +241,20 @@ bool Renderer::drawSprite(const sprite& targetSprite, COLORREF renderBoundsColor
     double worldTop = targetSprite.worldCenterY + targetSprite.worldDrawH / 2.0;
     double worldBottom = targetSprite.worldCenterY - targetSprite.worldDrawH / 2.0;
 
+    // 视口裁剪判定 (Culling)：
+    // 采用 AABB 矩形相交算法，对比 Sprite 的世界包围盒与当前相机的世界逻辑视口。
+    // 只有在 X 轴和 Y 轴上同时有重叠，才说明该 Sprite 的至少一部分在屏幕可视区域内。
+    // 这样判定能完美防止 Sprite 边缘在进出屏幕时产生“凭空消失”或“黑边穿帮”现象。
+    bool isVisible = (worldRight >= gCamera.getViewLeft())   && // 精灵右边界超过视口左边界
+                     (worldLeft <= gCamera.getViewRight())  && // 精灵左边界未超视口右边界
+                     (worldTop >= gCamera.getViewBottom())  && // 精灵上边界超过视口下边界
+                     (worldBottom <= gCamera.getViewTop());    // 精灵下边界未超视口上边界
+
+    if (!isVisible)
+    {
+        return false; // 在屏幕外，直接丢弃，不执行任何屏幕坐标换算和渲染操作
+    }
+
     int drawX = gCamera.worldToScreenX(worldLeft);
     int drawY = gCamera.worldToScreenY(worldTop);
 
