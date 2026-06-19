@@ -10,99 +10,99 @@ void AnimationClipManager::init(ResourceManager& resources)
     // 在底层的红黑树结构中，如果 Key 不存在，它会自动分配一个新节点并调用默认构造，
     // 随后我们通过赋值，将具体的 AnimationClip 放入树节点中，复杂度均为 O(log N)。
     clips[ANIM_ID_PLAYER_IDLE_L] =
-        AnimationClip(resources.getImage2D(IMG_PLAYER_IDLE_L), 8, 3, true);
+        AnimationClip(resources.getImage2D("player1_idle_l"), 8, 3, true);
 
     clips[ANIM_ID_PLAYER_IDLE_R] =
-        AnimationClip(resources.getImage2D(IMG_PLAYER_IDLE_R), 8, 3, true);
+        AnimationClip(resources.getImage2D("player1_idle_r"), 8, 3, true);
 
     clips[ANIM_ID_PLAYER_WALK_L] =
-        AnimationClip(resources.getImage2D(IMG_PLAYER_WALK_L), 8, 3, true);
+        AnimationClip(resources.getImage2D("player1_walk_l"), 8, 3, true);
 
     clips[ANIM_ID_PLAYER_WALK_R] =
-        AnimationClip(resources.getImage2D(IMG_PLAYER_WALK_R), 8, 3, true);
+        AnimationClip(resources.getImage2D("player1_walk_r"), 8, 3, true);
 
     clips[ANIM_ID_PLAYER_RUN_L] =
-        AnimationClip(resources.getImage2D(IMG_PLAYER_RUN_L), 8, 3, true);
+        AnimationClip(resources.getImage2D("player1_run_l"), 8, 3, true);
 
     clips[ANIM_ID_PLAYER_RUN_R] =
-        AnimationClip(resources.getImage2D(IMG_PLAYER_RUN_R), 8, 3, true);
+        AnimationClip(resources.getImage2D("player1_run_r"), 8, 3, true);
 
     clips[ANIM_ID_PLAYER_JUMP_START_L] =
-        AnimationClip(resources.getImage2D(IMG_PLAYER_JUMP_START_L), 8, 2, false);
+        AnimationClip(resources.getImage2D("player1_jumpStart_l"), 8, 2, false);
 
     clips[ANIM_ID_PLAYER_JUMP_START_R] =
-        AnimationClip(resources.getImage2D(IMG_PLAYER_JUMP_START_R), 8, 2, false);
+        AnimationClip(resources.getImage2D("player1_jumpStart_r"), 8, 2, false);
 
     clips[ANIM_ID_PLAYER_JUMP_LOOP_L] =
-        AnimationClip(resources.getImage2D(IMG_PLAYER_JUMP_LOOP_L), 8, 3, true);
+        AnimationClip(resources.getImage2D("player1_jumpLoop_l"), 8, 3, true);
 
     clips[ANIM_ID_PLAYER_JUMP_LOOP_R] =
-        AnimationClip(resources.getImage2D(IMG_PLAYER_JUMP_LOOP_R), 8, 3, true);
+        AnimationClip(resources.getImage2D("player1_jumpLoop_r"), 8, 3, true);
 
     clips[ANIM_ID_PLAYER_JUMP_END_L] =
-        AnimationClip(resources.getImage2D(IMG_PLAYER_JUMP_END_L), 8, 2, false);
+        AnimationClip(resources.getImage2D("player1_jumpEnd_l"), 8, 2, false);
 
     clips[ANIM_ID_PLAYER_JUMP_END_R] =
-        AnimationClip(resources.getImage2D(IMG_PLAYER_JUMP_END_R), 8, 2, false);
+        AnimationClip(resources.getImage2D("player1_jumpEnd_r"), 8, 2, false);
 
     clips[ANIM_ID_PLAYER2_STATIC] =
-        AnimationClip(resources.getImage2D(IMG_PLAYER2_STATIC), 1, 4, true);
+        AnimationClip(resources.getImage2D("player2"), 1, 4, true);
 
     clips[ANIM_ID_PLAYER3_STATIC] =
-        AnimationClip(resources.getImage2D(IMG_PLAYER3_STATIC), 1, 4, true);
+        AnimationClip(resources.getImage2D("player3"), 1, 4, true);
 
     clips[ANIM_ID_PLAYER4_STATIC] =
-        AnimationClip(resources.getImage2D(IMG_PLAYER4_STATIC), 1, 4, true);
+        AnimationClip(resources.getImage2D("player4"), 1, 4, true);
 
     clips[ANIM_ID_COIN_GOLD] =
-        AnimationClip(resources.getImage2D(IMG_COIN_GOLD), 5, 5, true);
+        AnimationClip(resources.getImage2D("coin_gold"), 5, 5, true);
 
     clips[ANIM_ID_COIN_SILVER] =
-        AnimationClip(resources.getImage2D(IMG_COIN_SILVER), 5, 5, true);
+        AnimationClip(resources.getImage2D("coin_silver"), 5, 5, true);
 
     clips[ANIM_ID_COIN_COPPER] =
-        AnimationClip(resources.getImage2D(IMG_COIN_COPPER), 5, 5, true);
+        AnimationClip(resources.getImage2D("coin_copper"), 5, 5, true);
 
     clips[ANIM_ID_APPLE] =
-        AnimationClip(resources.getImage2D(IMG_APPLE), 17, 5, true);
+        AnimationClip(resources.getImage2D("apple"), 17, 5, true);
 
     clips[ANIM_ID_BANANA] =
-        AnimationClip(resources.getImage2D(IMG_BANANA), 17, 5, true);
+        AnimationClip(resources.getImage2D("banana"), 17, 5, true);
 
     clips[ANIM_ID_MELON] =
-        AnimationClip(resources.getImage2D(IMG_MELON), 17, 5, true);
+        AnimationClip(resources.getImage2D("melon"), 17, 5, true);
 
     clips[ANIM_ID_ORANGE] =
-        AnimationClip(resources.getImage2D(IMG_ORANGE), 17, 5, true);
+        AnimationClip(resources.getImage2D("orange"), 17, 5, true);
 
     clips[ANIM_ID_PINEAPPLE] =
-        AnimationClip(resources.getImage2D(IMG_PINEAPPLE), 17, 5, true);
+        AnimationClip(resources.getImage2D("pineapple"), 17, 5, true);
 
     clips[ANIM_ID_STRAWBERRY] =
-        AnimationClip(resources.getImage2D(IMG_STRAWBERRY), 17, 5, true);
+        AnimationClip(resources.getImage2D("strawberry"), 17, 5, true);
 
     clips[ANIM_ID_KIWI] =
-        AnimationClip(resources.getImage2D(IMG_KIWI), 17, 5, true);
+        AnimationClip(resources.getImage2D("kiwi"), 17, 5, true);
 
     clips[ANIM_ID_CHERRY] =
-        AnimationClip(resources.getImage2D(IMG_CHERRY), 17, 5, true);
+        AnimationClip(resources.getImage2D("cherry"), 17, 5, true);
 
 
     clips[ANIM_ID_COIN_COLLECTED] =
-        AnimationClip(resources.getImage2D(IMG_COIN_COLLECTED), 6, 4, false);
+        AnimationClip(resources.getImage2D("coin_collected"), 6, 4, false);
 
     clips[ANIM_ID_CHECKPOINT_NO_FLAG] =
-        AnimationClip(resources.getImage2D(IMG_CHECKPOINT_NO_FLAG), 1, 2, true);
+        AnimationClip(resources.getImage2D("checkpoint_no_flag"), 1, 2, true);
 
     clips[ANIM_ID_CHECKPOINT_FLAG_OUT] =
-        AnimationClip(resources.getImage2D(IMG_CHECKPOINT_FLAG_OUT), 26, 2, false);
+        AnimationClip(resources.getImage2D("checkpoint_flag_out"), 26, 2, false);
 
     clips[ANIM_ID_CHECKPOINT_FLAG_IDLE] =
-        AnimationClip(resources.getImage2D(IMG_CHECKPOINT_FLAG_IDLE), 10, 2, true);
+        AnimationClip(resources.getImage2D("checkpoint_flag_idle"), 10, 2, true);
     clips[ANIM_ID_ENDPOINT_IDLE] =
-        AnimationClip(resources.getImage2D(IMAGE_ENDPOINT_IDLE), 1, 2, true);
+        AnimationClip(resources.getImage2D("endpoint_idle"), 1, 2, true);
     clips[ANIM_ID_ENDPOINT_PRESSED] =
-        AnimationClip(resources.getImage2D(IMAGE_ENDPOINT_PRESSED), 8, 2, false);
+        AnimationClip(resources.getImage2D("endpoint_pressed"), 8, 2, false);
 }
 
 // 功能：根据动画资源 ID 获取动画片段描述。

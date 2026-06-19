@@ -262,8 +262,8 @@ void Level::initResources()
 void Level::initMap()
 {
     tileMap.setTileSize(16, 16, 48, 48);
-    tileMap.loadTileset(resources.getImage2D(IMG_TILESET_MAIN));
-    tileMap.loadFromText(resources.getTextContent(TXT_MAP_MAIN));
+    tileMap.loadTileset(resources.getImage2D("tileset"));
+    tileMap.loadFromText(resources.getTextContent("map_main"));
 
     worldWidth = tileMap.getworldWidth();
     worldHeight = tileMap.getWOrldHeight();
@@ -283,10 +283,10 @@ void Level::initBackground()
 {
     backgroundManager.clear();
 
-    Image2D* skyImage = resources.getImage2D(IMG_BG_SKY);
-    Image2D* cloudsImage = resources.getImage2D(IMG_BG_CLOUDS);
-    Image2D* flora1Image = resources.getImage2D(IMG_BG_FLORA1);
-    Image2D* flora2Image = resources.getImage2D(IMG_BG_FLORA2);
+    Image2D* skyImage = resources.getImage2D("bg_sky");
+    Image2D* cloudsImage = resources.getImage2D("bg_clouds");
+    Image2D* flora1Image = resources.getImage2D("bg_flora1");
+    Image2D* flora2Image = resources.getImage2D("bg_flora2");
 
     double backgroundCenterX = gCamera.centerX;
     double backgroundCenterY = gCamera.centerY;
