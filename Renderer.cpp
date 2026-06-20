@@ -157,61 +157,14 @@ void Renderer::toggleRenderBounds()
     showRenderBounds = !showRenderBounds;
 }
 
-int Renderer::drawBackgroundObjects(BackgroundManager& backgroundManager)
+bool Renderer::getShowCollisionBox() const
 {
-    int renderedBackgroundCount = 0;
-
-    vector<BackgroundObject>& backgroundObjects = backgroundManager.getRenderObjects();
-    int activeCount = backgroundManager.getActiveRenderCount();
-
-    for (int i = 0; i < activeCount; i++)
-    {
-        BackgroundObject& object = backgroundObjects[i];
-
-        if (!object.visible)
-        {
-            continue;
-        }
-
-        if (drawSprite(object.renderSprite, RGB(120, 160, 255)))
-        {
-            renderedBackgroundCount++;
-        }
-    }
-
-    return renderedBackgroundCount;
+    return showCollisionBox;
 }
 
-bool Renderer::drawTileInstance(TileMap& tileMap, const TileInstance& tile)
+bool Renderer::getShowTileCollisionBox() const
 {
-    sprite tileSprite = tileMap.buildSpriteFromTileInstance(tile);
-
-    return drawSprite(
-        tileSprite,
-        RGB(255, 220, 0)
-    );
-}
-
-int Renderer::drawTileMap(TileMap& tileMap)
-{
-    int renderedTileCount = 0;
-
-    const vector<TileInstance>& tileInstances = tileMap.getTileInstances();
-
-    for (int i = 0; i < (int)tileInstances.size(); i++)
-    {
-        if (drawTileInstance(tileMap, tileInstances[i]))
-        {
-            renderedTileCount++;
-        }
-    }
-
-    if (showTileCollisionBox)
-    {
-        tileMap.drawDebugCollisionBoxes();
-    }
-
-    return renderedTileCount;
+    return showTileCollisionBox;
 }
 
 bool Renderer::drawSprite(const sprite& targetSprite, COLORREF renderBoundsColor)
@@ -300,38 +253,18 @@ bool Renderer::drawSprite(const sprite& targetSprite, COLORREF renderBoundsColor
     return true;
 }
 
-// 核心绘制功能：绘制大舞台上所有的活跃演员
-// 
-// 它是怎么运行的？
-// 我们不再遍历整个大 vector，而是仅仅循环 activeIndices 活跃名单。
-// 对名单里的每一个演员，先做安全检查（万一刚才死了但还没来得及清出 activeIndices，跳过它）。
-// 然后调用 drawSprite() 绘制它的动作贴图，如果开启了碰撞调试框，则顺便用红色/绿色画出碰撞范围框。
-int Renderer::drawEntities(vector<Entity>& entitys, const vector<size_t>& activeIndices)
+// 批量绘制所有活跃实体的调试碰撞框
+void Renderer::drawEntityCollisionBoxes(vector<Entity>& entities, const vector<size_t>& activeIndices)
 {
-    int renderedEntityCount = 0; // 记录本帧一共画了多少个实体
-
     for (size_t idx : activeIndices)
     {
-        // 如果演员已经被标记为死亡，不画它，留待帧末被回收
-        if (!entitys[idx].getIsAlive())
+        if (!entities[idx].getIsAlive())
         {
             continue;
         }
 
-        // 调用 EasyX 绘制实体的精灵动作贴图
-        if (drawSprite(entitys[idx].getSprite()))
-        {
-            renderedEntityCount++; // 画图计数累加
-        }
-
-        // 如果用户按了 F5 开启了碰撞盒显示
-        if (showCollisionBox)
-        {
-            drawEntityCollisionBox(entitys[idx]); // 在实体外圈用红线/绿线画一圈碰撞盒框
-        }
+        drawEntityCollisionBox(entities[idx]);
     }
-
-    return renderedEntityCount; // 返回总绘制个数
 }
 
 void Renderer::drawUIElementPanel(const UIElement& element)

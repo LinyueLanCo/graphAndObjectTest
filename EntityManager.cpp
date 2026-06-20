@@ -5,6 +5,7 @@
 // 让我们能够像操作 Python 字典/JS 对象一样直接解析、读取和写入 JSON 配置文件。
 // 我们在初始化关卡实体时，需要用它来解析 assets/data/entities.json 文件。
 #include "json.hpp"
+#include "RenderQueue.h"
 
 // 默认构造，暂时不需要做什么
 EntityManager::EntityManager()
@@ -378,5 +379,18 @@ void EntityManager::processSpawns(AnimationClipManager& animationClips)
         
         // 记得清空本次请求本子，留待下一帧记录
         spawnQueue.clear();
+    }
+}
+
+void EntityManager::collectSprites(RenderQueue& queue)
+{
+    for (size_t idx : activeIndices)
+    {
+        if (!entities[idx].getIsAlive())
+        {
+            continue;
+        }
+
+        queue.submit(entities[idx].getSprite(), SPRITE_TYPE_ENTITY, RGB(0, 220, 255));
     }
 }

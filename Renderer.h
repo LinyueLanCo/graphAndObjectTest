@@ -107,23 +107,17 @@ public:
     // 功能：切换可绘制对象的绘制边界框显示状态。
     void toggleRenderBounds();
 
-    // 功能：绘制 BackgroundManager 中本帧已经展开好的背景对象，并返回真实绘制成功的 background sprite 数量。
-    int drawBackgroundObjects(BackgroundManager& backgroundManager);
+    // 功能：获取是否绘制实体碰撞框。
+    bool getShowCollisionBox() const;
 
-    // 功能：根据 TileInstance 生成通用 sprite，并交给统一 sprite 绘制接口。
-    bool drawTileInstance(TileMap& tileMap, const TileInstance& tile);
-
-    // 功能：逐个绘制当前地图中的 tile 实例，并返回真实绘制成功的 tile sprite 数量。
-    int drawTileMap(TileMap& tileMap);
+    // 功能：获取是否绘制 tile 碰撞框。
+    bool getShowTileCollisionBox() const;
 
     // 功能：根据 sprite 自身保存的世界绘制数据绘制单帧图像。
     bool drawSprite(const sprite& targetSprite, COLORREF renderBoundsColor = RGB(0, 220, 255));
 
-    // 核心绘制：画出对象池中所有的活跃实体
-    // 参数意义：
-    //   entitys: 对象池大数组
-    //   activeIndices: 活跃实体索引表，只画处于这个名单中的实体
-    int drawEntities(std::vector<Entity>& entitys, const std::vector<size_t>& activeIndices);
+    // 功能：批量绘制所有活跃实体的调试碰撞框。
+    void drawEntityCollisionBoxes(std::vector<Entity>& entities, const std::vector<size_t>& activeIndices);
 
     // 功能：绘制一个通用 UIElement 面板。
     void drawUIElementPanel(const UIElement& element);

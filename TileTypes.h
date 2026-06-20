@@ -42,6 +42,8 @@ struct TileInstance
 
     int layer;
 
+    int zIndex;
+
     bool visible;
 
     TileCollisionType collisionType;

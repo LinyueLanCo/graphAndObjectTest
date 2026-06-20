@@ -87,6 +87,7 @@ public:
     RectBox getTileWorldBox(int row, int col);
     RectBox getTileCollisionWorldBox(int row, int col);
     void drawDebugCollisionBoxes();
+    void collectSprites(class RenderQueue& queue);
 
     int getworldWidth();
     int getWOrldHeight();

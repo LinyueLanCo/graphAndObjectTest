@@ -28,6 +28,9 @@ struct sprite
     double worldDrawW;
     double worldDrawH;
 
+    // 渲染层级，默认值为 0。值越小越先画（底层），值越大越后画（顶层）
+    int zIndex;
+
     // 功能：初始化一个空精灵，默认没有图、帧矩形和变换。
     sprite() : imageSource(NULL),
         srcX(0),
@@ -42,6 +45,7 @@ struct sprite
         worldCenterY(0.0),
         worldDrawW(0.0),
         worldDrawH(0.0),
+        zIndex(0),
         visible(true)
     {}
     // 功能：设置精灵当前帧使用的图像资源和源图裁剪矩形。

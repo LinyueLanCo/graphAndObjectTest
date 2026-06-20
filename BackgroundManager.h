@@ -20,6 +20,8 @@ public:
     const vector<BackgroundObject>& getRenderObjects() const;
     int getActiveRenderCount() const;                    // 获取当前活跃的背景实例总数
 
+    void collectSprites(class RenderQueue& queue);
+
     void rebuildRenderObjects();
     void clear();
     void addObjectFromImage2D(

@@ -1,5 +1,6 @@
 ﻿#include "BackgroundManager.h"
 #include "Camera.h"
+#include "RenderQueue.h"
 
 // 构造函数：预置渲染对象池的大小，防止运行时频繁扩容拷贝，并将活跃渲染计数初始化为 0。
 BackgroundManager::BackgroundManager()
@@ -258,4 +259,20 @@ vector<BackgroundObject>& BackgroundManager::getObjects()
 const vector<BackgroundObject>& BackgroundManager::getObjects() const
 {
     return objects;
+}
+
+void BackgroundManager::collectSprites(RenderQueue& queue)
+{
+    for (int i = 0; i < activeRenderCount; i++)
+    {
+        BackgroundObject& obj = renderPool[i];
+        if (!obj.visible)
+        {
+            continue;
+        }
+
+        // 背景对象的 zIndex 默认设为 0，因为它们最先提交，利用稳定排序会保持在最底层
+        obj.renderSprite.zIndex = 0;
+        queue.submit(obj.renderSprite, SPRITE_TYPE_BACKGROUND, RGB(120, 160, 255));
+    }
 }

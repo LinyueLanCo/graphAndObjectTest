@@ -89,4 +89,6 @@ public:
 
     // 根据活跃名单，重新构建 nameToIndex 导航图
     void rebuildMap();
+
+    void collectSprites(class RenderQueue& queue);
 };

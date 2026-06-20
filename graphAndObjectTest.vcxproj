@@ -166,13 +166,13 @@
     <ClCompile Include="TileMap.cpp" />
     <ClCompile Include="TileTypes.cpp" />
     <ClCompile Include="UI.cpp" />
+    <ClCompile Include="RenderQueue.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="AnimatedSprite.h" />
     <ClInclude Include="Animator.h" />
     <ClInclude Include="AnimationClip.h" />
     <ClInclude Include="AnimationClipManager.h" />
-
     <ClInclude Include="Background.h" />
     <ClInclude Include="BackgroundManager.h" />
     <ClInclude Include="BackgroundObject.h" />
@@ -199,6 +199,7 @@
     <ClInclude Include="TileMap.h" />
     <ClInclude Include="TileTypes.h" />
     <ClInclude Include="UI.h" />
+    <ClInclude Include="RenderQueue.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

@@ -4,6 +4,7 @@
 // 将地图文本字符串封装进 std::stringstream 中，能让我们像操作 std::ifstream 文件流一样，
 // 直接使用流提取操作符 `>>` 来逐个提取整型和字符串，极大地方便了文本格式的解析工作。
 #include <sstream>
+#include "RenderQueue.h"
 
 // 功能：初始化 tile map 的尺寸、偏移和地图数据指针。
 TileMap::TileMap()
@@ -671,4 +672,19 @@ int TileMap::getworldWidth()
 int TileMap::getWOrldHeight()
 {
     return rows * drawTileHeight * 3;
+}
+
+void TileMap::collectSprites(RenderQueue& queue)
+{
+    for (const TileInstance& tile : tileInstances)
+    {
+        if (!tile.visible || tile.tileId == TILE_EMPTY)
+        {
+            continue;
+        }
+
+        sprite tileSprite = buildSpriteFromTileInstance(tile);
+        tileSprite.zIndex = tile.zIndex;
+        queue.submit(tileSprite, SPRITE_TYPE_TILE, RGB(255, 220, 0));
+    }
 }

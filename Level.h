@@ -13,6 +13,7 @@
 #include "Resource.h"
 #include "TileMap.h"
 #include "UI.h"
+#include "RenderQueue.h"
 
 // Level: 关卡大舞台（场景控制器）。
 // 它是当前关卡的核心组织者，整合了地图、视差背景、实体、UI以及物理/渲染引擎。
@@ -38,6 +39,7 @@ private:
 
     RenderFrameStats renderFrameStats;       // 渲染计数器：统计本帧画了多少背景、有多少实体、多少瓦片
     Renderer renderer;                       // 画笔：负责调用 EasyX 将各类游戏精灵、文本及 UI 框真正绘制到屏幕上
+    RenderQueue renderQueue;                 // 渲染队列：缓存并统一管理每一帧精灵的顺序和绘制
 
     EntityID controlledPlayerId;             // 当前操控的演员 EntityID
     

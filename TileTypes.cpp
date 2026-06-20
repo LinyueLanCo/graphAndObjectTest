@@ -18,6 +18,7 @@ TileInstance::TileInstance()
     scaleY = 1.0;
 
     layer = 0;
+    zIndex = 0;
 
     visible = true;
 

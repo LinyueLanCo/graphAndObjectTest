@@ -219,15 +219,29 @@ void Level::update(InputManager& input)
 
 void Level::draw()
 {
-    renderFrameStats.backgroundSpriteCount =
-        renderer.drawBackgroundObjects(backgroundManager);
-    renderFrameStats.tileSpriteCount =
-        renderer.drawTileMap(tileMap);
+    // 1. 清空上一帧的渲染队列
+    renderQueue.clear();
 
-    renderFrameStats.entitySpriteCount =
-        renderer.drawEntities(entityManager.getEntities(), entityManager.getActiveIndices());
+    // 2. 收集各个系统的 Sprite 拷贝
+    backgroundManager.collectSprites(renderQueue);
+    tileMap.collectSprites(renderQueue);
+    entityManager.collectSprites(renderQueue);
 
-    renderFrameStats.refreshTotal();
+    // 3. 按照 zIndex 进行稳定排序
+    renderQueue.sort();
+
+    // 4. 统一分发给 Renderer 绘制所有 Sprite 并更新帧统计数据
+    renderQueue.drawAll(renderer, renderFrameStats);
+
+    // 5. 调试后期处理：绘制实体和地图的碰撞框覆盖层
+    if (renderer.getShowCollisionBox())
+    {
+        renderer.drawEntityCollisionBoxes(entityManager.getEntities(), entityManager.getActiveIndices());
+    }
+    if (renderer.getShowTileCollisionBox())
+    {
+        tileMap.drawDebugCollisionBoxes();
+    }
 
     // Debug 面板父级负责整体背景；子 section 的最终可见性由 UIManager 按父级链路判断。
     if (uiManager.isElementEffectivelyVisible(debugPanelIndex))
