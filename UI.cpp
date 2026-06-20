@@ -1,4 +1,5 @@
 ﻿#include "UI.h"
+#include "MathUtils.h"
 
 // 功能：获取当前窗口对应的顶层 UI 区域。
 UIBox makeViewportUIBox()
@@ -271,8 +272,8 @@ void UIElement::update()
         return;
     }
 
-    x += (targetX - x) * moveSpeed;
-    y += (targetY - y) * moveSpeed;
+    x = MathUtils::smoothTo(x, targetX, moveSpeed);
+    y = MathUtils::smoothTo(y, targetY, moveSpeed);
 
     if (fabs(targetX - x) < 0.1)
     {

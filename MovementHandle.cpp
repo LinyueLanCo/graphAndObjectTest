@@ -1,4 +1,5 @@
 ﻿#include "MovementHandle.h"
+#include "MathUtils.h"
 
 // 根据行为意图、物理规则和碰撞检测结果，更新当前实体的移动位置和速度状态
 void MovementHandle::update(
@@ -61,13 +62,7 @@ void MovementHandle::update(
     // 上帝模式的特殊飞行逻辑：不管碰撞和重力，直接飞过去。
     if (self.god)
     {
-        double length = sqrt(inputX * inputX + inputY * inputY);
-
-        if (length != 0)
-        {
-            inputX = inputX / length; // 归一化，防止斜着走速度变快（勾股定理）
-            inputY = inputY / length;
-        }
+        MathUtils::normalize2D(inputX, inputY);
 
         self.x += inputX * currentSpeed;
         self.y += inputY * currentSpeed;

@@ -1,6 +1,7 @@
 ﻿#pragma once
 
 #include "Config.h"
+#include "MathUtils.h"
 
 struct Camera
 {
@@ -123,17 +124,9 @@ struct Camera
         double springFactor = 0.12;
         double friction = 0.55;
 
-        // 计算目标速度 (引力拉动)
-        double targetVx = (targetCenterX - centerX) * springFactor;
-        double targetVy = (targetCenterY - centerY) * springFactor;
-
-        // 应用阻尼与速度更新 (实现平滑惯性，这里调整为过阻尼参数以防止反复振荡)
-        vx = vx * friction + targetVx * (1.0 - friction);
-        vy = vy * friction + targetVy * (1.0 - friction);
-
-        // 累加坐标
-        centerX += vx;
-        centerY += vy;
+        // 使用 MathUtils 中的弹簧阻尼公式平滑更新相机位置和速度
+        MathUtils::springMove(centerX, vx, targetCenterX, springFactor, friction);
+        MathUtils::springMove(centerY, vy, targetCenterY, springFactor, friction);
 
         // 微距对齐，结束无限逼近 (放宽对齐阈值，快速锁定位置)
         if (fabs(targetCenterX - centerX) < 0.5 && fabs(vx) < 0.2)
@@ -172,8 +165,7 @@ struct Camera
     void updateZoom()
     {
         double zoomSpeed = 0.08;
-        // 用当前缩放和目标缩放的差值乘以速度，得到本帧缩放变化量。
-        zoom += (targetZoom - zoom) * zoomSpeed;
+        zoom = MathUtils::smoothTo(zoom, targetZoom, zoomSpeed);
     }
 
     // 将摄像机视口限制在世界范围内。
