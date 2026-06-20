@@ -1,6 +1,6 @@
 ﻿#pragma once
 
-#include "CollisionHandle.h"
+#include "CollisionManager.h"
 #include "Controller.h"
 #include "Entity.h"
 #include "TileMap.h"
@@ -34,6 +34,6 @@ public:
         TileMap& tileMap,
         int worldWidth,
         int worldHeight,
-        CollisionHandle& collisionHandle
+        CollisionManager& collisionHandle
     );
 };

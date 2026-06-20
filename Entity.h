@@ -12,7 +12,7 @@
 #include "Sprite.h"
 #include "AnimationPlayer.h"
 
-class CollisionHandle;
+class CollisionManager;
 class MovementHandle;
 class EntityManager;
 class AnimationClipManager;
@@ -22,7 +22,7 @@ class AnimationClipManager;
 class Entity
 {
     friend class MovementHandle;
-    friend class CollisionHandle;
+    friend class CollisionManager;
     friend class Animator;
 
 private:

@@ -67,7 +67,7 @@
     <ClCompile Include="Collision.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="CollisionHandle.cpp">
+    <ClCompile Include="CollisionManager.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="UI.cpp">
@@ -152,7 +152,7 @@
     <ClInclude Include="Collision.h">
       <Filter>头文件</Filter>
     </ClInclude>
-    <ClInclude Include="CollisionHandle.h">
+    <ClInclude Include="CollisionManager.h">
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="TileMap.h">

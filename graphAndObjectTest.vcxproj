@@ -150,7 +150,7 @@
     <ClCompile Include="Camera.cpp" />
     <ClCompile Include="CameraFollow.cpp" />
     <ClCompile Include="Collision.cpp" />
-    <ClCompile Include="CollisionHandle.cpp" />
+    <ClCompile Include="CollisionManager.cpp" />
     <ClCompile Include="Controller.cpp" />
     <ClCompile Include="draggable.cpp" />
     <ClCompile Include="Entity.cpp" />
@@ -181,7 +181,7 @@
     <ClInclude Include="Camera.h" />
     <ClInclude Include="CameraFollow.h" />
     <ClInclude Include="Collision.h" />
-    <ClInclude Include="CollisionHandle.h" />
+    <ClInclude Include="CollisionManager.h" />
     <ClInclude Include="Config.h" />
     <ClInclude Include="Controller.h" />
     <ClInclude Include="Entity.h" />

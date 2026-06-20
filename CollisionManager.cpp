@@ -1,14 +1,10 @@
-﻿#include "CollisionHandle.h"
+﻿#include "CollisionManager.h"
 #include <cmath>
 #include <iostream>
 #include <algorithm>
 
 // 检查两个二维矩形（a 和 b）有没有叠在一起
-// 核心逻辑：
-// 如果 a 已经在 b 的右边，或者 a 在 b 的左边，或者 a 在 b 的上方，或者 a 在 b 的下方，
-// 只要满足其中一个，就说明绝对不可能重叠。
-// 我们把它取反，就是“重叠”的条件。
-bool CollisionHandle::isRectOverlapping(RectBox a, RectBox b)
+bool CollisionManager::isRectOverlapping(RectBox a, RectBox b)
 {
     return !(a.left >= b.right ||  // a在b右侧
              a.right <= b.left ||  // a在b左侧
@@ -17,17 +13,13 @@ bool CollisionHandle::isRectOverlapping(RectBox a, RectBox b)
 }
 
 // 检查两个一维线段（[aMin, aMax] 和 [bMin, bMax]）有没有重叠
-// 核心逻辑：
-// 比如判定垂直撞墙时，我们要看两个人在水平 X 轴上的投影区间有没有交集。
-// 如果 aMax <= bMin 或者 bMax <= aMin，说明两者完全错开了。
-// 取反即代表有交集。
-bool CollisionHandle::isRangeOverlapping(double aMin, double aMax, double bMin, double bMax)
+bool CollisionManager::isRangeOverlapping(double aMin, double aMax, double bMin, double bMax)
 {
     return !(aMax <= bMin || bMax <= aMin);
 }
 
 // 计算实体在水平 X 轴上，能走多远而不会穿墙
-double CollisionHandle::getAllowedMoveX(
+double CollisionManager::getAllowedMoveX(
     Entity& self,
     double moveX,
     std::vector<Entity>& entitys,
@@ -62,7 +54,6 @@ double CollisionHandle::getAllowedMoveX(
         RectBox otherBox = entitys[idx].getWorldCollisionBox();
 
         // 核心判定：水平相撞的前提是，两个人在垂直 Y 轴上的范围必须是重叠的！
-        // 如果垂直方向错开了（比如一个在天上一只在地上），水平怎么走都不会撞到，直接忽略
         if (!this->isRangeOverlapping(myBox.bottom, myBox.top, otherBox.bottom, otherBox.top))
         {
             continue;
@@ -171,7 +162,7 @@ double CollisionHandle::getAllowedMoveX(
 }
 
 // 计算实体在垂直 Y 轴上，能走多远而不会卡进天花板或地下
-double CollisionHandle::getAllowedMoveY(
+double CollisionManager::getAllowedMoveY(
     Entity& self,
     double moveY,
     std::vector<Entity>& entitys,
@@ -267,7 +258,7 @@ double CollisionHandle::getAllowedMoveY(
         // 1. 如果我们向上跳（moveY > 0）
         if (moveY > 0)
         {
-            // 特别注意：单向平台（只能从下往上跳穿过去，但能踩在上面）在往上跳时是不阻挡的！
+            // 特别注意：单向平台在往上跳时是不阻挡的！
             if (collisionType == TILE_COLLISION_FULL_ONE_WAY ||
                 collisionType == TILE_COLLISION_TOP_HALF_ONE_WAY ||
                 collisionType == TILE_COLLISION_TOP_LEFT_HALF_ONE_WAY ||
@@ -290,7 +281,6 @@ double CollisionHandle::getAllowedMoveY(
         else if (moveY < 0)
         {
             // 核心：单向平台的单向判定逻辑！
-            // 只有当玩家在“上一帧”的脚底，高于平台顶端时，才代表它是从天上下落踩上来的，我们才阻挡它。
             if (collisionType == TILE_COLLISION_FULL_ONE_WAY ||
                 collisionType == TILE_COLLISION_TOP_HALF_ONE_WAY ||
                 collisionType == TILE_COLLISION_TOP_LEFT_HALF_ONE_WAY ||
@@ -322,7 +312,7 @@ double CollisionHandle::getAllowedMoveY(
 }
 
 // 步骤功能：强行锁边，防止演员掉出关卡下方或走到地图最左侧外面
-void CollisionHandle::limitInWorld(Entity& self, int worldWidth, int worldHeight)
+void CollisionManager::limitInWorld(Entity& self, int worldWidth, int worldHeight)
 {
     RectBox box = self.getWorldCollisionBox();
 
@@ -370,4 +360,95 @@ void CollisionHandle::limitInWorld(Entity& self, int worldWidth, int worldHeight
             self.velocityY = 0; // 上升速度归零
         }
     }
+}
+
+bool CollisionManager::contains(const std::vector<std::string>& vec, const std::string& key)
+{
+    for (const auto& item : vec)
+    {
+        if (item == key)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+void CollisionManager::updateOverlapEvents(EntityManager& entityManager)
+{
+    auto& entities = entityManager.getEntities();
+    const auto& activeIndices = entityManager.getActiveIndices();
+    std::vector<std::string> currentOverlapPairs;
+
+    for (size_t i = 0; i < activeIndices.size(); i++)
+    {
+        for (size_t j = i + 1; j < activeIndices.size(); j++)
+        {
+            size_t idxA = activeIndices[i];
+            size_t idxB = activeIndices[j];
+
+            // 死亡槽位或者不参与碰撞的实体（比如上帝模式的角色）直接跳过
+            if (!entities[idxA].getIsAlive() || !entities[idxB].getIsAlive())
+            {
+                continue;
+            }
+
+            if (!entities[idxA].isCollidable() || !entities[idxB].isCollidable())
+            {
+                continue;
+            }
+
+            // 获取两者本帧的世界碰撞盒边界
+            RectBox a = entities[idxA].getWorldCollisionBox();
+            RectBox b = entities[idxB].getWorldCollisionBox();
+
+            // 计算两个矩形是否有重叠相交
+            bool overlapping = isRectOverlapping(a, b);
+
+            if (overlapping)
+            {
+                // 如果相撞，给两个实体标记上本帧 overlapping 标志（以供绘制红色碰撞盒）
+                entities[idxA].setOverlapping(true);
+                entities[idxB].setOverlapping(true);
+
+                // 把对方的 ID 和类型登记到各自内部 of currentOverlaps vector 中
+                entities[idxA].addOverlap(entities[idxB].getId(), entities[idxB].getEntityType());
+                entities[idxB].addOverlap(entities[idxA].getId(), entities[idxA].getEntityType());
+
+                // 将两者的 ID 按照大小排序拼接成一个唯一的键，避免重复日志
+                std::string key = (entities[idxA].getId() < entities[idxB].getId()) ?
+                                  (std::to_string(entities[idxA].getId()) + "_" + std::to_string(entities[idxB].getId())) :
+                                  (std::to_string(entities[idxB].getId()) + "_" + std::to_string(entities[idxA].getId()));
+                
+                currentOverlapPairs.push_back(key);
+
+                // 如果上一帧并没有碰过它，才打印日志（防止控制台疯狂刷屏）
+                if (!contains(lastOverlapPairs, key))
+                {
+                    std::cout << "检测到新重叠事件：实体 [" << entities[idxA].getName() << "] (ID: " << entities[idxA].getId() 
+                         << ") 碰到了 实体 [" << entities[idxB].getName() << "] (ID: " << entities[idxB].getId() << ")" << std::endl;
+                }
+            }
+        }
+    }
+    // 保存这一帧的碰撞对记录
+    lastOverlapPairs = currentOverlapPairs;
+}
+
+void CollisionManager::resolveEntityOverlaps(EntityManager& entityManager)
+{
+    auto& entities = entityManager.getEntities();
+    const auto& activeIndices = entityManager.getActiveIndices();
+    for (size_t idx : activeIndices)
+    {
+        if (entities[idx].getIsAlive())
+        {
+            entities[idx].resolveOverlaps(entityManager);
+        }
+    }
+}
+
+void CollisionManager::clearHistory()
+{
+    lastOverlapPairs.clear();
 }

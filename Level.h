@@ -3,7 +3,7 @@
 #include "AnimationClipManager.h"
 #include "Background.h"
 #include "CameraFollow.h"
-#include "CollisionHandle.h"
+#include "CollisionManager.h"
 #include "Config.h"
 #include "Controller.h"
 #include "EntityManager.h"
@@ -39,12 +39,9 @@ private:
 
     EntityID controlledPlayerId;             // 当前操控的演员 EntityID
     
-    // 重叠日志历史缓存：记录上一帧已经发生重叠的配对 ID（如 "Player1_Coin1"），用 vector 记录，防止每帧重复打印刷屏
-    std::vector<std::string> lastOverlapPairs;
-
     PlayerController playerController;       // 控制器翻译官：把键盘的 WASD/空格等输入翻译为玩家想移动跳跃的意图
     MovementHandle movementHandle;           // 物理发动机：根据意图更新实体的坐标和重力
-    CollisionHandle collisionHandle;         // 碰撞检测姬：计算实体会不会撞墙、能够移动多远
+    CollisionManager collisionManager;         // 碰撞管理器：计算实体会不会撞墙、能够移动多远
 
     int worldWidth;                          // 关卡世界的像素总宽度
     int worldHeight;                         // 关卡世界的像素总高度
@@ -88,11 +85,7 @@ private:
 
 
 
-    // 步骤函数：双重循环检测实体两两之间是否有 AABB 重叠，填充 entities 内部的重叠信息，避免重复打印日志
-    void updateOverlapEvents();
 
-    // 步骤函数：让发生碰撞的实体自己去读取自己的重叠列表，决定是否加分、自毁或升旗
-    void resolveEntityOverlaps();
 
 
 public:

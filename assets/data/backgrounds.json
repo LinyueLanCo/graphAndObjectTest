@@ -50,7 +50,7 @@
     "drawMode": "BACKGROUND_REPEAT_X",
     "useCameraCenter": true,
     "offsetX": 0.0,
-    "offsetY": 300.0,
+    "offsetY": 500.0,
     "drawW": -1.0,
     "drawH": -1.0,
     "autoScrollSpeedX": 0.0

@@ -11,7 +11,7 @@ void MovementHandle::update(
     TileMap& tileMap,
     int worldWidth,
     int worldHeight,
-    CollisionHandle& collisionHandle
+    CollisionManager& collisionHandle
 )
 {
     // MovementHandle 本帧数据更新流程：

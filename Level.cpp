@@ -4,19 +4,6 @@
 #include "json.hpp"
 #include "Camera.h"
 
-// contains: 一个小帮手函数，用来判断某个字符串是不是在 vector 里。
-// 主要是为了配合调试日志去重，传入历史名单 vec 和碰撞 ID，如果找到就返回 true。
-static bool contains(const std::vector<std::string>& vec, const std::string& key)
-{
-    for (const auto& item : vec)
-    {
-        if (item == key)
-        {
-            return true; // 找到了！说明之前就已经碰上了
-        }
-    }
-    return false; // 没找到，说明是个新来的碰撞
-}
 
 // 关卡构造函数：初始化状态控制变量默认值
 Level::Level()
@@ -65,7 +52,7 @@ void Level::init()
     levelDebugger.init(uiManager);
 
     // 5. 每次进关卡时，记得把碰撞打印的历史名单清空，准备开始新的计算
-    lastOverlapPairs.clear();
+    collisionManager.clearHistory();
 
     // Find default controlled player
     for (size_t idx : entityManager.getActiveIndices())
@@ -144,8 +131,8 @@ void Level::update(InputManager& input)
     levelDebugger.updateDebugLogs(entityManager);
 
     // 进行重叠交互判定与响应
-    updateOverlapEvents();
-    resolveEntityOverlaps();
+    collisionManager.updateOverlapEvents(entityManager);
+    collisionManager.resolveEntityOverlaps(entityManager);
 
     // 事件联动：检查是否有旗子刚刚播完升旗动画，如果是，立马让管家生成银币（Coin2）
     static int spawnedCoinCounter = 1;
@@ -333,7 +320,7 @@ void Level::clearEntityFrameState()
 // 对大池子里的每一个活着并活跃的演员执行以下五部曲：
 // 1. 创建本帧默认的意图（不按键就代表什么都不想做）。
 // 2. 如果当前角色正好受键盘控制，由 PlayerController 搜集按键并翻译为意图（如水平想往左、想按下跳跃等）。
-// 3. 调用物理引擎 movementHandle.update()，根据意图算速度，并调用 collisionHandle 测算障碍，修正实体坐标。
+// 3. 调用物理引擎 movementHandle.update()，根据意图算速度，并调用 collisionManager 测算障碍，修正实体坐标。
 // 4. 让 Animator 状态机自动根据实体是否在空、在地面、是否在冲刺来决策应该播放哪一类动画（比如 idle 或 jump）。
 // 5. 推进当前动画帧计时器，并将最新一帧的裁剪源图贴到实体 Sprite 身上备用。
 void Level::updateEntities(InputManager& input)
@@ -393,7 +380,7 @@ void Level::updateEntities(InputManager& input)
             tileMap,            // 地图图块信息，用来防止穿墙
             worldWidth,         // 关卡世界宽度
             worldHeight,        // 关卡世界高度
-            collisionHandle     // 碰撞盒子判定处理器
+            collisionManager    // 碰撞盒子判定处理器
         );
 
         // 让 Animator 状态机给它决策本帧动画片段
@@ -529,98 +516,4 @@ void Level::updateCamera(InputManager& input)
 
     gCamera.dx = gCamera.centerX - oldCenterX;
     gCamera.dy = gCamera.centerY - oldCenterY;
-}
-
-
-
-// 步骤功能：监测各种物理状态转移日志。
-// 每帧遍历活着的演员，对比他们本帧和上一帧的状态，一旦发生变化就打印提示。
-// 比如：Player1 从空中落到了地上，或者金币 died（死亡了）。
-
-
-// 步骤功能：双重循环检测实体两两之间是否有 AABB 碰撞重叠，并将碰撞事件填充到双方身上。
-// 
-// 为什么只在 activeIndices 中算？
-// 因为这样可以过滤掉死掉的金币或空闲实体，把运算开销从 O(N^2) 降低到 O(M^2)（M 为活人数量，如 10-20）。
-// 去重思路：
-// 我们用当前帧的名单 currentOverlapPairs 记录本帧发生了的所有碰撞组合（Key 是字母排序后的 ID 拼接，如 "Coin1_Player1"）。
-// 如果这个组合在去年的老名单 lastOverlapPairs 中查不到（调用 contains 辅助函数返回 false），
-// 说明这是一个“新鲜出炉的碰撞”！我们只在此时打印控制台日志。
-void Level::updateOverlapEvents()
-{
-    auto& entities = entityManager.getEntities();
-    const auto& activeIndices = entityManager.getActiveIndices();
-    std::vector<std::string> currentOverlapPairs;
-
-    for (size_t i = 0; i < activeIndices.size(); i++)
-    {
-        for (size_t j = i + 1; j < activeIndices.size(); j++)
-        {
-            size_t idxA = activeIndices[i];
-            size_t idxB = activeIndices[j];
-
-            // 死亡槽位或者不参与碰撞的实体（比如上帝模式的角色）直接跳过
-            if (!entities[idxA].getIsAlive() || !entities[idxB].getIsAlive())
-            {
-                continue;
-            }
-
-            if (!entities[idxA].isCollidable() || !entities[idxB].isCollidable())
-            {
-                continue;
-            }
-
-            // 获取两者本帧的世界碰撞盒边界
-            RectBox a = entities[idxA].getWorldCollisionBox();
-            RectBox b = entities[idxB].getWorldCollisionBox();
-
-            // 调用碰撞助手计算两个矩形是否有重叠相交
-            bool overlapping = collisionHandle.isRectOverlapping(a, b);
-
-            if (overlapping)
-            {
-                // 如果相撞，给两个实体标记上本帧 overlapping 标志（以供绘制红色碰撞盒）
-                entities[idxA].setOverlapping(true);
-                entities[idxB].setOverlapping(true);
-
-                // 核心：把对方的名字 ID 和类型登记到各自内部 of currentOverlaps vector 中，实现碰撞关系存储
-                entities[idxA].addOverlap(entities[idxB].getId(), entities[idxB].getEntityType());
-                entities[idxB].addOverlap(entities[idxA].getId(), entities[idxA].getEntityType());
-
-                // 将两者的 ID 按照大小排序拼接成一个唯一的键，避免 (A, B) 和 (B, A) 产生多余判断
-                std::string key = (entities[idxA].getId() < entities[idxB].getId()) ?
-                                  (std::to_string(entities[idxA].getId()) + "_" + std::to_string(entities[idxB].getId())) :
-                                  (std::to_string(entities[idxB].getId()) + "_" + std::to_string(entities[idxA].getId()));
-                
-                // 登记在当前帧的碰撞名单上
-                currentOverlapPairs.push_back(key);
-
-                // 如果上一帧并没有碰过它，才打印日志（防止控制台疯狂刷屏）
-                if (!contains(lastOverlapPairs, key))
-                {
-                    cout << "检测到新重叠事件：实体 [" << entities[idxA].getName() << "] (ID: " << entities[idxA].getId() 
-                         << ") 碰到了 实体 [" << entities[idxB].getName() << "] (ID: " << entities[idxB].getId() << ")" << endl;
-                }
-            }
-        }
-    }
-    // 交接棒：将本帧数据存入历史，留待下一帧作为“上一帧”使用
-    lastOverlapPairs = currentOverlapPairs;
-}
-
-// 步骤功能：通知活着的实体自己去处理刚才发生的碰撞。
-// 因为上一阶段已经把碰到的所有人塞进了 entities[idx].currentOverlaps，
-// 这里就是通知每个实体自治响应（金币吃掉自毁、旗帜遇到玩家升旗）。
-void Level::resolveEntityOverlaps()
-{
-    auto& entities = entityManager.getEntities();
-    const auto& activeIndices = entityManager.getActiveIndices();
-    for (size_t idx : activeIndices)
-    {
-        if (entities[idx].getIsAlive())
-        {
-            // 实体自治逻辑
-            entities[idx].resolveOverlaps(entityManager);
-        }
-    }
 }
