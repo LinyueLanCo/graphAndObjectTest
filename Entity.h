@@ -9,7 +9,8 @@
 #include "Controller.h"
 #include "GameTypes.h"
 #include "Sprite.h"
-#include "AnimatedSprite.h"
+#include "Sprite.h"
+#include "AnimationPlayer.h"
 
 class CollisionHandle;
 class MovementHandle;
@@ -29,7 +30,7 @@ private:
     std::string name;
     std::vector<OverlapInfo> currentOverlaps;
 
-    animatedSprite animation;
+    AnimationPlayer animation;
     sprite renderSprite;
 
     double x;
@@ -141,9 +142,6 @@ public:
     facingDirection getFacingDirection();
     void setFacingDirection(facingDirection direction);
 
-    bool isAnimationFinished();
-    std::string getAnimationState() const;
-    void setAnimationClip(AnimationClip clip);
     void updateAnimator(BehaviorIntent intent);
 
     bool hasCollisionState();
@@ -175,6 +173,13 @@ public:
     sprite& getRenderSprite();
     const sprite& getSprite() const;
 
+    AnimationPlayer& getAnimation() { return animation; }
+    const AnimationPlayer& getAnimation() const { return animation; }
+    Animator& getAnimator() { return animator; }
+    const Animator& getAnimator() const { return animator; }
+    CollisionBox& getCollisionBox() { return collisionBox; }
+    const CollisionBox& getCollisionBox() const { return collisionBox; }
+
     void setOverlapping(bool value);
     void addOverlap(EntityID otherId, EntityType otherType);
     const std::vector<OverlapInfo>& getCurrentOverlaps() const;
@@ -188,14 +193,10 @@ public:
     RectBox getWorldCollisionBox();
 
     void setCollisionBoxSize(double width, double height);
-    void setCollisionBoxOffset(double offsetX, double offsetY);
-    void setCollisionScale(double scaleX, double scaleY);
 
     void syncRenderSpriteWorldDrawData();
     void updateAnimatedSprite();
     void updateFallingPlatform(class EntityManager& entityManager);
-    void setSpriteTransform(double scaleX, double scaleY, double offsetX, double offsetY);
-    void setAnimationSpeed(int speed);
     void initAnimationFromAnimator();
 
     // 初始化本实体的所有状态动画片段缓存

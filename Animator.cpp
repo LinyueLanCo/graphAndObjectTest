@@ -27,7 +27,7 @@ void Animator::changeAnimation(Entity& entity, const std::string& newState)
     }
 
     // 只有拿到有效 clip 后才写入播放器并更新当前状态缓存。
-    entity.setAnimationClip(clip);
+    entity.getAnimation().setClip(clip);
     currentAnimState = newState;
 }
 
@@ -48,7 +48,7 @@ void Animator::update(Entity& entity, BehaviorIntent intent)
     entity.animParams["sprinting"] = entity.isSprinting() ? 1.0f : 0.0f;
     entity.animParams["isJumping"] = entity.isJumping() ? 1.0f : 0.0f;
     entity.animParams["facing"] = (entity.getFacingDirection() == RIGHT) ? 1.0f : -1.0f;
-    entity.animParams["animFinished"] = entity.isAnimationFinished() ? 1.0f : 0.0f;
+    entity.animParams["animFinished"] = entity.getAnimation().isFinished() ? 1.0f : 0.0f;
     entity.animParams["platformState"] = (float)entity.platformState;
     entity.animParams["shouldPlayJumpStart"] = (entity.isJumping() && intent.wantJump && !entity.lastInAirState) ? 1.0f : 0.0f;
     entity.animParams["justLanded"] = (entity.lastInAirState && entity.isOnGround()) ? 1.0f : 0.0f;

@@ -140,7 +140,7 @@
     </Manifest>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="AnimatedSprite.cpp" />
+    <ClCompile Include="AnimationPlayer.cpp" />
     <ClCompile Include="Animator.cpp" />
 
     <ClCompile Include="AnimationClip.cpp" />
@@ -169,7 +169,7 @@
     <ClCompile Include="RenderQueue.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="AnimatedSprite.h" />
+    <ClInclude Include="AnimationPlayer.h" />
     <ClInclude Include="Animator.h" />
     <ClInclude Include="AnimationClip.h" />
     <ClInclude Include="AnimationClipManager.h" />

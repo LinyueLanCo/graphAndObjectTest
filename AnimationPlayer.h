@@ -3,10 +3,10 @@
 #include "AnimationClip.h"
 #include "Sprite.h"
 
-// animatedSprite:
-// 过渡期的序列帧动画播放器，后续可以进一步改名为 AnimationPlayer。
+// AnimationPlayer:
+// 序列帧动画播放器。
 // 它根据 AnimationClip 绑定图片资源，推进 currentFrame，并把当前帧写入 sprite。
-class animatedSprite
+class AnimationPlayer
 {
 private:
     Image2D image;
@@ -33,7 +33,7 @@ private:
     int frameTimer;
 
 public:
-    animatedSprite();
+    AnimationPlayer();
 
     bool isFinished();
     void load(const TCHAR* path, int frameWidth, int frameHeight, int frameCount);

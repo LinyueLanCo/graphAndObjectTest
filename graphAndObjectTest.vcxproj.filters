@@ -15,7 +15,7 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="AnimatedSprite.cpp">
+    <ClCompile Include="AnimationPlayer.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="Animator.cpp">
@@ -96,7 +96,7 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="AnimatedSprite.h">
+    <ClInclude Include="AnimationPlayer.h">
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="Animator.h">

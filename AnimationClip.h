@@ -4,7 +4,7 @@
 
 // AnimationClip:
 // 动画资源描述数据。它只定义图片引用、帧数、播放参数和 sprite sheet 裁剪规则。
-// 当前播放进度由 animatedSprite / 未来的 AnimationPlayer 负责。
+// 当前播放进度由 AnimationPlayer 负责。
 struct AnimationClip
 {
     Image2D* image;

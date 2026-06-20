@@ -336,22 +336,7 @@ void Entity::setFacingDirection(facingDirection direction)
     currentFacingDirection = direction;
 }
 
-// 功能：判断实体当前非循环动画是否已经播放结束。
-bool Entity::isAnimationFinished()
-{
-    return animation.isFinished();
-}
 
-std::string Entity::getAnimationState() const
-{
-    return animator.getCurrentState();
-}
-
-// 功能：把新的动画片段绑定到实体的动画播放器。
-void Entity::setAnimationClip(AnimationClip clip)
-{
-    animation.setClip(clip);
-}
 
 // 功能：委托实体内部 Animator 更新动画状态。
 void Entity::updateAnimator(BehaviorIntent intent)
@@ -523,7 +508,7 @@ void Entity::resolveOverlaps(EntityManager& entityManager)
             // 如果确实碰到了主角，并且我还没升过旗（不处于 FLAG_OUT 和 FLAG_IDLE 状态）
             if (otherEntity != nullptr && otherEntity->isControlled())
             {
-                if (getAnimationState() != "flag_out" && getAnimationState() != "flag_idle")
+                if (animator.getCurrentState() != "flag_out" && animator.getCurrentState() != "flag_idle")
                 {
                     // 切换到升旗动画
                     animator.changeAnimation(*this, "flag_out");
@@ -538,7 +523,7 @@ void Entity::resolveOverlaps(EntityManager& entityManager)
 
             if (otherEntity != nullptr && otherEntity->isControlled())
             {
-                if (getAnimationState() != "pressed" && getAnimationState() != "collected")
+                if (animator.getCurrentState() != "pressed" && animator.getCurrentState() != "collected")
                 {
                     collidable = false;
                     animator.changeAnimation(*this, "pressed");
@@ -587,17 +572,7 @@ void Entity::setCollisionBoxSize(double width, double height)
     collisionBox.setBaseSize(width, height);
 }
 
-// 功能：设置实体碰撞盒相对实体中心点的偏移。
-void Entity::setCollisionBoxOffset(double offsetX, double offsetY)
-{
-    collisionBox.setOffset(offsetX, offsetY);
-}
 
-// 功能：设置实体碰撞盒缩放比例。
-void Entity::setCollisionScale(double scaleX, double scaleY)
-{
-    collisionBox.setScale(scaleX, scaleY);
-}
 
 // 功能：根据实体当前位置和 sprite 自身变换，补全当前帧的世界绘制数据。
 void Entity::syncRenderSpriteWorldDrawData()
@@ -626,20 +601,20 @@ void Entity::updateAnimatedSprite()
     syncRenderSpriteWorldDrawData();
 
     // 如果是金币且播放完了收集爆裂动画，则将其真正自毁
-    if (entityType == COIN && getAnimationState() == "collected" && isAnimationFinished())
+    if (entityType == COIN && animator.getCurrentState() == "collected" && animation.isFinished())
     {
         killEntity();
         std::cout << "Coin [" << name << "] (ID: " << instanceId << ") destroyed after collected animation finished." << std::endl;
     }
 
     // 如果是旗帜且播放完了升旗动画，标记以动态生成金币
-    if (entityType == CHECKPOINT && getAnimationState() == "flag_out" && isAnimationFinished())
+    if (entityType == CHECKPOINT && animator.getCurrentState() == "flag_out" && animation.isFinished())
     {
         flagActivatedJustNow = true;
     }
 
     // 如果是终点且播放完了收集爆裂动画，则将其真正自毁
-    if (entityType == ENDPOINT && getAnimationState() == "collected" && isAnimationFinished())
+    if (entityType == ENDPOINT && animator.getCurrentState() == "collected" && animation.isFinished())
     {
         killEntity();
         std::cout << "Endpoint [" << name << "] (ID: " << instanceId << ") collected and processed." << std::endl;
@@ -708,18 +683,7 @@ void Entity::updateFallingPlatform(EntityManager& entityManager)
     }
 }
 
-// 功能：设置实体 sprite 绘制缩放和偏移。
-void Entity::setSpriteTransform(double scaleX, double scaleY, double offsetX, double offsetY)
-{
-    renderSprite.setTransform(scaleX, scaleY, offsetX, offsetY);
-    syncRenderSpriteWorldDrawData();
-}
 
-// 功能：设置实体动画播放速度。
-void Entity::setAnimationSpeed(int speed)
-{
-    animation.setSpeed(speed);
-}
 
 // 功能：让实体内部 Animator 根据初始状态绑定动画，并同步第一帧 sprite 和碰撞盒尺寸。
 void Entity::initAnimationFromAnimator()

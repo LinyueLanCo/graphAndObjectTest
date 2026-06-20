@@ -190,21 +190,22 @@ bool EntityManager::loadEntities(const std::string& filepath, AnimationClipManag
         double scaleY = item.value("scaleY", temp.scaleY);
         double offsetX = item.value("offsetX", temp.offsetX);
         double offsetY = item.value("offsetY", temp.offsetY);
-        entities[i].setSpriteTransform(scaleX, scaleY, offsetX, offsetY);
+        entities[i].getRenderSprite().setTransform(scaleX, scaleY, offsetX, offsetY);
+        entities[i].syncRenderSpriteWorldDrawData();
 
         // 读取物理属性（有覆盖用覆盖，无则用模板）
         double colScaleX = item.value("colScaleX", temp.colScaleX);
         double colScaleY = item.value("colScaleY", temp.colScaleY);
-        entities[i].setCollisionScale(colScaleX, colScaleY);
+        entities[i].getCollisionBox().setScale(colScaleX, colScaleY);
 
         double colOffsetX = item.value("colOffsetX", temp.colOffsetX);
         double colOffsetY = item.value("colOffsetY", temp.colOffsetY);
-        entities[i].setCollisionBoxOffset(colOffsetX, colOffsetY);
+        entities[i].getCollisionBox().setOffset(colOffsetX, colOffsetY);
 
         int animSpeed = item.value("animSpeed", temp.animSpeed);
         if (animSpeed != -1)
         {
-            entities[i].setAnimationSpeed(animSpeed);
+            entities[i].getAnimation().setSpeed(animSpeed);
         }
 
         // 登记到活跃名单中
@@ -380,13 +381,14 @@ void EntityManager::processSpawns(AnimationClipManager& animationClips)
             );
 
             // 应用它要求的渲染大小和物理大小参数
-            entities[idx].setSpriteTransform(temp.scaleX, temp.scaleY, temp.offsetX, temp.offsetY);
-            entities[idx].setCollisionScale(temp.colScaleX, temp.colScaleY);
-            entities[idx].setCollisionBoxOffset(temp.colOffsetX, temp.colOffsetY);
+            entities[idx].getRenderSprite().setTransform(temp.scaleX, temp.scaleY, temp.offsetX, temp.offsetY);
+            entities[idx].syncRenderSpriteWorldDrawData();
+            entities[idx].getCollisionBox().setScale(temp.colScaleX, temp.colScaleY);
+            entities[idx].getCollisionBox().setOffset(temp.colOffsetX, temp.colOffsetY);
 
             if (temp.animSpeed != -1)
             {
-                entities[idx].setAnimationSpeed(temp.animSpeed);
+                entities[idx].getAnimation().setSpeed(temp.animSpeed);
             }
 
             // 同步加载第一帧并同步精灵尺寸

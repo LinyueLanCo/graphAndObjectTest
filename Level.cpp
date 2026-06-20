@@ -101,7 +101,7 @@ void Level::init()
     {
         if (entityManager.getEntities()[idx].getEntityType() == CHECKPOINT)
         {
-            entityManager.getEntities()[idx].setCollisionBoxOffset(0.0, -30.0);
+            entityManager.getEntities()[idx].getCollisionBox().setOffset(0.0, -30.0);
         }
     }
 

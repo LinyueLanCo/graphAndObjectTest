@@ -1,7 +1,7 @@
-﻿#include "AnimatedSprite.h"
+﻿#include "AnimationPlayer.h"
 
 // 功能：初始化序列帧动画的默认播放参数。
-animatedSprite::animatedSprite()
+AnimationPlayer::AnimationPlayer()
 {
     frameWidth = 0;
     frameHeight = 0;
@@ -27,13 +27,13 @@ animatedSprite::animatedSprite()
 }
 
 // 功能：判断非循环动画是否已经播放结束。
-bool animatedSprite::isFinished()
+bool AnimationPlayer::isFinished()
 {
     return !isLoop && !isPlaying;
 }
 
 // 功能：按显式帧尺寸加载序列帧图片。
-void animatedSprite::load(const TCHAR* path, int frameWidth, int frameHeight, int frameCount)
+void AnimationPlayer::load(const TCHAR* path, int frameWidth, int frameHeight, int frameCount)
 {
     image.load(path);
     imageSource = &image;
@@ -54,7 +54,7 @@ void animatedSprite::load(const TCHAR* path, int frameWidth, int frameHeight, in
 }
 
 // 功能：按帧数自动平均切分横向序列帧图片。
-void animatedSprite::load(const TCHAR* path, int newFrameCount)
+void AnimationPlayer::load(const TCHAR* path, int newFrameCount)
 {
     image.load(path);
     imageSource = &image;
@@ -81,7 +81,7 @@ void animatedSprite::load(const TCHAR* path, int newFrameCount)
 }
 
 // 功能：绑定已经由 AnimationClipManager 提供的动画片段。
-void animatedSprite::setClip(AnimationClip clip)
+void AnimationPlayer::setClip(AnimationClip clip)
 {
     if (clip.image == NULL)
     {
@@ -141,19 +141,19 @@ void animatedSprite::setClip(AnimationClip clip)
 }
 
 // 功能：获取当前动画单帧宽度。
-int animatedSprite::getFrameWidth()
+int AnimationPlayer::getFrameWidth()
 {
     return frameWidth;
 }
 
 // 功能：获取当前动画单帧高度。
-int animatedSprite::getFrameHeight()
+int AnimationPlayer::getFrameHeight()
 {
     return frameHeight;
 }
 
 // 功能：设置动画帧切换间隔。
-void animatedSprite::setSpeed(int frameInterval)
+void AnimationPlayer::setSpeed(int frameInterval)
 {
     if (frameInterval < 1)
     {
@@ -164,26 +164,26 @@ void animatedSprite::setSpeed(int frameInterval)
 }
 
 // 功能：设置动画是否循环播放。
-void animatedSprite::setLoop(bool value)
+void AnimationPlayer::setLoop(bool value)
 {
     isLoop = value;
 }
 
 // 功能：停止当前动画播放。
-void animatedSprite::stop()
+void AnimationPlayer::stop()
 {
     isPlaying = false;
 }
 
 // 功能：重置动画到第一帧并清空计时器。
-void animatedSprite::reset()
+void AnimationPlayer::reset()
 {
     currentFrame = 0;
     frameTimer = 0;
 }
 
 // 功能：推进动画帧计时并在需要时切换当前帧。
-void animatedSprite::update()
+void AnimationPlayer::update()
 {
     if (!isPlaying)
     {
@@ -218,7 +218,7 @@ void animatedSprite::update()
 }
 
 // 功能：将当前动画帧的源图裁剪数据写入基础 sprite，供 Renderer 绘制。
-void animatedSprite::writeCurrentFrameTo(sprite& targetSprite)
+void AnimationPlayer::writeCurrentFrameTo(sprite& targetSprite)
 {
     if (imageSource == NULL)
     {
