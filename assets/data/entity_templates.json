@@ -25,7 +25,149 @@
       "jump_loop_r": "player1_jumpLoop_r",
       "jump_end_l": "player1_jumpEnd_l",
       "jump_end_r": "player1_jumpEnd_r"
-    }
+    },
+    "transitionRules": [
+      {
+        "from": "any",
+        "to": "jump_start_r",
+        "conditions": [
+          { "param": "shouldPlayJumpStart", "expected": 1.0 },
+          { "param": "facing", "expected": 1.0 }
+        ]
+      },
+      {
+        "from": "any",
+        "to": "jump_start_l",
+        "conditions": [
+          { "param": "shouldPlayJumpStart", "expected": 1.0 },
+          { "param": "facing", "expected": -1.0 }
+        ]
+      },
+      {
+        "from": "jump_start_r",
+        "to": "jump_loop_r",
+        "conditions": [
+          { "param": "animFinished", "expected": 1.0 }
+        ]
+      },
+      {
+        "from": "jump_start_l",
+        "to": "jump_loop_l",
+        "conditions": [
+          { "param": "animFinished", "expected": 1.0 }
+        ]
+      },
+      {
+        "from": "any",
+        "to": "jump_loop_r",
+        "conditions": [
+          { "param": "inAir", "expected": 1.0 },
+          { "param": "isJumpStart", "expected": 0.0 },
+          { "param": "facing", "expected": 1.0 }
+        ]
+      },
+      {
+        "from": "any",
+        "to": "jump_loop_l",
+        "conditions": [
+          { "param": "inAir", "expected": 1.0 },
+          { "param": "isJumpStart", "expected": 0.0 },
+          { "param": "facing", "expected": -1.0 }
+        ]
+      },
+      {
+        "from": "jump_loop_r",
+        "to": "jump_end_r",
+        "conditions": [
+          { "param": "justLanded", "expected": 1.0 },
+          { "param": "moving", "expected": 0.0 },
+          { "param": "facing", "expected": 1.0 }
+        ]
+      },
+      {
+        "from": "jump_loop_l",
+        "to": "jump_end_l",
+        "conditions": [
+          { "param": "justLanded", "expected": 1.0 },
+          { "param": "moving", "expected": 0.0 },
+          { "param": "facing", "expected": -1.0 }
+        ]
+      },
+      {
+        "from": "jump_end_r",
+        "to": "idle_r",
+        "conditions": [
+          { "param": "animFinished", "expected": 1.0 }
+        ]
+      },
+      {
+        "from": "jump_end_l",
+        "to": "idle_l",
+        "conditions": [
+          { "param": "animFinished", "expected": 1.0 }
+        ]
+      },
+      {
+        "from": "any",
+        "to": "run_r",
+        "conditions": [
+          { "param": "inAir", "expected": 0.0 },
+          { "param": "isJumpEnd", "expected": 0.0 },
+          { "param": "moving", "expected": 1.0 },
+          { "param": "sprinting", "expected": 1.0 },
+          { "param": "facing", "expected": 1.0 }
+        ]
+      },
+      {
+        "from": "any",
+        "to": "run_l",
+        "conditions": [
+          { "param": "inAir", "expected": 0.0 },
+          { "param": "isJumpEnd", "expected": 0.0 },
+          { "param": "moving", "expected": 1.0 },
+          { "param": "sprinting", "expected": 1.0 },
+          { "param": "facing", "expected": -1.0 }
+        ]
+      },
+      {
+        "from": "any",
+        "to": "walk_r",
+        "conditions": [
+          { "param": "inAir", "expected": 0.0 },
+          { "param": "isJumpEnd", "expected": 0.0 },
+          { "param": "moving", "expected": 1.0 },
+          { "param": "facing", "expected": 1.0 }
+        ]
+      },
+      {
+        "from": "any",
+        "to": "walk_l",
+        "conditions": [
+          { "param": "inAir", "expected": 0.0 },
+          { "param": "isJumpEnd", "expected": 0.0 },
+          { "param": "moving", "expected": 1.0 },
+          { "param": "facing", "expected": -1.0 }
+        ]
+      },
+      {
+        "from": "any",
+        "to": "idle_r",
+        "conditions": [
+          { "param": "inAir", "expected": 0.0 },
+          { "param": "isJumpEnd", "expected": 0.0 },
+          { "param": "facing", "expected": 1.0 }
+        ]
+      },
+      {
+        "from": "any",
+        "to": "idle_l",
+        "conditions": [
+          { "param": "inAir", "expected": 0.0 },
+          { "param": "isJumpEnd", "expected": 0.0 },
+          { "param": "facing", "expected": -1.0 }
+        ]
+      }
+    ]
   },
   "Player2": {
     "type": 2,
@@ -130,7 +272,16 @@
       "no_flag": "checkpoint_no_flag",
       "flag_out": "checkpoint_flag_out",
       "flag_idle": "checkpoint_flag_idle"
-    }
+    },
+    "transitionRules": [
+      {
+        "from": "flag_out",
+        "to": "flag_idle",
+        "conditions": [
+          { "param": "animFinished", "expected": 1.0 }
+        ]
+      }
+    ]
   },
   "Endpoint": {
     "type": 6,
@@ -149,7 +300,16 @@
       "idle": "endpoint_idle",
       "pressed": "endpoint_pressed",
       "collected": "coin_collected"
-    }
+    },
+    "transitionRules": [
+      {
+        "from": "pressed",
+        "to": "collected",
+        "conditions": [
+          { "param": "animFinished", "expected": 1.0 }
+        ]
+      }
+    ]
   },
   "Apple": {
     "type": 3,

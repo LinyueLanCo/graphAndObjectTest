@@ -78,6 +78,27 @@ bool EntityManager::loadTemplates(const std::string& filepath)
             }
         }
 
+        if (config.contains("transitionRules"))
+        {
+            for (auto& ruleVal : config["transitionRules"])
+            {
+                TransitionRule rule;
+                rule.fromState = ruleVal.value("from", "any");
+                rule.toState = ruleVal.value("to", "");
+                if (ruleVal.contains("conditions"))
+                {
+                    for (auto& condVal : ruleVal["conditions"])
+                    {
+                        Condition cond;
+                        cond.paramName = condVal.value("param", "");
+                        cond.expectedValue = condVal.value("expected", 1.0f);
+                        rule.conditions.push_back(cond);
+                    }
+                }
+                temp.transitionRules.push_back(rule);
+            }
+        }
+
         templates[tempName] = temp;
     }
 
@@ -160,6 +181,7 @@ bool EntityManager::loadEntities(const std::string& filepath, AnimationClipManag
             temp.initialAnim,
             temp.initialFacing,
             temp.stateToClip,
+            temp.transitionRules,
             animationClips
         );
 
@@ -353,6 +375,7 @@ void EntityManager::processSpawns(AnimationClipManager& animationClips)
                 temp.initialAnim,
                 temp.initialFacing,
                 temp.stateToClip,
+                temp.transitionRules,
                 animationClips
             );
 

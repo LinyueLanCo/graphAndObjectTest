@@ -37,6 +37,9 @@ struct EntityTemplate
     
     // 状态映射：stateName -> clipName
     std::unordered_map<std::string, std::string> stateToClip;
+
+    // 动画状态过渡规则表
+    std::vector<TransitionRule> transitionRules;
 };
 
 // EntityManager: 实体总管家，负责管理对象池和双索引。

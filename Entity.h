@@ -66,6 +66,7 @@ private:
     // 数据驱动动画扩展：当前实体所使用的模板名以及本地缓存的状态-动画片段池
     std::string templateName;
     std::unordered_map<std::string, AnimationClip> myClips;
+    std::unordered_map<std::string, float> animParams;
 
 public:
     // State cache for transition logging (formerly in Level)
@@ -203,6 +204,7 @@ public:
         const std::string& initialAnim,
         facingDirection initialFacing,
         const std::unordered_map<std::string, std::string>& stateToClipName,
+        const std::vector<TransitionRule>& rules,
         AnimationClipManager& animClips
     );
     AnimationClip getClipForState(const std::string& state) const;

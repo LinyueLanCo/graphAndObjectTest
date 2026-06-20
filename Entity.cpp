@@ -43,6 +43,7 @@ Entity::Entity()
 
     platformState = 0;
     platformTimer = 0.0;
+    animParams.clear();
 }
 
 // 功能：按资源路径和初始属性创建一个可用实体。
@@ -106,6 +107,7 @@ Entity::Entity(
 
     platformState = 0;
     platformTimer = 0.0;
+    animParams.clear();
 }
 
 // 功能：按初始逻辑状态和动画资源模板创建实体，不再直接从构造函数加载图片路径。
@@ -154,7 +156,7 @@ Entity::Entity(
     isAlive = alive;
     templateName = tempName;
 
-    animator.configure(tempName, initialAnim);
+    animator.configure(tempName, initialAnim, {});
 
     lastCollisionState = false;
     lastGroundState = false;
@@ -166,6 +168,7 @@ Entity::Entity(
 
     platformState = 0;
     platformTimer = 0.0;
+    animParams.clear();
 }
 
 // 功能：按默认朝向和默认待机状态创建绑定动画资源模板的实体。
@@ -241,7 +244,7 @@ void Entity::reset(
 
     currentOverlaps.clear();
 
-    animator.configure(tempName, "idle");
+    animator.configure(tempName, "idle", {});
 
     lastCollisionState = false;
     lastGroundState = false;
@@ -253,6 +256,7 @@ void Entity::reset(
 
     platformState = 0;
     platformTimer = 0.0;
+    animParams.clear();
 }
 
 // 功能：获取实体唯一标识 ID。
@@ -740,12 +744,13 @@ void Entity::initAnimations(
     const std::string& initialAnim,
     facingDirection initialFacing,
     const std::unordered_map<std::string, std::string>& stateToClipName,
+    const std::vector<TransitionRule>& rules,
     AnimationClipManager& animClips
 )
 {
     templateName = tempName;
     currentFacingDirection = initialFacing;
-    animator.configure(tempName, initialAnim);
+    animator.configure(tempName, initialAnim, rules);
 
     myClips.clear();
     for (const auto& pair : stateToClipName)

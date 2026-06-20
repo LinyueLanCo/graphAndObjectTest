@@ -1,12 +1,12 @@
 ﻿#include "Animator.h"
 #include "Entity.h"
 #include <cmath>
+#include <iostream>
 
 // 功能：初始化动画状态缓存。
 Animator::Animator()
 {
     currentAnimState = "";
-    wasInAir = false;
     templateName = "";
     initialAnimState = "idle";
 }
@@ -31,144 +31,75 @@ void Animator::changeAnimation(Entity& entity, const std::string& newState)
     currentAnimState = newState;
 }
 
-// 功能：读取实体真实状态并决定 idle / walk / run / jumpStart / jumpLoop / jumpEnd。
+// 功能：读取实体真实状态，在参数字典中更新当前帧的值，然后根据配置的过渡规则表比对并切换状态。
 void Animator::update(Entity& entity, BehaviorIntent intent)
 {
-    if (templateName == "Endpoint")
+    // 如果没有配置任何过渡规则（比如静态物体或下落平台），直接返回
+    if (transitionRules.empty())
     {
-        // 改为判断当前是否处于 pressed 状态，且该非循环动画已经播放结束
-        if (currentAnimState == "pressed" && entity.isAnimationFinished())
+        return;
+    }
+
+    // 1. 每帧刷新实体的动画参数字典
+    entity.animParams["inAir"] = entity.isInAir() ? 1.0f : 0.0f;
+    entity.animParams["wasInAir"] = entity.lastInAirState ? 1.0f : 0.0f;
+    entity.animParams["onGround"] = entity.isOnGround() ? 1.0f : 0.0f;
+    entity.animParams["moving"] = (fabs(intent.moveX) > 1e-6) ? 1.0f : 0.0f;
+    entity.animParams["sprinting"] = entity.isSprinting() ? 1.0f : 0.0f;
+    entity.animParams["isJumping"] = entity.isJumping() ? 1.0f : 0.0f;
+    entity.animParams["facing"] = (entity.getFacingDirection() == RIGHT) ? 1.0f : -1.0f;
+    entity.animParams["animFinished"] = entity.isAnimationFinished() ? 1.0f : 0.0f;
+    entity.animParams["platformState"] = (float)entity.platformState;
+    entity.animParams["shouldPlayJumpStart"] = (entity.isJumping() && intent.wantJump && !entity.lastInAirState) ? 1.0f : 0.0f;
+    entity.animParams["justLanded"] = (entity.lastInAirState && entity.isOnGround()) ? 1.0f : 0.0f;
+    entity.animParams["isJumpStart"] = (currentAnimState == "jump_start_r" || currentAnimState == "jump_start_l") ? 1.0f : 0.0f;
+    entity.animParams["isJumpEnd"] = (currentAnimState == "jump_end_r" || currentAnimState == "jump_end_l") ? 1.0f : 0.0f;
+
+    std::string nextState = currentAnimState;
+
+    // 2. 顺序遍历过渡规则表进行比对
+    for (const auto& rule : transitionRules)
+    {
+        // 匹配起始状态：当前动画状态，或通用匹配 "any"
+        if (rule.fromState == "any" || rule.fromState == currentAnimState)
         {
-            changeAnimation(entity, "collected");
-        }
-        return;
-    }
-
-    if (templateName == "Checkpoint")
-    {
-        if (currentAnimState == "flag_out" && entity.isAnimationFinished())
-        {
-            changeAnimation(entity, "flag_idle");
-        }
-        return;
-    }
-
-    if (templateName == "CoinGold" ||
-        templateName == "CoinSilver" ||
-        templateName == "CoinCopper" ||
-        templateName == "Apple" ||
-        templateName == "Banana" ||
-        templateName == "Cherry")
-    {
-        return;
-    }
-
-    if (!entity.isControlled())
-    {
-        return;
-    }
-
-    double inputX = intent.moveX;
-
-    bool hasMoveInput = fabs(inputX) > 1e-6; // EPS = 1e-6
-    bool justLanded = wasInAir && entity.isOnGround();
-
-    std::string idleState = "idle_l";
-    std::string walkState = "walk_l";
-    std::string runState = "run_l";
-    std::string jumpStartState = "jump_start_l";
-    std::string jumpLoopState = "jump_loop_l";
-    std::string jumpEndState = "jump_end_l";
-
-    if (entity.getFacingDirection() == RIGHT)
-    {
-        idleState = "idle_r";
-        walkState = "walk_r";
-        runState = "run_r";
-        jumpStartState = "jump_start_r";
-        jumpLoopState = "jump_loop_r";
-        jumpEndState = "jump_end_r";
-    }
-
-    if (justLanded && !hasMoveInput)
-    {
-        changeAnimation(entity, jumpEndState);
-        wasInAir = entity.isInAir();
-        return;
-    }
-
-    bool currentIsJumpStart =
-        currentAnimState == "jump_start_l" ||
-        currentAnimState == "jump_start_r";
-
-    if (entity.isInAir())
-    {
-        bool shouldPlayJumpStart =
-            entity.isJumping() &&
-            intent.wantJump &&
-            !wasInAir;
-
-        if (shouldPlayJumpStart)
-        {
-            changeAnimation(entity, jumpStartState);
-            wasInAir = entity.isInAir();
-            return;
-        }
-
-        if (currentIsJumpStart)
-        {
-            if (entity.isAnimationFinished())
+            bool allConditionsMet = true;
+            for (const auto& cond : rule.conditions)
             {
-                changeAnimation(entity, jumpLoopState);
+                auto it = entity.animParams.find(cond.paramName);
+                float val = (it != entity.animParams.end()) ? it->second : 0.0f;
+                if (val != cond.expectedValue)
+                {
+                    allConditionsMet = false;
+                    break;
+                }
             }
 
-            wasInAir = entity.isInAir();
-            return;
-        }
-
-        changeAnimation(entity, jumpLoopState);
-        wasInAir = entity.isInAir();
-        return;
-    }
-
-    bool currentIsJumpEnd =
-        currentAnimState == "jump_end_l" ||
-        currentAnimState == "jump_end_r";
-
-    if (currentIsJumpEnd && !hasMoveInput && !entity.isAnimationFinished())
-    {
-        wasInAir = entity.isInAir();
-        return;
-    }
-
-    if (hasMoveInput)
-    {
-        if (entity.isSprinting())
-        {
-            changeAnimation(entity, runState);
-        }
-        else
-        {
-            changeAnimation(entity, walkState);
+            if (allConditionsMet)
+            {
+                nextState = rule.toState;
+                break; // 顺序比对，匹配到第一条规则即应用并结束
+            }
         }
     }
-    else
-    {
-        changeAnimation(entity, idleState);
-    }
 
-    wasInAir = entity.isInAir();
+    // 3. 执行状态变更
+    if (nextState != currentAnimState)
+    {
+        changeAnimation(entity, nextState);
+    }
 }
 
-// 功能：配置 Animator 的实体模板和初始状态，并重置动画状态缓存。
-void Animator::configure(const std::string& newTemplateName, const std::string& newInitialState)
+// 功能：配置 Animator 的实体模板、初始状态和过渡规则表，并重置动画状态缓存。
+void Animator::configure(const std::string& newTemplateName, const std::string& newInitialState, const std::vector<TransitionRule>& rules)
 {
     templateName = newTemplateName;
     initialAnimState = newInitialState;
+    transitionRules = rules;
     currentAnimState = "";
-    wasInAir = false;
 }
 
+// 功能：执行初始动画绑定。
 void Animator::initAnimation(Entity& entity)
 {
     if (templateName.empty())
