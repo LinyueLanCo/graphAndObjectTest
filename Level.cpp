@@ -1,5 +1,7 @@
 ﻿#include "Level.h"
 
+#include <fstream>
+#include "json.hpp"
 #include "Camera.h"
 
 // contains: 一个小帮手函数，用来判断某个字符串是不是在 vector 里。
@@ -307,67 +309,89 @@ void Level::initBackground()
 {
     backgroundManager.clear();
 
-    Image2D* skyImage = resources.getImage2D("bg_sky");
-    Image2D* cloudsImage = resources.getImage2D("bg_clouds");
-    Image2D* flora1Image = resources.getImage2D("bg_flora1");
-    Image2D* flora2Image = resources.getImage2D("bg_flora2");
+    std::string filepath = "assets/data/backgrounds.json";
+    std::ifstream f(filepath);
+    if (!f.is_open())
+    {
+        std::cout << "无法打开背景配置文件: " << filepath << std::endl;
+        return;
+    }
+
+    nlohmann::json data;
+    try {
+        f >> data;
+        f.close();
+    }
+    catch (const std::exception& e) {
+        std::cout << "解析背景 JSON 出错: " << e.what() << std::endl;
+        f.close();
+        return;
+    }
 
     double backgroundCenterX = gCamera.centerX;
     double backgroundCenterY = gCamera.centerY;
 
-    backgroundManager.addObjectFromImage2D(
-        skyImage,
-        0,
-        0.0,
-        0.0,
-        false,
-        BACKGROUND_REPEAT_X,
-        backgroundCenterX,
-        backgroundCenterY,
-        skyImage != NULL ? skyImage->getWidth() : WINDOW_WIDTH,
-        skyImage != NULL ? skyImage->getHeight() : WINDOW_HEIGHT
-    );
+    for (const auto& item : data)
+    {
+        std::string imageName = item.value("image", "");
+        Image2D* imageResource = resources.getImage2D(imageName);
+        if (!imageResource)
+        {
+            std::cout << "警告: 未找到背景图片资源: " << imageName << std::endl;
+            continue;
+        }
 
+        int renderOrder = item.value("renderOrder", 0);
+        double parallaxFactor = item.value("parallaxFactor", 0.0);
+        double zoomFactor = item.value("zoomFactor", 0.0);
+        bool useAlphaBlend = item.value("useAlphaBlend", false);
 
-    backgroundManager.addObjectFromImage2D(
-        cloudsImage,
-        1,
-        0.15,
-        0.15,
-        true,
-        BACKGROUND_REPEAT_X,
-        backgroundCenterX,
-        backgroundCenterY,
-        cloudsImage != NULL ? cloudsImage->getWidth() : WINDOW_WIDTH,
-        cloudsImage != NULL ? cloudsImage->getHeight() : WINDOW_HEIGHT,
-        0.5
-    );
+        std::string drawModeStr = item.value("drawMode", "BACKGROUND_REPEAT_X");
+        BackgroundDrawMode drawMode = BACKGROUND_REPEAT_X;
+        if (drawModeStr == "BACKGROUND_SINGLE_WORLD" || drawModeStr == "SINGLE_WORLD")
+        {
+            drawMode = BACKGROUND_SINGLE_WORLD;
+        }
+        else if (drawModeStr == "BACKGROUND_FIXED_CAMERA" || drawModeStr == "FIXED_CAMERA")
+        {
+            drawMode = BACKGROUND_FIXED_CAMERA;
+        }
 
-    backgroundManager.addObjectFromImage2D(
-        flora1Image,
-        2,
-        0.35,
-        0.35,
-        true,
-        BACKGROUND_REPEAT_X,
-        backgroundCenterX,
-        backgroundCenterY,
-        flora1Image != NULL ? flora1Image->getWidth() : WINDOW_WIDTH,
-        flora1Image != NULL ? flora1Image->getHeight() : WINDOW_HEIGHT
-    );
+        bool useCameraCenter = item.value("useCameraCenter", true);
+        double offsetX = item.value("offsetX", 0.0);
+        double offsetY = item.value("offsetY", 0.0);
 
-    backgroundManager.addObjectFromImage2D(
-        flora2Image,
-        3,
-        0.65,
-        0.65,
-        true,
-        BACKGROUND_REPEAT_X,
-        backgroundCenterX,
-        backgroundCenterY,
-        flora2Image != NULL ? flora2Image->getWidth() : WINDOW_WIDTH,
-        flora2Image != NULL ? flora2Image->getHeight() : WINDOW_HEIGHT
-    );
+        double centerX = useCameraCenter ? (backgroundCenterX + offsetX) : offsetX;
+        double centerY = useCameraCenter ? (backgroundCenterY + offsetY) : offsetY;
+
+        double drawW = item.value("drawW", -1.0);
+        double drawH = item.value("drawH", -1.0);
+
+        if (drawW <= 0.0)
+        {
+            drawW = imageResource->getWidth();
+        }
+        if (drawH <= 0.0)
+        {
+            drawH = imageResource->getHeight();
+        }
+
+        double autoScrollSpeedX = item.value("autoScrollSpeedX", 0.0);
+
+        backgroundManager.addObjectFromImage2D(
+            imageResource,
+            renderOrder,
+            parallaxFactor,
+            zoomFactor,
+            useAlphaBlend,
+            drawMode,
+            centerX,
+            centerY,
+            drawW,
+            drawH,
+            autoScrollSpeedX
+        );
+    }
 }
 
 void Level::initUI()
