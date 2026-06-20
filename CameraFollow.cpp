@@ -73,19 +73,6 @@ void updateCameraFollow(
         return;
     }
 
-    if (GetAsyncKeyState('B') & 0x8000)
-    {
-        gCamera.zoomTo(0.3);
-    }
-    else if (GetAsyncKeyState('V') & 0x8000)
-    {
-        gCamera.zoomTo(3.0);
-    }
-    else
-    {
-        gCamera.zoomTo(1.0);
-    }
-
     // 先更新 zoom，再用新的可见视口范围限制 camera center。
     gCamera.updateZoom();
 

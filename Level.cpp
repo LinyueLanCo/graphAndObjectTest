@@ -560,6 +560,20 @@ void Level::handleCameraInput(InputManager& input)
     {
         setCameraFollowTargetByName("Player4");
     }
+
+    // 统一处理相机镜头缩放控制（从 CameraFollow 中解耦）
+    if (input.isKeyDown('B'))
+    {
+        gCamera.zoomTo(0.3);
+    }
+    else if (input.isKeyDown('V'))
+    {
+        gCamera.zoomTo(3.0);
+    }
+    else
+    {
+        gCamera.zoomTo(1.0);
+    }
 }
 
 void Level::handleUIInput(InputManager& input)
