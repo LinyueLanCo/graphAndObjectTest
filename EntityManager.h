@@ -35,10 +35,12 @@ struct EntityTemplate
     std::string initialAnim = "idle";
     facingDirection initialFacing = RIGHT;
     
-    // 状态映射：stateName -> clipName
+    // std::unordered_map 是标准模板库（STL）中的哈希表关联容器。
+    // 这里用于状态映射：将动画状态名称关联到实际的剪辑名称，提供常数平均时间复杂度的快速查询。
     std::unordered_map<std::string, std::string> stateToClip;
 
-    // 动画状态过渡规则表
+    // std::vector 是标准模板库（STL）中的动态数组容器，用于存储连续内存的元素。
+    // 这里用于保存动画状态过渡规则表。
     std::vector<TransitionRule> transitionRules;
 };
 
@@ -46,16 +48,28 @@ struct EntityTemplate
 class EntityManager
 {
 private:
-    std::vector<Entity> entities;                        // 对象池本尊：固定存放 200 个实体实例的连续大箱子
-    std::unordered_map<EntityID, size_t> idToIndex;      // 导航地图：记录实体 ID 到大箱子下标的映射。
-    std::vector<SpawnRequest> spawnQueue;                // 临时寄存处：本帧内请求动态生成但还没落地的演员队列
+    // entities: 对象池本尊。
+    // std::vector 容器，用于固定存放 200 个实体实例的连续大箱子，避免运行时频繁分配与释放内存。
+    std::vector<Entity> entities;
+
+    // idToIndex: 导航地图。
+    // std::unordered_map 关联容器，记录实体 ID 到大箱子下标的映射，支持常数时间复杂度的查找。
+    std::unordered_map<EntityID, size_t> idToIndex;
+
+    // spawnQueue: 临时寄存处。
+    // std::vector 容器，保存本帧内请求动态生成但还没落地的演员队列，用于在帧末安全统一生成。
+    std::vector<SpawnRequest> spawnQueue;
+
     EntityID nextEntityId;                               // 自增唯一标识符计数器
 
     // 双索引列表，高效遍历与复用的核心
-    std::vector<size_t> activeIndices;                   // 活跃索引名单：目前活在游戏世界里的实体下标
-    std::vector<size_t> deadIndices;                     // 空闲索引名单：死掉或者还没启用的槽位下标
+    // activeIndices: 活跃索引名单。std::vector 容器，保存目前活在游戏世界里的实体在 entities 数组中的下标。
+    // deadIndices: 空闲索引名单。std::vector 容器，保存死掉或者还没启用的槽位在 entities 数组中的下标。
+    std::vector<size_t> activeIndices;
+    std::vector<size_t> deadIndices;
 
-    // 实体模板库
+    // templates: 实体模板库。
+    // std::unordered_map 关联容器，将模板名映射到 EntityTemplate 结构体，用于快速生成实体。
     std::unordered_map<std::string, EntityTemplate> templates;
 
 public:

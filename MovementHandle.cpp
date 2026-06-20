@@ -1,17 +1,17 @@
 ﻿#include "MovementHandle.h"
 #include "MathUtils.h"
 
-// 根据行为意图、物理规则和碰撞检测结果，更新当前实体的移动位置和速度状态
+// 根据行为意图、物理规则和碰撞检测结果，更新当前实体的移动位置和速度状态。
 void MovementHandle::update(
     Entity& self,
     BehaviorIntent intent,
-    vector<Entity>& entitys,
-    const vector<size_t>& activeIndices,
+    std::vector<Entity>& entitys,
+    const std::vector<size_t>& activeIndices,
     int selfIndex,
     TileMap& tileMap,
     int worldWidth,
     int worldHeight,
-    CollisionManager& collisionHandle
+    CollisionManager& collisionManager
 )
 {
     // MovementHandle 本帧数据更新流程：
@@ -67,8 +67,8 @@ void MovementHandle::update(
         self.x += inputX * currentSpeed;
         self.y += inputY * currentSpeed;
 
-        // 依然要限制不能飞到屏幕外面去
-        collisionHandle.limitInWorld(self, worldWidth, worldHeight);
+        // 依然要限制不能飞到屏幕外面去，调用 collisionManager 进行强制锁边
+        collisionManager.limitInWorld(self, worldWidth, worldHeight);
         return;
     }
 
@@ -88,7 +88,7 @@ void MovementHandle::update(
     double wantMoveX = inputX * currentSpeed;
 
     // 测算实际被地图和其它人阻挡后的允许移动距离
-    double allowedMoveX = collisionHandle.getAllowedMoveX(
+    double allowedMoveX = collisionManager.getAllowedMoveX(
         self,
         wantMoveX,
         entitys,
@@ -122,7 +122,7 @@ void MovementHandle::update(
     double wantMoveY = self.velocityY;
 
     // 测算这帧落下去或者升上去时，会不会撞到格子天花板或者地板
-    double allowedMoveY = collisionHandle.getAllowedMoveY(
+    double allowedMoveY = collisionManager.getAllowedMoveY(
         self,
         wantMoveY,
         entitys,
@@ -154,5 +154,5 @@ void MovementHandle::update(
     self.y += allowedMoveY; // 真正把高度变化应用到坐标上
 
     // 4. 最后做一次锁屏限制，不掉出关卡边界
-    collisionHandle.limitInWorld(self, worldWidth, worldHeight);
+    collisionManager.limitInWorld(self, worldWidth, worldHeight);
 }

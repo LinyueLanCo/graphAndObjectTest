@@ -28,6 +28,9 @@ class Entity
 private:
     EntityID instanceId;
     std::string name;
+
+    // currentOverlaps: 本帧正在与该实体发生重叠碰撞的其它实体信息的列表。
+    // std::vector 是 C++ 标准库中的动态数组容器，它将元素存储在连续的内存中，支持快速的尾部插入和顺序遍历。
     std::vector<OverlapInfo> currentOverlaps;
 
     AnimationPlayer animation;
@@ -66,6 +69,10 @@ private:
 
     // 数据驱动动画扩展：当前实体所使用的模板名以及本地缓存的状态-动画片段池
     std::string templateName;
+
+    // myClips 和 animParams:
+    // std::unordered_map 是 C++ 标准库中的无序关联容器，基于哈希表实现。
+    // 这里分别用于存储状态到动画剪辑（AnimationClip）的映射以及动画控制浮点数参数的映射，提供平均常数时间 O(1) 的超快查找性能。
     std::unordered_map<std::string, AnimationClip> myClips;
     std::unordered_map<std::string, float> animParams;
 

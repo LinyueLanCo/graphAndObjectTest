@@ -23,9 +23,14 @@ private:
     int drawTileWidth;
     int drawTileHeight;
 
+    // tiles 和 collisionTiles:
+    // int** 代表指向指针的二级指针，在 C++ 中常用于实现二维动态分配数组。
+    // 这里用于保存地图网格和碰撞网格的行列矩阵，需要在运行时动态分配并手动进行析构释放以防止内存泄漏。
     int** tiles;
     int** collisionTiles;
 
+    // tileInstances: 地图上被实例化生成的图块列表。
+    // std::vector 容器用于在连续内存中存储所有活动的图块实例，方便高效顺序渲染。
     vector<TileInstance> tileInstances;
 
     double offsetX;
