@@ -120,6 +120,7 @@ public:
 
     EntityID getId() const;
     const std::string& getName() const { return name; }
+    void setName(const std::string& newName) { name = newName; }
     std::string getTemplateName() const { return templateName; }
     EntityType getEntityType();
     bool isCollidable();

@@ -205,7 +205,7 @@ void Level::update(InputManager& input)
             entityManager.queueSpawnEntity(
                 ent.getX(),
                 ent.getY() + 64.0,     // 放置在新位置
-                "CoinSilver"
+                "Banana"
             );
         }
     }

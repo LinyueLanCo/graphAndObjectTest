@@ -121,8 +121,8 @@ bool EntityManager::loadEntities(const std::string& filepath, AnimationClipManag
     for (size_t i = 0; i < activeCount; i++)
     {
         auto& item = data[i];
-        std::string name = item.value("name", "");
         std::string tempName = item.value("template", "");
+        std::string name = item.value("name", tempName);
         double x = item.value("x", 0.0);
         double y = item.value("y", 0.0);
 
@@ -329,7 +329,7 @@ void EntityManager::processSpawns(AnimationClipManager& animationClips)
             deadIndices.pop_back();
 
             EntityID iid = nextEntityId++;
-            std::string generatedName = "Spawned_" + std::to_string(iid);
+            std::string generatedName = req.templateName;
 
             // 调用 reset 重塑这块槽位的属性
             entities[idx].reset(
