@@ -182,5 +182,8 @@
     <ClInclude Include="Level.h">
       <Filter>头文件</Filter>
     </ClInclude>
+    <ClInclude Include="MathUtils.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>
