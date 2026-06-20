@@ -1,32 +1,25 @@
 ﻿#include "Animator.h"
 #include "Entity.h"
+#include <cmath>
 
 // 功能：初始化动画状态缓存。
 Animator::Animator()
 {
-    currentAnimState = ANIM_COUNT;
+    currentAnimState = "";
     wasInAir = false;
-    animationSetId = ANIM_SET_NONE;
-    initialAnimState = ANIM_IDLE_R;
+    templateName = "";
+    initialAnimState = "idle";
 }
 
 // 功能：按动画状态切换实体当前播放的 AnimationClip。
-void Animator::changeAnimation(Entity& entity, AnimationState newState, AnimationClipManager& animationClips)
+void Animator::changeAnimation(Entity& entity, const std::string& newState)
 {
     if (currentAnimState == newState)
     {
         return;
     }
 
-    // 用当前资源组和动画状态解析具体资源 ID，避免 Animator 直接绑定某个角色资源。
-    AnimationId animationId = getAnimationId(animationSetId, newState);
-
-    if (animationId == ANIM_ID_COUNT)
-    {
-        return;
-    }
-
-    AnimationClip clip = animationClips.getClip(animationId);
+    AnimationClip clip = entity.getClipForState(newState);
 
     if (clip.image == NULL)
     {
@@ -39,30 +32,33 @@ void Animator::changeAnimation(Entity& entity, AnimationState newState, Animatio
 }
 
 // 功能：读取实体真实状态并决定 idle / walk / run / jumpStart / jumpLoop / jumpEnd。
-void Animator::update(Entity& entity, BehaviorIntent intent, AnimationClipManager& animationClips)
+void Animator::update(Entity& entity, BehaviorIntent intent)
 {
-    if (animationSetId == ANIM_SET_ENDPOINT)
+    if (templateName == "Endpoint")
     {
-        // 改为判断当前是否处于 Pressed 状态，且该非循环动画已经播放结束
-        if (currentAnimState == ANIM_ENDPOINT_PRESSED && entity.isAnimationFinished())
+        // 改为判断当前是否处于 pressed 状态，且该非循环动画已经播放结束
+        if (currentAnimState == "pressed" && entity.isAnimationFinished())
         {
-            changeAnimation(entity, ANIM_COLLECTED, animationClips);
+            changeAnimation(entity, "collected");
         }
         return;
     }
 
-    if (animationSetId == ANIM_SET_CHECKPOINT)
+    if (templateName == "Checkpoint")
     {
-        if (currentAnimState == ANIM_CHECKPOINT_FLAG_OUT && entity.isAnimationFinished())
+        if (currentAnimState == "flag_out" && entity.isAnimationFinished())
         {
-            changeAnimation(entity, ANIM_CHECKPOINT_FLAG_IDLE, animationClips);
+            changeAnimation(entity, "flag_idle");
         }
         return;
     }
 
-    if (animationSetId == ANIM_SET_COIN_GOLD ||
-        animationSetId == ANIM_SET_COIN_SILVER ||
-        animationSetId == ANIM_SET_COIN_COPPER)
+    if (templateName == "CoinGold" ||
+        templateName == "CoinSilver" ||
+        templateName == "CoinCopper" ||
+        templateName == "Apple" ||
+        templateName == "Banana" ||
+        templateName == "Cherry")
     {
         return;
     }
@@ -74,36 +70,36 @@ void Animator::update(Entity& entity, BehaviorIntent intent, AnimationClipManage
 
     double inputX = intent.moveX;
 
-    bool hasMoveInput = fabs(inputX) > EPS;
+    bool hasMoveInput = fabs(inputX) > 1e-6; // EPS = 1e-6
     bool justLanded = wasInAir && entity.isOnGround();
 
-    AnimationState idleState = ANIM_IDLE_L;
-    AnimationState walkState = ANIM_WALK_LEFT;
-    AnimationState runState = ANIM_RUN_LEFT;
-    AnimationState jumpStartState = ANIM_JUMP_START_L;
-    AnimationState jumpLoopState = ANIM_JUMP_LOOP_L;
-    AnimationState jumpEndState = ANIM_JUMP_END_L;
+    std::string idleState = "idle_l";
+    std::string walkState = "walk_l";
+    std::string runState = "run_l";
+    std::string jumpStartState = "jump_start_l";
+    std::string jumpLoopState = "jump_loop_l";
+    std::string jumpEndState = "jump_end_l";
 
     if (entity.getFacingDirection() == RIGHT)
     {
-        idleState = ANIM_IDLE_R;
-        walkState = ANIM_WALK_RIGHT;
-        runState = ANIM_RUN_RIGHT;
-        jumpStartState = ANIM_JUMP_START_R;
-        jumpLoopState = ANIM_JUMP_LOOP_R;
-        jumpEndState = ANIM_JUMP_END_R;
+        idleState = "idle_r";
+        walkState = "walk_r";
+        runState = "run_r";
+        jumpStartState = "jump_start_r";
+        jumpLoopState = "jump_loop_r";
+        jumpEndState = "jump_end_r";
     }
 
     if (justLanded && !hasMoveInput)
     {
-        changeAnimation(entity, jumpEndState, animationClips);
+        changeAnimation(entity, jumpEndState);
         wasInAir = entity.isInAir();
         return;
     }
 
     bool currentIsJumpStart =
-        currentAnimState == ANIM_JUMP_START_L ||
-        currentAnimState == ANIM_JUMP_START_R;
+        currentAnimState == "jump_start_l" ||
+        currentAnimState == "jump_start_r";
 
     if (entity.isInAir())
     {
@@ -114,7 +110,7 @@ void Animator::update(Entity& entity, BehaviorIntent intent, AnimationClipManage
 
         if (shouldPlayJumpStart)
         {
-            changeAnimation(entity, jumpStartState, animationClips);
+            changeAnimation(entity, jumpStartState);
             wasInAir = entity.isInAir();
             return;
         }
@@ -123,21 +119,21 @@ void Animator::update(Entity& entity, BehaviorIntent intent, AnimationClipManage
         {
             if (entity.isAnimationFinished())
             {
-                changeAnimation(entity, jumpLoopState, animationClips);
+                changeAnimation(entity, jumpLoopState);
             }
 
             wasInAir = entity.isInAir();
             return;
         }
 
-        changeAnimation(entity, jumpLoopState, animationClips);
+        changeAnimation(entity, jumpLoopState);
         wasInAir = entity.isInAir();
         return;
     }
 
     bool currentIsJumpEnd =
-        currentAnimState == ANIM_JUMP_END_L ||
-        currentAnimState == ANIM_JUMP_END_R;
+        currentAnimState == "jump_end_l" ||
+        currentAnimState == "jump_end_r";
 
     if (currentIsJumpEnd && !hasMoveInput && !entity.isAnimationFinished())
     {
@@ -149,37 +145,36 @@ void Animator::update(Entity& entity, BehaviorIntent intent, AnimationClipManage
     {
         if (entity.isSprinting())
         {
-            changeAnimation(entity, runState, animationClips);
+            changeAnimation(entity, runState);
         }
         else
         {
-            changeAnimation(entity, walkState, animationClips);
+            changeAnimation(entity, walkState);
         }
     }
     else
     {
-        changeAnimation(entity, idleState, animationClips);
+        changeAnimation(entity, idleState);
     }
 
     wasInAir = entity.isInAir();
 }
 
-// 功能：配置 Animator 的资源组和初始状态，并重置动画状态缓存。
-void Animator::configure(AnimationSetId newSetId, AnimationState newInitialState)
+// 功能：配置 Animator 的实体模板和初始状态，并重置动画状态缓存。
+void Animator::configure(const std::string& newTemplateName, const std::string& newInitialState)
 {
-    animationSetId = newSetId;
+    templateName = newTemplateName;
     initialAnimState = newInitialState;
-    currentAnimState = ANIM_COUNT;
+    currentAnimState = "";
     wasInAir = false;
 }
 
-// 功能：在资源加载完成后，根据初始状态绑定实体第一段动画。
-void Animator::initAnimation(Entity& entity, AnimationClipManager& animationClips)
+void Animator::initAnimation(Entity& entity)
 {
-    if (animationSetId == ANIM_SET_NONE)
+    if (templateName.empty())
     {
         return;
     }
 
-    changeAnimation(entity, initialAnimState, animationClips);
+    changeAnimation(entity, initialAnimState);
 }

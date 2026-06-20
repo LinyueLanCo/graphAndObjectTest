@@ -45,9 +45,7 @@
     <ClCompile Include="EntityManager.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Animation.cpp">
-      <Filter>源文件</Filter>
-    </ClCompile>
+
     <ClCompile Include="AnimationClip.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
@@ -125,18 +123,14 @@
     <ClInclude Include="Sprite.h">
       <Filter>头文件</Filter>
     </ClInclude>
-    <ClInclude Include="Animation.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
+
     <ClInclude Include="AnimationClip.h">
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="AnimationClipManager.h">
       <Filter>头文件</Filter>
     </ClInclude>
-    <ClInclude Include="AnimationTypes.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
+
     <ClInclude Include="Background.h">
       <Filter>头文件</Filter>
     </ClInclude>

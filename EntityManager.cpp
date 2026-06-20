@@ -17,6 +17,73 @@ const std::vector<size_t>& EntityManager::getActiveIndices() const
     return activeIndices;
 }
 
+// 从 JSON 配置文件中载入实体模板库
+bool EntityManager::loadTemplates(const std::string& filepath)
+{
+    std::ifstream f(filepath);
+    if (!f.is_open())
+    {
+        std::cout << "无法打开实体模板配置文件: " << filepath << std::endl;
+        return false;
+    }
+
+    nlohmann::json data;
+    try {
+        f >> data;
+        f.close();
+    }
+    catch (const std::exception& e) {
+        std::cout << "解析实体模板 JSON 出错: " << e.what() << std::endl;
+        f.close();
+        return false;
+    }
+
+    templates.clear();
+
+    for (auto& element : data.items())
+    {
+        std::string tempName = element.key();
+        auto& config = element.value();
+
+        EntityTemplate temp;
+        temp.name = tempName;
+        temp.type = (EntityType)config.value("type", 4);
+        temp.controlled = config.value("controlled", false);
+        temp.collidable = config.value("collidable", true);
+        temp.blocking = config.value("blocking", false);
+        temp.god = config.value("god", false);
+        temp.scaleX = config.value("scaleX", 1.0);
+        temp.scaleY = config.value("scaleY", 1.0);
+        temp.offsetX = config.value("offsetX", 0.0);
+        temp.offsetY = config.value("offsetY", 0.0);
+        temp.colScaleX = config.value("colScaleX", 1.0);
+        temp.colScaleY = config.value("colScaleY", 1.0);
+        temp.colOffsetX = config.value("colOffsetX", 0.0);
+        temp.colOffsetY = config.value("colOffsetY", 0.0);
+        temp.animSpeed = config.value("animSpeed", -1);
+        temp.initialAnim = config.value("initialAnim", "idle");
+
+        std::string facingStr = config.value("facing", "RIGHT");
+        if (facingStr == "LEFT") temp.initialFacing = LEFT;
+        else if (facingStr == "RIGHT") temp.initialFacing = RIGHT;
+        else if (facingStr == "UP") temp.initialFacing = UP;
+        else if (facingStr == "DOWN") temp.initialFacing = DOWN;
+
+        if (config.contains("animations"))
+        {
+            for (auto& animPair : config["animations"].items())
+            {
+                temp.stateToClip[animPair.key()] = animPair.value().get<std::string>();
+            }
+        }
+
+        templates[tempName] = temp;
+    }
+
+    std::cout << "实体模板加载完毕，共加载了 " << templates.size() << " 个模板。" << std::endl;
+    return true;
+}
+
 // 核心初始化：从 JSON 关卡配置文件中加载所有关卡实体，并分配固定对象池
 bool EntityManager::loadEntities(const std::string& filepath, AnimationClipManager& animationClips)
 {
@@ -27,9 +94,6 @@ bool EntityManager::loadEntities(const std::string& filepath, AnimationClipManag
         return false;
     }
 
-    // 声明一个 JSON 数据对象。nlohmann::json 是一个基于模板实现的类，
-    // 内部使用复杂的数据结构（如 map/vector 嵌套）来表示任意 nested 的 JSON 节点。
-    // 我们可以直接通过输入流操作符 `>>` 把文件流解析为树形结构。
     nlohmann::json data;
     f >> data;
     f.close();
@@ -42,9 +106,6 @@ bool EntityManager::loadEntities(const std::string& filepath, AnimationClipManag
     // 清理索引、队列和哈希定位器，准备重新分配
     activeIndices.clear();
     deadIndices.clear();
-    
-    // 调用 std::unordered_map::clear() 清空导航地图。
-    // 这项操作会释放哈希表内的所有存储节点（Buckets），保证重新载入关卡时，定位表完全干净，没有任何老实体的残留。
     nameToIndex.clear();
     spawnQueue.clear();
 
@@ -60,41 +121,60 @@ bool EntityManager::loadEntities(const std::string& filepath, AnimationClipManag
     {
         auto& item = data[i];
         std::string name = item.value("id", "");
+        std::string tempName = item.value("template", "");
         double x = item.value("x", 0.0);
         double y = item.value("y", 0.0);
-        bool controlled = item.value("controlled", false);
-        bool collidable = item.value("collidable", true);
-        bool blocking = item.value("blocking", false);
-        bool god = item.value("god", false);
-        EntityType type = (EntityType)item.value("type", 4);
-        AnimationSetId animSet = (AnimationSetId)item.value("animSet", 0);
+
+        auto it = templates.find(tempName);
+        if (it == templates.end())
+        {
+            std::cout << "警告：实体 \"" << name << "\" 指定了未置的模板 \"" << tempName << "\"，无法加载！" << std::endl;
+            continue;
+        }
+        const EntityTemplate& temp = it->second;
+
+        // 如果 JSON 实例级别显式声明了覆盖参数，则用实例参数；否则使用模板默认参数
+        bool controlled = item.value("controlled", temp.controlled);
+        bool collidable = item.value("collidable", temp.collidable);
+        bool blocking = item.value("blocking", temp.blocking);
+        bool god = item.value("god", temp.god);
+        EntityType type = (EntityType)item.value("type", (int)temp.type);
 
         // 用 reset 函数重写这块槽位上实体的所有属性，“赋予新生命”
         entities[i].reset(
             name,
             x, y,
             controlled, collidable, blocking, god,
-            type, animSet,
+            type, tempName,
             1 // 初始活泼状态为 1（alive = 1）
         );
 
-        // 读取 JSON 配置中的可选渲染参数，微调精灵绘制缩放与偏移
-        double scaleX = item.value("scaleX", 1.0);
-        double scaleY = item.value("scaleY", 1.0);
-        double offsetX = item.value("offsetX", 0.0);
-        double offsetY = item.value("offsetY", 0.0);
+        // 同步加载并本地缓存实体的所有状态动画片段，重置朝向和初始动画状态
+        entities[i].initAnimations(
+            temp.name,
+            temp.initialAnim,
+            temp.initialFacing,
+            temp.stateToClip,
+            animationClips
+        );
+
+        // 读取 JSON 配置中的渲染参数（有覆盖用覆盖，无则用模板）
+        double scaleX = item.value("scaleX", temp.scaleX);
+        double scaleY = item.value("scaleY", temp.scaleY);
+        double offsetX = item.value("offsetX", temp.offsetX);
+        double offsetY = item.value("offsetY", temp.offsetY);
         entities[i].setSpriteTransform(scaleX, scaleY, offsetX, offsetY);
 
-        // 读取可选的物理属性，微调碰撞盒大小和偏移
-        double colScaleX = item.value("colScaleX", 1.0);
-        double colScaleY = item.value("colScaleY", 1.0);
+        // 读取物理属性（有覆盖用覆盖，无则用模板）
+        double colScaleX = item.value("colScaleX", temp.colScaleX);
+        double colScaleY = item.value("colScaleY", temp.colScaleY);
         entities[i].setCollisionScale(colScaleX, colScaleY);
 
-        double colOffsetX = item.value("colOffsetX", 0.0);
-        double colOffsetY = item.value("colOffsetY", 0.0);
+        double colOffsetX = item.value("colOffsetX", temp.colOffsetX);
+        double colOffsetY = item.value("colOffsetY", temp.colOffsetY);
         entities[i].setCollisionBoxOffset(colOffsetX, colOffsetY);
 
-        int animSpeed = item.value("animSpeed", -1);
+        int animSpeed = item.value("animSpeed", temp.animSpeed);
         if (animSpeed != -1)
         {
             entities[i].setAnimationSpeed(animSpeed);
@@ -104,6 +184,7 @@ bool EntityManager::loadEntities(const std::string& filepath, AnimationClipManag
         activeIndices.push_back(i);
     }
 
+
     // 3. 把剩下的空闲槽位全部归入“死亡空闲队列”，等以后动态生成时复用它们
     for (size_t i = activeCount; i < 200; i++)
     {
@@ -111,10 +192,10 @@ bool EntityManager::loadEntities(const std::string& filepath, AnimationClipManag
         deadIndices.push_back(i);
     }
 
-    // 4. 为这一批初始活跃的演员们同步载入动画素材贴图
+    // 4. 为这一批初始活跃的演员们同步第一帧贴图与物理大小
     for (size_t idx : activeIndices)
     {
-        entities[idx].initAnimationFromAnimator(animationClips);
+        entities[idx].initAnimationFromAnimator();
     }
 
     // 5. 构建哈希检索表，方便后续以 ID 查询位置
@@ -125,13 +206,10 @@ bool EntityManager::loadEntities(const std::string& filepath, AnimationClipManag
 // 极其高效的导航查询：基于哈希表 O(1) 瞬间获取实体的内存地址
 Entity* EntityManager::getEntityById(const std::string& id)
 {
-    // 调用 std::unordered_map::find() 进行查找。
-    // 该查找行为会计算 ID 字符串的哈希值，并在哈希表中瞬间定位其桶（Bucket）。
-    // 在绝大多数情况下，时间复杂度是 O(1) 的常数级，极大提升了多实体环境下的寻址效率。
     auto it = nameToIndex.find(id);
     if (it != nameToIndex.end())
     {
-        return &entities[it->second]; // 直接返回数组内实体的地址
+        return &entities[it->second];
     }
     return nullptr;
 }
@@ -139,7 +217,6 @@ Entity* EntityManager::getEntityById(const std::string& id)
 // 极其高效的导航查询（常量版本）
 const Entity* EntityManager::getEntityById(const std::string& id) const
 {
-    // 同上，只读常量版本的哈希检索
     auto it = nameToIndex.find(id);
     if (it != nameToIndex.end())
     {
@@ -171,15 +248,11 @@ void EntityManager::clear()
 }
 
 // 重新建立“名字ID -> vector下标”的对照表。
-// 当实体的活跃状态或索引发生大规模调整（例如关卡初次加载或大重构）后，
-// 需要通过遍历 activeIndices 将所有活跃实体的 ID 映射到新的槽位，重新填入 nameToIndex 映射表中。
 void EntityManager::rebuildMap()
 {
-    // 释放旧映射节点以准备填充新的一对一关联数据
     nameToIndex.clear();
     for (size_t idx : activeIndices)
     {
-        // 同样是 O(1) 的插入效率
         nameToIndex[entities[idx].getId()] = idx;
     }
 }
@@ -189,34 +262,14 @@ void EntityManager::queueSpawnEntity(
     const std::string& id,
     double x,
     double y,
-    bool controlled,
-    bool collidable,
-    bool blocking,
-    bool god,
-    EntityType type,
-    AnimationSetId animSet,
-    double scaleX,
-    double scaleY,
-    double colScaleX,
-    double colScaleY,
-    int animSpeed
+    const std::string& templateName
 )
 {
     SpawnRequest req;
     req.id = id;
     req.x = x;
     req.y = y;
-    req.controlled = controlled;
-    req.collidable = collidable;
-    req.blocking = blocking;
-    req.god = god;
-    req.type = type;
-    req.animSet = animSet;
-    req.scaleX = scaleX;
-    req.scaleY = scaleY;
-    req.colScaleX = colScaleX;
-    req.colScaleY = colScaleY;
-    req.animSpeed = animSpeed;
+    req.templateName = templateName;
 
     spawnQueue.push_back(req);
 }
@@ -225,30 +278,22 @@ void EntityManager::queueSpawnEntity(
 void EntityManager::processSpawns(AnimationClipManager& animationClips)
 {
     // 步骤一：垃圾回收已经死掉的实体（使用 Swap-and-Pop 算法优化）
-    // 如果直接从活跃数组中间删元素，后面所有元素往前挪的开销是 O(N)。
-    // 我们的做法是把要删的元素和数组最后一个元素对调，然后把末尾弹掉，这样以 O(1) 的常数时间就可以搞定。
     for (size_t i = 0; i < activeIndices.size(); )
     {
         size_t idx = activeIndices[i];
         if (!entities[idx].getIsAlive()) // 如果它已经死了（比如被吃掉的硬币）
         {
             // 从哈希导航图中注销该 ID。
-            // 使用 std::unordered_map::erase(key) 可以在 O(1) 的平均时间复杂度内定位并移出该键值对，
-            // 保证已被回收的死亡实体不会再被任何外部查找访问到。
             nameToIndex.erase(entities[idx].getId());
             
             // 归还到死亡索引列表中，以便将来别的请求复用这个坑位
             deadIndices.push_back(idx);
 
-            // 核心公式/操作：Swap-and-Pop！
-            // 把尾巴上的元素调过来盖在当前被删的元素上
+            // 核心操作：Swap-and-Pop！
             activeIndices[i] = activeIndices.back();
-            // 弹出尾部，完成物理删除
             activeIndices.pop_back();
 
             // 特别注意：此时不需要执行 ++i！
-            // 因为被调过来的新元素现在躺在位置 i，我们必须在下一轮循环中再次检查位置 i，
-            // 确保刚调过来的尾巴元素也是经过检测的。
         }
         else
         {
@@ -268,39 +313,55 @@ void EntityManager::processSpawns(AnimationClipManager& animationClips)
                 break;
             }
 
+            auto it = templates.find(req.templateName);
+            if (it == templates.end())
+            {
+                std::cout << "警告：未找到模板 \"" << req.templateName << "\"，无法动态生成新演员！" << std::endl;
+                continue;
+            }
+            const EntityTemplate& temp = it->second;
+
             // 从空闲名单里弹出一个可用的墓地槽位下标
             size_t idx = deadIndices.back();
             deadIndices.pop_back();
 
-            // 调用 reset 重塑这块槽位的属性（借尸还魂）
+            // 调用 reset 重塑这块槽位的属性
             entities[idx].reset(
                 req.id,
                 req.x,
                 req.y,
-                req.controlled,
-                req.collidable,
-                req.blocking,
-                req.god,
-                req.type,
-                req.animSet,
+                temp.controlled,
+                temp.collidable,
+                temp.blocking,
+                temp.god,
+                temp.type,
+                req.templateName,
                 1 // 重新复活状态
             );
 
-            // 应用它要求的渲染大小和碰撞大小
-            entities[idx].setSpriteTransform(req.scaleX, req.scaleY, 0.0, 0.0);
-            entities[idx].setCollisionScale(req.colScaleX, req.colScaleY);
+            // 初始化新实体的动画状态、朝向与片段映射
+            entities[idx].initAnimations(
+                temp.name,
+                temp.initialAnim,
+                temp.initialFacing,
+                temp.stateToClip,
+                animationClips
+            );
 
-            if (req.animSpeed != -1)
+            // 应用它要求的渲染大小和物理大小参数
+            entities[idx].setSpriteTransform(temp.scaleX, temp.scaleY, temp.offsetX, temp.offsetY);
+            entities[idx].setCollisionScale(temp.colScaleX, temp.colScaleY);
+            entities[idx].setCollisionBoxOffset(temp.colOffsetX, temp.colOffsetY);
+
+            if (temp.animSpeed != -1)
             {
-                entities[idx].setAnimationSpeed(req.animSpeed);
+                entities[idx].setAnimationSpeed(temp.animSpeed);
             }
 
-            // 同步加载动画帧皮肤贴图
-            entities[idx].initAnimationFromAnimator(animationClips);
+            // 同步加载第一帧并同步精灵尺寸
+            entities[idx].initAnimationFromAnimator();
 
             // 将其放回活人名单，并在哈希地图上重新注册它的名字。
-            // 使用 std::unordered_map::operator[] 可以在 O(1) 的平均时间复杂度下插入新的映射对，
-            // 它是典型的 C++ 关联式容器模板类操作，使得后续通过 ID 获取刚生成的实体同样飞快。
             activeIndices.push_back(idx);
             nameToIndex[req.id] = idx;
 

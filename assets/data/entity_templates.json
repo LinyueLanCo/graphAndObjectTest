@@ -1,0 +1,202 @@
+{
+  "Player1": {
+    "type": 1,
+    "controlled": true,
+    "collidable": true,
+    "blocking": true,
+    "god": false,
+    "scaleX": 2.0,
+    "scaleY": 2.0,
+    "colScaleX": 1.2,
+    "colScaleY": 2.0,
+    "animSpeed": 3,
+    "initialAnim": "idle_r",
+    "initialFacing": "RIGHT",
+    "animations": {
+      "idle_l": "player1_idle_l",
+      "idle_r": "player1_idle_r",
+      "walk_l": "player1_walk_l",
+      "walk_r": "player1_walk_r",
+      "run_l": "player1_run_l",
+      "run_r": "player1_run_r",
+      "jump_start_l": "player1_jumpStart_l",
+      "jump_start_r": "player1_jumpStart_r",
+      "jump_loop_l": "player1_jumpLoop_l",
+      "jump_loop_r": "player1_jumpLoop_r",
+      "jump_end_l": "player1_jumpEnd_l",
+      "jump_end_r": "player1_jumpEnd_r"
+    }
+  },
+  "Player2": {
+    "type": 2,
+    "controlled": false,
+    "collidable": true,
+    "blocking": false,
+    "god": false,
+    "initialAnim": "static",
+    "initialFacing": "RIGHT",
+    "animations": {
+      "static": "player2"
+    }
+  },
+  "Player3": {
+    "type": 2,
+    "controlled": false,
+    "collidable": true,
+    "blocking": true,
+    "god": false,
+    "initialAnim": "static",
+    "initialFacing": "RIGHT",
+    "animations": {
+      "static": "player3"
+    }
+  },
+  "Player4": {
+    "type": 2,
+    "controlled": false,
+    "collidable": true,
+    "blocking": false,
+    "god": false,
+    "scaleX": 2.0,
+    "scaleY": 2.0,
+    "initialAnim": "static",
+    "initialFacing": "RIGHT",
+    "animations": {
+      "static": "player4"
+    }
+  },
+  "CoinGold": {
+    "type": 3,
+    "controlled": false,
+    "collidable": true,
+    "blocking": false,
+    "god": true,
+    "scaleX": 4.0,
+    "scaleY": 4.0,
+    "animSpeed": 3,
+    "initialAnim": "idle",
+    "initialFacing": "RIGHT",
+    "animations": {
+      "idle": "coin_gold",
+      "collected": "coin_collected"
+    }
+  },
+  "CoinSilver": {
+    "type": 3,
+    "controlled": false,
+    "collidable": true,
+    "blocking": false,
+    "god": true,
+    "scaleX": 4.0,
+    "scaleY": 4.0,
+    "initialAnim": "idle",
+    "initialFacing": "RIGHT",
+    "animations": {
+      "idle": "coin_silver",
+      "collected": "coin_collected"
+    }
+  },
+  "CoinCopper": {
+    "type": 3,
+    "controlled": false,
+    "collidable": true,
+    "blocking": false,
+    "god": true,
+    "scaleX": 4.0,
+    "scaleY": 4.0,
+    "initialAnim": "idle",
+    "initialFacing": "RIGHT",
+    "animations": {
+      "idle": "coin_copper",
+      "collected": "coin_collected"
+    }
+  },
+  "Checkpoint": {
+    "type": 5,
+    "controlled": false,
+    "collidable": true,
+    "blocking": false,
+    "god": false,
+    "scaleX": 4.0,
+    "scaleY": 4.0,
+    "colScaleX": 2.0,
+    "colScaleY": 3.0,
+    "colOffsetX": 0.0,
+    "colOffsetY": -30.0,
+    "animSpeed": 3,
+    "initialAnim": "no_flag",
+    "initialFacing": "RIGHT",
+    "animations": {
+      "no_flag": "checkpoint_no_flag",
+      "flag_out": "checkpoint_flag_out",
+      "flag_idle": "checkpoint_flag_idle"
+    }
+  },
+  "Endpoint": {
+    "type": 6,
+    "controlled": false,
+    "collidable": true,
+    "blocking": false,
+    "god": false,
+    "scaleX": 4.0,
+    "scaleY": 4.0,
+    "colScaleX": 2.0,
+    "colScaleY": 3.0,
+    "animSpeed": 3,
+    "initialAnim": "idle",
+    "initialFacing": "RIGHT",
+    "animations": {
+      "idle": "endpoint_idle",
+      "pressed": "endpoint_pressed",
+      "collected": "coin_collected"
+    }
+  },
+  "Apple": {
+    "type": 3,
+    "controlled": false,
+    "collidable": true,
+    "blocking": false,
+    "god": true,
+    "scaleX": 4.0,
+    "scaleY": 4.0,
+    "animSpeed": 3,
+    "initialAnim": "idle",
+    "initialFacing": "RIGHT",
+    "animations": {
+      "idle": "apple",
+      "collected": "coin_collected"
+    }
+  },
+  "Banana": {
+    "type": 3,
+    "controlled": false,
+    "collidable": true,
+    "blocking": false,
+    "god": true,
+    "scaleX": 4.0,
+    "scaleY": 4.0,
+    "animSpeed": 3,
+    "initialAnim": "idle",
+    "initialFacing": "RIGHT",
+    "animations": {
+      "idle": "banana",
+      "collected": "coin_collected"
+    }
+  },
+  "Cherry": {
+    "type": 3,
+    "controlled": false,
+    "collidable": true,
+    "blocking": false,
+    "god": true,
+    "scaleX": 4.0,
+    "scaleY": 4.0,
+    "animSpeed": 3,
+    "initialAnim": "idle",
+    "initialFacing": "RIGHT",
+    "animations": {
+      "idle": "cherry",
+      "collected": "coin_collected"
+    }
+  }
+}

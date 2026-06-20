@@ -76,7 +76,7 @@ void Level::initEntityAnimations()
     auto& entities = entityManager.getEntities();
     for (size_t idx : entityManager.getActiveIndices())
     {
-        entities[idx].initAnimationFromAnimator(animationClips);
+        entities[idx].initAnimationFromAnimator();
     }
 }
 
@@ -85,6 +85,9 @@ void Level::init()
 {
     // 1. 登记图片资源路径并载入内存
     initResources();
+
+    // 1.5. 加载实体模板
+    entityManager.loadTemplates("assets/data/entity_templates.json");
 
     // 2. 从文本解析格子地图，设定世界总像素尺寸
     initMap();
@@ -187,15 +190,7 @@ void Level::update(InputManager& input)
                 coinId,
                 ent.getX(),
                 ent.getY() + 64.0,     // 放置在新位置
-                false,                 // controlled = false，新钱不能由玩家操作
-                true,                  // collidable = true，可以被吃掉
-                false,                 // blocking = false，不阻挡别人走路
-                true,                  // god = true，不受重力且无视阻挡
-                COIN,                  // type = 金币
-                ANIM_SET_COIN_SILVER,  // animSet = 银币动画素材包
-                4.0, 4.0,              // scaleX, scaleY = 4倍大
-                1.0, 1.0,              // colScaleX, colScaleY
-                3                      // animSpeed = 每3帧播一幅图
+                "CoinSilver"
             );
         }
     }
@@ -256,7 +251,7 @@ void Level::draw()
 void Level::initResources()
 {
     resources.loadLevelResources();
-    animationClips.init(resources);
+    animationClips.init("assets/data/animations.json", resources);
 }
 
 void Level::initMap()
@@ -444,7 +439,7 @@ void Level::updateEntities(InputManager& input)
         );
 
         // 让 Animator 状态机给它决策本帧动画片段
-        entities[idx].updateAnimator(intent, animationClips);
+        entities[idx].updateAnimator(intent);
         
         // 推进精灵图动画的帧更新
         entities[idx].updateAnimatedSprite();
@@ -816,7 +811,7 @@ void Level::resolveEntityOverlaps()
         if (entities[idx].getIsAlive())
         {
             // 实体自治逻辑
-            entities[idx].resolveOverlaps(entityManager, animationClips);
+            entities[idx].resolveOverlaps(entityManager);
         }
     }
 }

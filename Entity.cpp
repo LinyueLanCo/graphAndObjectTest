@@ -100,7 +100,7 @@ Entity::Entity(
     flagActivatedJustNow = false;
 }
 
-// 功能：按初始逻辑状态和动画资源组创建实体，不再直接从构造函数加载图片路径。
+// 功能：按初始逻辑状态和动画资源模板创建实体，不再直接从构造函数加载图片路径。
 Entity::Entity(
     std::string entityId,
     double startX,
@@ -110,9 +110,9 @@ Entity::Entity(
     bool isBlocking,
     bool isGod,
     EntityType Type,
-    AnimationSetId animationSet,
+    const std::string& tempName,
     facingDirection initialFacing,
-    AnimationState initialAnim,
+    const std::string& initialAnim,
     bool alive
 )
 {
@@ -142,8 +142,9 @@ Entity::Entity(
 
     entityType = Type;
     isAlive = alive;
+    templateName = tempName;
 
-    animator.configure(animationSet, initialAnim);
+    animator.configure(tempName, initialAnim);
 
     lastCollisionState = false;
     lastGroundState = false;
@@ -154,7 +155,7 @@ Entity::Entity(
     flagActivatedJustNow = false;
 }
 
-// 功能：按默认朝向和默认待机状态创建绑定动画资源组的实体。
+// 功能：按默认朝向和默认待机状态创建绑定动画资源模板的实体。
 Entity::Entity(
     std::string entityId,
     double startX,
@@ -164,7 +165,7 @@ Entity::Entity(
     bool isBlocking,
     bool isGod,
     EntityType Type,
-    AnimationSetId animationSet,
+    const std::string& tempName,
     bool alive
 )
     : Entity(
@@ -176,9 +177,9 @@ Entity::Entity(
         isBlocking,
         isGod,
         Type,
-        animationSet,
+        tempName,
         RIGHT,
-        ANIM_IDLE_R,
+        "idle",
         alive
     )
 {
@@ -194,7 +195,7 @@ void Entity::reset(
     bool isBlocking,
     bool isGod,
     EntityType Type,
-    AnimationSetId animationSet,
+    const std::string& tempName,
     bool alive
 )
 {
@@ -207,6 +208,7 @@ void Entity::reset(
     god = isGod;
     entityType = Type;
     isAlive = alive;
+    templateName = tempName;
 
     speed = 5;
     velocityY = 0;
@@ -222,7 +224,7 @@ void Entity::reset(
 
     currentOverlaps.clear();
 
-    animator.configure(animationSet, ANIM_IDLE_R);
+    animator.configure(tempName, "idle");
 
     lastCollisionState = false;
     lastGroundState = false;
@@ -316,7 +318,7 @@ bool Entity::isAnimationFinished()
     return animation.isFinished();
 }
 
-AnimationState Entity::getAnimationState() const
+std::string Entity::getAnimationState() const
 {
     return animator.getCurrentState();
 }
@@ -328,9 +330,9 @@ void Entity::setAnimationClip(AnimationClip clip)
 }
 
 // 功能：委托实体内部 Animator 更新动画状态。
-void Entity::updateAnimator(BehaviorIntent intent, AnimationClipManager& animationClips)
+void Entity::updateAnimator(BehaviorIntent intent)
 {
-    animator.update(*this, intent, animationClips);
+    animator.update(*this, intent);
 }
 
 // 功能：判断实体本帧是否处于碰撞或重叠反馈状态。
@@ -425,7 +427,7 @@ const std::vector<OverlapInfo>& Entity::getCurrentOverlaps() const
 // 参数意义：
 //   entityManager: 统一实体管理器引用，利用 O(1) 字典查找对方实体
 //   animationClips: 动画片段管理器，用于切换金币被吃动画或升旗动画
-void Entity::resolveOverlaps(EntityManager& entityManager, AnimationClipManager& animationClips)
+void Entity::resolveOverlaps(EntityManager& entityManager)
 {
     // 如果我已经挂了，那就没必要做出任何碰撞反馈了
     if (!isAlive)
@@ -481,7 +483,7 @@ void Entity::resolveOverlaps(EntityManager& entityManager, AnimationClipManager&
                     NULL,
                     SND_ASYNC | SND_NOSTOP
                 );
-                animator.changeAnimation(*this, ANIM_COLLECTED, animationClips);
+                animator.changeAnimation(*this, "collected");
             }
         }
         // 3. 如果我是旗杆（CHECKPOINT）：
@@ -493,10 +495,10 @@ void Entity::resolveOverlaps(EntityManager& entityManager, AnimationClipManager&
             // 如果确实碰到了主角，并且我还没升过旗（不处于 FLAG_OUT 和 FLAG_IDLE 状态）
             if (otherEntity != nullptr && otherEntity->isControlled())
             {
-                if (getAnimationState() != ANIM_CHECKPOINT_FLAG_OUT && getAnimationState() != ANIM_CHECKPOINT_FLAG_IDLE)
+                if (getAnimationState() != "flag_out" && getAnimationState() != "flag_idle")
                 {
                     // 切换到升旗动画
-                    animator.changeAnimation(*this, ANIM_CHECKPOINT_FLAG_OUT, animationClips);
+                    animator.changeAnimation(*this, "flag_out");
                     std::cout << "旗杆 (ID: " << id << ") 被玩家触碰，开始升旗！" << std::endl;
                 }
             }
@@ -508,10 +510,10 @@ void Entity::resolveOverlaps(EntityManager& entityManager, AnimationClipManager&
 
             if (otherEntity != nullptr && otherEntity->isControlled())
             {
-                if (getAnimationState() != ANIM_ENDPOINT_PRESSED && getAnimationState() != ANIM_COLLECTED)
+                if (getAnimationState() != "pressed" && getAnimationState() != "collected")
                 {
                     collidable = false;
-                    animator.changeAnimation(*this, ANIM_ENDPOINT_PRESSED, animationClips);
+                    animator.changeAnimation(*this, "pressed");
                 }
                 std::cout << "玩家触碰到了终点 (ID: " << id << ")" << std::endl;
                 // 这里可以添加过关逻辑，比如切换到下一关或者显示胜利界面
@@ -596,20 +598,20 @@ void Entity::updateAnimatedSprite()
     syncRenderSpriteWorldDrawData();
 
     // 如果是金币且播放完了收集爆裂动画，则将其真正自毁
-    if (entityType == COIN && getAnimationState() == ANIM_COLLECTED && isAnimationFinished())
+    if (entityType == COIN && getAnimationState() == "collected" && isAnimationFinished())
     {
         killEntity();
         std::cout << "Coin (ID: " << id << ") destroyed after collected animation finished." << std::endl;
     }
 
     // 如果是旗帜且播放完了升旗动画，标记以动态生成金币
-    if (entityType == CHECKPOINT && getAnimationState() == ANIM_CHECKPOINT_FLAG_OUT && isAnimationFinished())
+    if (entityType == CHECKPOINT && getAnimationState() == "flag_out" && isAnimationFinished())
     {
         flagActivatedJustNow = true;
     }
 
     // 如果是终点且播放完了收集爆裂动画，则将其真正自毁
-    if (entityType == ENDPOINT && getAnimationState() == ANIM_COLLECTED && isAnimationFinished())
+    if (entityType == ENDPOINT && getAnimationState() == "collected" && isAnimationFinished())
     {
         killEntity();
         std::cout << "Endpoint (ID: " << id << ") collected and processed." << std::endl;
@@ -630,9 +632,9 @@ void Entity::setAnimationSpeed(int speed)
 }
 
 // 功能：让实体内部 Animator 根据初始状态绑定动画，并同步第一帧 sprite 和碰撞盒尺寸。
-void Entity::initAnimationFromAnimator(AnimationClipManager& animationClips)
+void Entity::initAnimationFromAnimator()
 {
-    animator.initAnimation(*this, animationClips);
+    animator.initAnimation(*this);
 
     animation.writeCurrentFrameTo(renderSprite);
     syncRenderSpriteWorldDrawData();
@@ -645,4 +647,36 @@ void Entity::initAnimationFromAnimator(AnimationClipManager& animationClips)
         );
     }
 }
+
+// 功能：从模板映射初始化本实体的所有状态动画片段缓存。
+void Entity::initAnimations(
+    const std::string& tempName,
+    const std::string& initialAnim,
+    facingDirection initialFacing,
+    const std::unordered_map<std::string, std::string>& stateToClipName,
+    AnimationClipManager& animClips
+)
+{
+    templateName = tempName;
+    currentFacingDirection = initialFacing;
+    animator.configure(tempName, initialAnim);
+
+    myClips.clear();
+    for (const auto& pair : stateToClipName)
+    {
+        myClips[pair.first] = animClips.getClip(pair.second);
+    }
+}
+
+// 功能：根据状态名称获取本实体缓存在本地的动画片段。
+AnimationClip Entity::getClipForState(const std::string& state) const
+{
+    auto it = myClips.find(state);
+    if (it != myClips.end())
+    {
+        return it->second;
+    }
+    return AnimationClip();
+}
+
 
