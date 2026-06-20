@@ -158,6 +158,7 @@
     <ClCompile Include="GraphicsUtils.cpp" />
     <ClCompile Include="Input.cpp" />
     <ClCompile Include="Level.cpp" />
+    <ClCompile Include="LevelDebugger.cpp" />
     <ClCompile Include="MovementHandle.cpp" />
     <ClCompile Include="Renderer.cpp" />
     <ClCompile Include="Resource.cpp" />
@@ -189,6 +190,7 @@
     <ClInclude Include="GraphicsUtils.h" />
     <ClInclude Include="Input.h" />
     <ClInclude Include="Level.h" />
+    <ClInclude Include="LevelDebugger.h" />
     <ClInclude Include="MathUtils.h" />
     <ClInclude Include="MovementHandle.h" />
     <ClInclude Include="Renderer.h" />

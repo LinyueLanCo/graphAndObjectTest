@@ -18,57 +18,11 @@ static bool contains(const std::vector<std::string>& vec, const std::string& key
     return false; // 没找到，说明是个新来的碰撞
 }
 
-// 收集当前帧的游戏状态（如焦点角色的像素位置、渲染消耗、相机视口范围等），用作 Debug UI 的数据显示
-DebugPanelData Level::buildDebugPanelData()
-{
-    DebugPanelData data;
-
-    // 拿到焦点跟随目标的 ID
-    data.targetId = gCameraFollowTargetId;
-
-    // 如果这个目标演员还活着，把它的世界坐标和屏幕坐标取出来传给 UI 面板
-    Entity* target = entityManager.getEntity(gCameraFollowTargetId);
-    if (target)
-    {
-        data.targetName = target->getName();
-        data.entityX = target->getX();
-        data.entityY = target->getY();
-
-        data.entityScreenX = gCamera.worldToScreenX(target->getX());
-        data.entityScreenY = gCamera.worldToScreenY(target->getY());
-    }
-
-    // 统计本帧画图开销数据
-    data.renderedBackgroundSprites = renderFrameStats.backgroundSpriteCount;
-    data.renderedTileSprites = renderFrameStats.tileSpriteCount;
-    data.renderedEntitySprites = renderFrameStats.entitySpriteCount;
-    data.renderedTotalSprites = renderFrameStats.totalSpriteCount;
-
-    // 获取相机的中心点和当前焦距缩放倍率
-    data.cameraCenterX = gCamera.centerX;
-    data.cameraCenterY = gCamera.centerY;
-    data.cameraZoom = gCamera.zoom;
-
-    // 获取当前相机世界视口的四个边界线坐标
-    data.viewLeft = gCamera.getViewLeft();
-    data.viewRight = gCamera.getViewRight();
-    data.viewBottom = gCamera.getViewBottom();
-    data.viewTop = gCamera.getViewTop();
-
-    return data;
-}
-
 // 关卡构造函数：初始化状态控制变量默认值
 Level::Level()
 {
     controlledPlayerId = INVALID_ENTITY_ID;
-
-    // 初始化 UI 元素的索引。一开始还没创建，所以记为 -1
-    debugPanelIndex = -1;
-    debugEntitySectionIndex = -1;
-    debugRenderSectionIndex = -1;
-    debugCameraSectionIndex = -1;
-
+ 
     worldWidth = WINDOW_WIDTH;
     worldHeight = WINDOW_HEIGHT;
 }
@@ -108,7 +62,7 @@ void Level::init()
     }
 
     // 4. 拼装屏幕右上角的调试 UI 控制台
-    initUI();
+    levelDebugger.init(uiManager);
 
     // 5. 每次进关卡时，记得把碰撞打印的历史名单清空，准备开始新的计算
     lastOverlapPairs.clear();
@@ -175,8 +129,7 @@ void Level::update(InputManager& input)
 
     // 捕获镜头和 UI 调试按键的输入
     handleCameraInput(input);
-    handleUIInput(input);
-    handleRendererInput(input);
+    levelDebugger.handleInput(input, renderer, uiManager, entityManager);
 
     // 更新镜头和平滑背景视差
     updateCamera(input);
@@ -188,7 +141,7 @@ void Level::update(InputManager& input)
     backgroundManager.updateRuntimeTransforms(gCamera.dx, gCamera.dy);
 
     // 轮询并打印状态转移日志
-    updateDebugStates();
+    levelDebugger.updateDebugLogs(entityManager);
 
     // 进行重叠交互判定与响应
     updateOverlapEvents();
@@ -245,37 +198,7 @@ void Level::draw()
         tileMap.drawDebugCollisionBoxes();
     }
 
-    // Debug 面板父级负责整体背景；子 section 的最终可见性由 UIManager 按父级链路判断。
-    if (uiManager.isElementEffectivelyVisible(debugPanelIndex))
-    {
-        renderer.drawUIElementPanel(uiManager.getElement(debugPanelIndex));
-    }
-
-    DebugPanelData data = buildDebugPanelData();
-
-    if (uiManager.isElementEffectivelyVisible(debugEntitySectionIndex))
-    {
-        renderer.drawDebugEntitySectionText(
-            uiManager.getElement(debugEntitySectionIndex),
-            data
-        );
-    }
-
-    if (uiManager.isElementEffectivelyVisible(debugRenderSectionIndex))
-    {
-        renderer.drawDebugRenderSectionText(
-            uiManager.getElement(debugRenderSectionIndex),
-            data
-        );
-    }
-
-    if (uiManager.isElementEffectivelyVisible(debugCameraSectionIndex))
-    {
-        renderer.drawDebugCameraSectionText(
-            uiManager.getElement(debugCameraSectionIndex),
-            data
-        );
-    }
+    levelDebugger.draw(renderer, uiManager, entityManager, renderFrameStats);
 
 }
 
@@ -394,38 +317,7 @@ void Level::initBackground()
     }
 }
 
-void Level::initUI()
-{
-    // Debug 面板是顶层 UI，相对于窗口右上角定位。
-    UIElement debugPanel;
-    debugPanel.init(420, 520, UI_TOP_RIGHT, 24, 24);
 
-    debugPanelIndex = uiManager.addElement(debugPanel);
-
-    // Debug Entity 区域：显示当前相机跟随目标实体的数据。
-    UIElement debugEntitySection;
-    debugEntitySection.init(388, 110, UI_TOP_LEFT, 16, 16);
-    debugEntitySection.setParentIndex(debugPanelIndex);
-    debugEntitySection.refreshTargetByParentBox(uiManager.getElement(debugPanelIndex).getBox());
-    debugEntitySection.snapToTarget();
-    debugEntitySectionIndex = uiManager.addElement(debugEntitySection);
-
-    // Debug Render 区域：显示当前渲染相关数据。
-    UIElement debugRenderSection;
-    debugRenderSection.init(388, 130, UI_TOP_LEFT, 16, 140);
-    debugRenderSection.setParentIndex(debugPanelIndex);
-    debugRenderSection.refreshTargetByParentBox(uiManager.getElement(debugPanelIndex).getBox());
-    debugRenderSection.snapToTarget();
-    debugRenderSectionIndex = uiManager.addElement(debugRenderSection);
-
-    // Debug Camera 区域：显示当前相机和视口数据。
-    UIElement debugCameraSection;
-    debugCameraSection.init(388, 180, UI_TOP_LEFT, 16, 300);
-    debugCameraSection.setParentIndex(debugPanelIndex);
-    debugCameraSection.refreshTargetByParentBox(uiManager.getElement(debugPanelIndex).getBox());
-    debugCameraSection.snapToTarget();
-    debugCameraSectionIndex = uiManager.addElement(debugCameraSection);
-}
 // 步骤功能：在一帧最开始时，清空当前所有活跃演员身上上一帧残留的碰撞/重叠/阻挡的标记。
 // 这样物理引擎在接下来计算移动时，能拿到一张干干净净的状态纸开始写新的判定。
 void Level::clearEntityFrameState()
@@ -621,122 +513,7 @@ void Level::handleCameraInput(InputManager& input)
     }
 }
 
-void Level::handleUIInput(InputManager& input)
-{
-    // 以下 F8-F11 仅用于当前阶段验证 Debug UI 层级、显隐状态和 section 动画。
-    // 后续正式 UI 交互应改由按钮、配置面板或 Debug 菜单自身控制。
-    if (input.isKeyPressed(VK_F8))
-    {
-        toggleDebugPanelVisible();
-        cout << "Toggle debug panel." << endl;
-    }
 
-    if (input.isKeyPressed(VK_F9))
-    {
-        toggleDebugEntitySectionVisible();
-        cout << "Toggle debug entity section." << endl;
-    }
-
-    if (input.isKeyPressed(VK_F10))
-    {
-        toggleDebugRenderSectionVisible();
-        cout << "Toggle debug render section." << endl;
-    }
-
-    if (input.isKeyPressed(VK_F11))
-    {
-        toggleDebugCameraSectionVisible();
-        cout << "Toggle debug camera section." << endl;
-    }
-
-}
-
-void Level::toggleDebugPanelVisible()
-{
-    toggleUIElementVisible(debugPanelIndex);
-}
-
-void Level::toggleDebugEntitySectionVisible()
-{
-    UIElement& element = uiManager.getElement(debugEntitySectionIndex);
-
-    if (element.isVisible())
-    {
-        uiManager.hideElementAnimatedToOffset(debugEntitySectionIndex, 40, 0);
-    }
-    else
-    {
-        uiManager.showElementAnimatedFromOffset(debugEntitySectionIndex, -40, 0);
-    }
-}
-
-void Level::toggleDebugRenderSectionVisible()
-{
-    UIElement& element = uiManager.getElement(debugRenderSectionIndex);
-
-    if (element.isVisible())
-    {
-        uiManager.hideElementAnimatedToOffset(debugRenderSectionIndex, -40, 0);
-    }
-    else
-    {
-        uiManager.showElementAnimatedFromOffset(debugRenderSectionIndex, 40, 0);
-    }
-}
-
-void Level::toggleDebugCameraSectionVisible()
-{
-    UIElement& element = uiManager.getElement(debugCameraSectionIndex);
-
-    if (element.isVisible())
-    {
-        uiManager.hideElementAnimatedToOffset(debugCameraSectionIndex, 0, -40);
-    }
-    else
-    {
-        uiManager.showElementAnimatedFromOffset(debugCameraSectionIndex, 0, 40);
-    }
-}
-
-void Level::toggleUIElementVisible(int elementIndex)
-{
-    if (!uiManager.isValidIndex(elementIndex))
-    {
-        return;
-    }
-
-    UIElement& element = uiManager.getElement(elementIndex);
-
-    if (element.isVisible())
-    {
-        element.hide();
-    }
-    else
-    {
-        uiManager.showElementInstant(elementIndex);
-    }
-}
-
-void Level::handleRendererInput(InputManager& input)
-{
-	if (input.isKeyPressed(VK_F5))
-	{
-		renderer.toggleCollisionBox();
-        cout << "Toggle entity collision box." << endl;
-	}
-
-	if (input.isKeyPressed(VK_F6))
-	{
-		renderer.toggleTileCollisionBox();
-		cout << "Toggle map tile edge." << endl;
-
-	}
-    if (input.isKeyPressed(VK_F7))
-    {
-        renderer.toggleRenderBounds();
-        cout << "Toggle render bounds." << endl;
-    }
-}
 
 void Level::updateCamera(InputManager& input)
 {
@@ -759,79 +536,7 @@ void Level::updateCamera(InputManager& input)
 // 步骤功能：监测各种物理状态转移日志。
 // 每帧遍历活着的演员，对比他们本帧和上一帧的状态，一旦发生变化就打印提示。
 // 比如：Player1 从空中落到了地上，或者金币 died（死亡了）。
-void Level::updateDebugStates()
-{
-    auto& entities = entityManager.getEntities();
-    const auto& activeIndices = entityManager.getActiveIndices();
 
-    for (size_t idx : activeIndices)
-    {
-        Entity& ent = entities[idx];
-        if (!ent.getIsAlive())
-        {
-            continue; // 忽略死人槽位
-        }
-
-        // 碰撞状态监测：如果这帧撞上了，但上帧没撞，打印碰撞开始
-        if (ent.hasCollisionState() && !ent.lastCollisionState)
-        {
-            cout << "演员 [" << ent.getName() << "] (ID: " << ent.getId() << ") 开始碰到阻挡物了。" << endl;
-        }
-        ent.lastCollisionState = ent.hasCollisionState(); // 更新历史缓存
-
-        // 落地状态监测：如果这帧站在地上了，但上帧还在空中，打印落地
-        if (ent.isOnGround() && !ent.lastGroundState)
-        {
-            cout << "演员 [" << ent.getName() << "] (ID: " << ent.getId() << ") 稳稳落地。" << endl;
-        }
-        ent.lastGroundState = ent.isOnGround();
-
-        // 悬空状态监测：如果起飞悬空了
-        if (ent.isInAir() && !ent.lastInAirState)
-        {
-            cout << "演员 [" << ent.getName() << "] (ID: " << ent.getId() << ") 处于悬空状态。" << endl;
-        }
-        ent.lastInAirState = ent.isInAir();
-
-        // 起跳状态监测
-        bool nowJumping = ent.isJumping();
-        if (nowJumping && !ent.lastJumpingState)
-        {
-            cout << "演员 [" << ent.getName() << "] (ID: " << ent.getId() << ") 开始跳跃！" << endl;
-        }
-        if (!nowJumping && ent.lastJumpingState)
-        {
-            cout << "演员 [" << ent.getName() << "] (ID: " << ent.getId() << ") 结束了跳跃。" << endl;
-        }
-        ent.lastJumpingState = nowJumping;
-
-        // 冲刺/奔跑状态监测
-        bool nowSprinting = ent.isSprinting();
-        if (nowSprinting && !ent.lastSprintState)
-        {
-            cout << "演员 [" << ent.getName() << "] (ID: " << ent.getId() << ") 开始撒丫子狂奔（冲刺）。" << endl;
-        }
-        if (!nowSprinting && ent.lastSprintState)
-        {
-            cout << "演员 [" << ent.getName() << "] (ID: " << ent.getId() << ") 停止了狂奔。" << endl;
-        }
-        ent.lastSprintState = nowSprinting;
-    }
-
-    // 死亡日志监测：
-    // 因为这发生在帧末 processSpawns 之前，所以刚死的实体依然在 activeIndices 里。
-    // 我们在此捕获它们死亡的瞬间并打印它已经仙逝。
-    for (size_t idx : activeIndices)
-    {
-        Entity& ent = entities[idx];
-        bool nowAlive = ent.getIsAlive();
-        if (!nowAlive && ent.lastAliveState)
-        {
-            cout << "演员 [" << ent.getName() << "] (ID: " << ent.getId() << ") 驾鹤西去（死亡）。" << endl;
-        }
-        ent.lastAliveState = nowAlive; // 同步生存历史标志
-    }
-}
 
 // 步骤功能：双重循环检测实体两两之间是否有 AABB 碰撞重叠，并将碰撞事件填充到双方身上。
 // 
