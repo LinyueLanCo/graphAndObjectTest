@@ -16,5 +16,8 @@
   { "template": "Banana", "x": 2200, "y": 532 },
   { "template": "Banana", "x": 2200, "y": 632 },
   { "template": "Cherry", "x": 2400, "y": 532 },
-  { "template": "Cherry", "x": 2400, "y": 632 }
+  { "template": "Cherry", "x": 2400, "y": 632 },
+  { "template": "FallingPlatformLeft", "x": 2184, "y": 456 },
+  { "template": "FallingPlatformMid", "x": 2232, "y": 456 },
+  { "template": "FallingPlatformRight", "x": 2280, "y": 456 }
 ]

@@ -452,6 +452,13 @@ void Level::updateEntities(InputManager& input)
             continue; // 忽略死人，防止对无用槽位空转计算
         }
 
+        if (entities[idx].getEntityType() == FALLING_PLATFORM)
+        {
+            entities[idx].updateFallingPlatform(entityManager);
+            entities[idx].updateAnimatedSprite();
+            continue;
+        }
+
         BehaviorIntent intent;
 
         // 如果这个角色当前被标记受控，让翻译官去生成意图

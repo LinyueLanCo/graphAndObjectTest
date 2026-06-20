@@ -40,6 +40,9 @@ Entity::Entity()
     lastJumpingState = false;
     lastAliveState = true;
     flagActivatedJustNow = false;
+
+    platformState = 0;
+    platformTimer = 0.0;
 }
 
 // 功能：按资源路径和初始属性创建一个可用实体。
@@ -100,6 +103,9 @@ Entity::Entity(
     lastJumpingState = false;
     lastAliveState = alive;
     flagActivatedJustNow = false;
+
+    platformState = 0;
+    platformTimer = 0.0;
 }
 
 // 功能：按初始逻辑状态和动画资源模板创建实体，不再直接从构造函数加载图片路径。
@@ -157,6 +163,9 @@ Entity::Entity(
     lastJumpingState = false;
     lastAliveState = alive;
     flagActivatedJustNow = false;
+
+    platformState = 0;
+    platformTimer = 0.0;
 }
 
 // 功能：按默认朝向和默认待机状态创建绑定动画资源模板的实体。
@@ -241,6 +250,9 @@ void Entity::reset(
     lastJumpingState = false;
     lastAliveState = alive;
     flagActivatedJustNow = false;
+
+    platformState = 0;
+    platformTimer = 0.0;
 }
 
 // 功能：获取实体唯一标识 ID。
@@ -627,6 +639,68 @@ void Entity::updateAnimatedSprite()
     {
         killEntity();
         std::cout << "Endpoint [" << name << "] (ID: " << instanceId << ") collected and processed." << std::endl;
+    }
+}
+
+// 功能：下落平台每帧的晃动与坠落逻辑
+void Entity::updateFallingPlatform(EntityManager& entityManager)
+{
+    if (platformState == 0) // STATIC
+    {
+        RectBox myBox = getWorldCollisionBox();
+        const auto& activeIndices = entityManager.getActiveIndices();
+        auto& entities = entityManager.getEntities();
+
+        for (size_t idx : activeIndices)
+        {
+            Entity& other = entities[idx];
+            if (other.getEntityType() == PLAYER && other.getIsAlive())
+            {
+                RectBox playerBox = other.getWorldCollisionBox();
+                bool xOverlap = (playerBox.left < myBox.right && playerBox.right > myBox.left);
+                bool onTop = (fabs(playerBox.bottom - myBox.top) <= 1.0);
+
+                if (xOverlap && onTop && other.isOnGround())
+                {
+                    platformState = 1; // 开启摇晃
+                    platformTimer = 90; // 摇晃 90 帧 (约 1.5 秒)
+                    break;
+                }
+            }
+        }
+    }
+    else if (platformState == 1) // SHAKING
+    {
+        platformTimer -= 1.0;
+        double shakeAmplitude = 4.0;
+        renderSprite.offsetX = ((int)platformTimer % 4 < 2) ? shakeAmplitude : -shakeAmplitude;
+        syncRenderSpriteWorldDrawData();
+
+        if (platformTimer <= 0.0)
+        {
+            platformState = 2; // 下落
+            renderSprite.offsetX = 0.0;
+            renderSprite.zIndex = 200; // 提到最前景
+            blocking = false; // 取消阻挡
+            velocityY = 0.0;
+            syncRenderSpriteWorldDrawData();
+        }
+    }
+    else if (platformState == 2) // FALLING
+    {
+        velocityY -= 0.5;
+        if (velocityY < -15.0)
+        {
+            velocityY = -15.0;
+        }
+        y += velocityY;
+        syncRenderSpriteWorldDrawData();
+
+        if (y < -200.0)
+        {
+            killEntity();
+            std::cout << "Falling platform [" << name << "] (ID: " << instanceId << ") fell out of world." << std::endl;
+        }
     }
 }
 

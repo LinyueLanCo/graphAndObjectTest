@@ -31,6 +31,9 @@
     "pineapple": { "image": "pineapple", "frameCount": 17, "frameDelay": 5, "loop": true },
     "strawberry": { "image": "strawberry", "frameCount": 17, "frameDelay": 5, "loop": true },
     "kiwi": { "image": "kiwi", "frameCount": 17, "frameDelay": 5, "loop": true },
-    "cherry": { "image": "cherry", "frameCount": 17, "frameDelay": 5, "loop": true }
+    "cherry": { "image": "cherry", "frameCount": 17, "frameDelay": 5, "loop": true },
+    "falling_platform_l": { "image": "tileset", "frameCount": 1, "frameDelay": 2, "loop": true, "frameWidth": 16, "frameHeight": 16, "sourceStartX": 192, "sourceStartY": 64, "frameSpacingX": 0, "frameSpacingY": 0, "frameColumns": 1 },
+    "falling_platform_m": { "image": "tileset", "frameCount": 1, "frameDelay": 2, "loop": true, "frameWidth": 16, "frameHeight": 16, "sourceStartX": 208, "sourceStartY": 64, "frameSpacingX": 0, "frameSpacingY": 0, "frameColumns": 1 },
+    "falling_platform_r": { "image": "tileset", "frameCount": 1, "frameDelay": 2, "loop": true, "frameWidth": 16, "frameHeight": 16, "sourceStartX": 224, "sourceStartY": 64, "frameSpacingX": 0, "frameSpacingY": 0, "frameColumns": 1 }
   }
 }

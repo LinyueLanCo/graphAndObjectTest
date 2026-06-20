@@ -12,7 +12,8 @@ enum EntityType
     DEFAULT = 4,
     CHECKPOINT = 5,
     ENDPOINT = 6,
-    FRUIT = 7
+    FRUIT = 7,
+    FALLING_PLATFORM = 8
 };
 
 // facingDirection：

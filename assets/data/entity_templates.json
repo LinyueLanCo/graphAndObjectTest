@@ -198,5 +198,47 @@
       "idle": "cherry",
       "collected": "coin_collected"
     }
+  },
+  "FallingPlatformLeft": {
+    "type": 8,
+    "controlled": false,
+    "collidable": true,
+    "blocking": true,
+    "god": false,
+    "scaleX": 3.0,
+    "scaleY": 3.0,
+    "initialAnim": "static",
+    "initialFacing": "RIGHT",
+    "animations": {
+      "static": "falling_platform_l"
+    }
+  },
+  "FallingPlatformMid": {
+    "type": 8,
+    "controlled": false,
+    "collidable": true,
+    "blocking": true,
+    "god": false,
+    "scaleX": 3.0,
+    "scaleY": 3.0,
+    "initialAnim": "static",
+    "initialFacing": "RIGHT",
+    "animations": {
+      "static": "falling_platform_m"
+    }
+  },
+  "FallingPlatformRight": {
+    "type": 8,
+    "controlled": false,
+    "collidable": true,
+    "blocking": true,
+    "god": false,
+    "scaleX": 3.0,
+    "scaleY": 3.0,
+    "initialAnim": "static",
+    "initialFacing": "RIGHT",
+    "animations": {
+      "static": "falling_platform_r"
+    }
   }
 }

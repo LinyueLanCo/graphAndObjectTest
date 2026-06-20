@@ -59,6 +59,10 @@ private:
     facingDirection currentFacingDirection;
     Animator animator;
 
+    // 下落平台相关变量
+    int platformState;    // 0: STATIC, 1: SHAKING, 2: FALLING
+    double platformTimer; // 计时器（用于抖动时间）
+
     // 数据驱动动画扩展：当前实体所使用的模板名以及本地缓存的状态-动画片段池
     std::string templateName;
     std::unordered_map<std::string, AnimationClip> myClips;
@@ -188,6 +192,7 @@ public:
 
     void syncRenderSpriteWorldDrawData();
     void updateAnimatedSprite();
+    void updateFallingPlatform(class EntityManager& entityManager);
     void setSpriteTransform(double scaleX, double scaleY, double offsetX, double offsetY);
     void setAnimationSpeed(int speed);
     void initAnimationFromAnimator();

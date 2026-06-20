@@ -43,6 +43,14 @@ bool AnimationClipManager::init(const std::string& filepath, ResourceManager& re
         int frameDelay = config.value("frameDelay", 4);
         bool loop = config.value("loop", true);
 
+        int frameWidth = config.value("frameWidth", 0);
+        int frameHeight = config.value("frameHeight", 0);
+        int sourceStartX = config.value("sourceStartX", 0);
+        int sourceStartY = config.value("sourceStartY", 0);
+        int frameSpacingX = config.value("frameSpacingX", 0);
+        int frameSpacingY = config.value("frameSpacingY", 0);
+        int frameColumns = config.value("frameColumns", 0);
+
         Image2D* img = resources.getImage2D(imageName);
         if (img == nullptr)
         {
@@ -50,7 +58,19 @@ bool AnimationClipManager::init(const std::string& filepath, ResourceManager& re
             continue;
         }
 
-        clips[clipName] = AnimationClip(img, frameCount, frameDelay, loop);
+        clips[clipName] = AnimationClip(
+            img,
+            frameCount,
+            frameDelay,
+            loop,
+            frameWidth,
+            frameHeight,
+            sourceStartX,
+            sourceStartY,
+            frameSpacingX,
+            frameSpacingY,
+            frameColumns
+        );
     }
 
     std::cout << "动画片段加载完毕，共加载了 " << clips.size() << " 个动画片段。" << std::endl;
