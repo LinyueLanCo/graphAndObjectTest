@@ -25,11 +25,14 @@ enum facingDirection
     DOWN
 };
 
+using EntityID = int;
+const EntityID INVALID_ENTITY_ID = 0;
+
 // OverlapInfo：
 // 记录发生碰撞重叠的对方实体 ID 和实体类型。
 struct OverlapInfo
 {
-    std::string otherEntityId;
+    EntityID otherEntityId;
     EntityType otherType;
 };
 

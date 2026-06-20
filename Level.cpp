@@ -25,9 +25,10 @@ DebugPanelData Level::buildDebugPanelData()
     data.targetId = gCameraFollowTargetId;
 
     // 如果这个目标演员还活着，把它的世界坐标和屏幕坐标取出来传给 UI 面板
-    Entity* target = entityManager.getEntityById(gCameraFollowTargetId);
+    Entity* target = entityManager.getEntity(gCameraFollowTargetId);
     if (target)
     {
+        data.targetName = target->getName();
         data.entityX = target->getX();
         data.entityY = target->getY();
 
@@ -58,7 +59,7 @@ DebugPanelData Level::buildDebugPanelData()
 // 关卡构造函数：初始化状态控制变量默认值
 Level::Level()
 {
-    controlledEntityName = "Player1"; // 默认玩家一开始操控的是 "Player1"
+    controlledPlayerId = INVALID_ENTITY_ID;
 
     // 初始化 UI 元素的索引。一开始还没创建，所以记为 -1
     debugPanelIndex = -1;
@@ -95,11 +96,14 @@ void Level::init()
     // 3. 从 JSON 配置文件加载本关的初始实体，放入对象池大箱子里
     entityManager.loadEntities("assets/data/entities.json", animationClips);
 
-	Entity* checkpoint = entityManager.getEntityById("Checkpoint");
-	if (checkpoint)
-	{
-		checkpoint->setCollisionBoxOffset(0.0, -30.0);
-	}
+    // Find checkpoint and offset its collision box (rule-based lookup)
+    for (size_t idx : entityManager.getActiveIndices())
+    {
+        if (entityManager.getEntities()[idx].getEntityType() == CHECKPOINT)
+        {
+            entityManager.getEntities()[idx].setCollisionBoxOffset(0.0, -30.0);
+        }
+    }
 
     // 4. 拼装屏幕右上角的调试 UI 控制台
     initUI();
@@ -107,16 +111,29 @@ void Level::init()
     // 5. 每次进关卡时，记得把碰撞打印的历史名单清空，准备开始新的计算
     lastOverlapPairs.clear();
 
-    // 6. 初始化相机：把镜头瞬间平移到池子里第一个活跃角色的头上，避免镜头乱跳
-    auto& entities = entityManager.getEntities();
-    const auto& activeIndices = entityManager.getActiveIndices();
-    if (!activeIndices.empty())
+    // Find default controlled player
+    for (size_t idx : entityManager.getActiveIndices())
     {
-        gCamera.followInstant(entities[activeIndices[0]].getX(), entities[activeIndices[0]].getY(), worldWidth, worldHeight);
+        if (entityManager.getEntities()[idx].isControlled())
+        {
+            controlledPlayerId = entityManager.getEntities()[idx].getId();
+            break;
+        }
+    }
+    if (controlledPlayerId == INVALID_ENTITY_ID)
+    {
+        for (size_t idx : entityManager.getActiveIndices())
+        {
+            if (entityManager.getEntities()[idx].getEntityType() == PLAYER)
+            {
+                controlledPlayerId = entityManager.getEntities()[idx].getId();
+                break;
+            }
+        }
     }
 
-    // 8. 默认激活 Player1 的键盘操纵权限
-    setControlTarget(controlledEntityName);
+    // 8. 默认激活被控角色的键盘操纵权限
+    setControlTarget(controlledPlayerId);
 
     // 9. 摆放天空、云朵和树木图层
     initBackground();
@@ -185,9 +202,7 @@ void Level::update(InputManager& input)
         {
             ent.flagActivatedJustNow = false; // 消费掉这个标记，重置它
 
-            std::string coinId = "SpawnedCoin_" + std::to_string(spawnedCoinCounter++);
             entityManager.queueSpawnEntity(
-                coinId,
                 ent.getX(),
                 ent.getY() + 64.0,     // 放置在新位置
                 "CoinSilver"
@@ -393,18 +408,24 @@ void Level::clearEntityFrameState()
 // 5. 推进当前动画帧计时器，并将最新一帧的裁剪源图贴到实体 Sprite 身上备用。
 void Level::updateEntities(InputManager& input)
 {
-    // 安全控制保护：如果当前操控的主角意外死亡，我们需要默认把操控权恢复给 Player1
-    Entity* controlTarget = entityManager.getEntityById(controlledEntityName);
+    // 安全控制保护：如果当前操控的主角意外死亡，我们需要默认把操控权恢复给第一个活着的 Player
+    Entity* controlTarget = entityManager.getEntity(controlledPlayerId);
     if (!controlTarget || !controlTarget->getIsAlive())
     {
-        controlTarget = entityManager.getEntityById("Player1");
-        if (controlTarget && controlTarget->getIsAlive())
+        controlTarget = nullptr;
+        for (size_t idx : entityManager.getActiveIndices())
         {
-            controlledEntityName = "Player1";
+            Entity& ent = entityManager.getEntities()[idx];
+            if (ent.getIsAlive() && ent.getEntityType() == PLAYER)
+            {
+                controlTarget = &ent;
+                controlledPlayerId = ent.getId();
+                break;
+            }
         }
-        else
+        if (!controlTarget)
         {
-            controlledEntityName = "";
+            controlledPlayerId = INVALID_ENTITY_ID;
         }
     }
 
@@ -449,48 +470,72 @@ void Level::updateEntities(InputManager& input)
 // 步骤功能：设置当前被键盘操控的主角。
 // 并把其它所有人的操控权一并剥夺。
 // name: 想操控的实体 ID 名字（找不到或者死了就不进行任何操作）
-void Level::setControlTarget(const std::string& name)
+void Level::setControlTarget(EntityID targetId)
 {
-    Entity* target = entityManager.getEntityById(name);
+    Entity* target = entityManager.getEntity(targetId);
     if (!target || !target->getIsAlive())
     {
         return; // 安全保护：如果新目标是个空指针或者已经死了，直接拒绝切人
     }
 
-    controlledEntityName = name;
+    controlledPlayerId = targetId;
 
     auto& entities = entityManager.getEntities();
     // 遍历所有活着的人，给被选中的人 setControlled(true)，其它人 setControlled(false)
     for (size_t idx : entityManager.getActiveIndices())
     {
-        entities[idx].setControlled(entities[idx].getId() == controlledEntityName);
+        entities[idx].setControlled(entities[idx].getId() == controlledPlayerId);
     }
 
-    cout << "操控角色已安全切换至: "
-        << controlledEntityName
-        << endl;
+    cout << "操控角色已安全切换至 ID: " << controlledPlayerId << " (" << target->getName() << ")" << endl;
+}
+
+void Level::setControlTargetByName(const std::string& name)
+{
+    auto& entities = entityManager.getEntities();
+    for (size_t idx : entityManager.getActiveIndices())
+    {
+        if (entities[idx].getName() == name)
+        {
+            setControlTarget(entities[idx].getId());
+            return;
+        }
+    }
+}
+
+void Level::setCameraFollowTargetByName(const std::string& name)
+{
+    auto& entities = entityManager.getEntities();
+    for (size_t idx : entityManager.getActiveIndices())
+    {
+        if (entities[idx].getName() == name)
+        {
+            setCameraFollowTarget(entities[idx].getId(), entityManager);
+            return;
+        }
+    }
 }
 
 void Level::handleControlInput(InputManager& input)
 {
     if (input.isKeyPressed('1'))
     {
-        setControlTarget("Player1");
+        setControlTargetByName("Player1");
     }
 
     if (input.isKeyPressed('2'))
     {
-        setControlTarget("Player2");
+        setControlTargetByName("Player2");
     }
 
     if (input.isKeyPressed('3'))
     {
-        setControlTarget("Player3");
+        setControlTargetByName("Player3");
     }
 
     if (input.isKeyPressed('4'))
     {
-        setControlTarget("Player4");
+        setControlTargetByName("Player4");
     }
 }
 
@@ -498,22 +543,22 @@ void Level::handleCameraInput(InputManager& input)
 {
     if (input.isKeyPressed(VK_F1))
     {
-        setCameraFollowTarget("Player1", entityManager);
+        setCameraFollowTargetByName("Player1");
     }
 
     if (input.isKeyPressed(VK_F2))
     {
-        setCameraFollowTarget("Player2", entityManager);
+        setCameraFollowTargetByName("Player2");
     }
 
     if (input.isKeyPressed(VK_F3))
     {
-        setCameraFollowTarget("Player3", entityManager);
+        setCameraFollowTargetByName("Player3");
     }
 
     if (input.isKeyPressed(VK_F4))
     {
-        setCameraFollowTarget("Player4", entityManager);
+        setCameraFollowTargetByName("Player4");
     }
 }
 
@@ -671,21 +716,21 @@ void Level::updateDebugStates()
         // 碰撞状态监测：如果这帧撞上了，但上帧没撞，打印碰撞开始
         if (ent.hasCollisionState() && !ent.lastCollisionState)
         {
-            cout << "演员 " << ent.getId() << " 开始碰到阻挡物了。" << endl;
+            cout << "演员 [" << ent.getName() << "] (ID: " << ent.getId() << ") 开始碰到阻挡物了。" << endl;
         }
         ent.lastCollisionState = ent.hasCollisionState(); // 更新历史缓存
 
         // 落地状态监测：如果这帧站在地上了，但上帧还在空中，打印落地
         if (ent.isOnGround() && !ent.lastGroundState)
         {
-            cout << "演员 " << ent.getId() << " 稳稳落地。" << endl;
+            cout << "演员 [" << ent.getName() << "] (ID: " << ent.getId() << ") 稳稳落地。" << endl;
         }
         ent.lastGroundState = ent.isOnGround();
 
         // 悬空状态监测：如果起飞悬空了
         if (ent.isInAir() && !ent.lastInAirState)
         {
-            cout << "演员 " << ent.getId() << " 处于悬空状态。" << endl;
+            cout << "演员 [" << ent.getName() << "] (ID: " << ent.getId() << ") 处于悬空状态。" << endl;
         }
         ent.lastInAirState = ent.isInAir();
 
@@ -693,11 +738,11 @@ void Level::updateDebugStates()
         bool nowJumping = ent.isJumping();
         if (nowJumping && !ent.lastJumpingState)
         {
-            cout << "演员 " << ent.getId() << " 开始跳跃！" << endl;
+            cout << "演员 [" << ent.getName() << "] (ID: " << ent.getId() << ") 开始跳跃！" << endl;
         }
         if (!nowJumping && ent.lastJumpingState)
         {
-            cout << "演员 " << ent.getId() << " 结束了跳跃。" << endl;
+            cout << "演员 [" << ent.getName() << "] (ID: " << ent.getId() << ") 结束了跳跃。" << endl;
         }
         ent.lastJumpingState = nowJumping;
 
@@ -705,11 +750,11 @@ void Level::updateDebugStates()
         bool nowSprinting = ent.isSprinting();
         if (nowSprinting && !ent.lastSprintState)
         {
-            cout << "演员 " << ent.getId() << " 开始撒丫子狂奔（冲刺）。" << endl;
+            cout << "演员 [" << ent.getName() << "] (ID: " << ent.getId() << ") 开始撒丫子狂奔（冲刺）。" << endl;
         }
         if (!nowSprinting && ent.lastSprintState)
         {
-            cout << "演员 " << ent.getId() << " 停止了狂奔。" << endl;
+            cout << "演员 [" << ent.getName() << "] (ID: " << ent.getId() << ") 停止了狂奔。" << endl;
         }
         ent.lastSprintState = nowSprinting;
     }
@@ -723,7 +768,7 @@ void Level::updateDebugStates()
         bool nowAlive = ent.getIsAlive();
         if (!nowAlive && ent.lastAliveState)
         {
-            cout << "演员 " << ent.getId() << " 驾鹤西去（死亡）。" << endl;
+            cout << "演员 [" << ent.getName() << "] (ID: " << ent.getId() << ") 驾鹤西去（死亡）。" << endl;
         }
         ent.lastAliveState = nowAlive; // 同步生存历史标志
     }
@@ -774,14 +819,14 @@ void Level::updateOverlapEvents()
                 entities[idxA].setOverlapping(true);
                 entities[idxB].setOverlapping(true);
 
-                // 核心：把对方的名字 ID 和类型登记到各自内部的 currentOverlaps vector 中，实现碰撞关系存储
+                // 核心：把对方的名字 ID 和类型登记到各自内部 of currentOverlaps vector 中，实现碰撞关系存储
                 entities[idxA].addOverlap(entities[idxB].getId(), entities[idxB].getEntityType());
                 entities[idxB].addOverlap(entities[idxA].getId(), entities[idxA].getEntityType());
 
-                // 将两者的 ID 按照字母表小到大排序拼接成一个唯一的键，避免 (A, B) 和 (B, A) 产生多余判断
+                // 将两者的 ID 按照大小排序拼接成一个唯一的键，避免 (A, B) 和 (B, A) 产生多余判断
                 std::string key = (entities[idxA].getId() < entities[idxB].getId()) ?
-                                  (entities[idxA].getId() + "_" + entities[idxB].getId()) :
-                                  (entities[idxB].getId() + "_" + entities[idxA].getId());
+                                  (std::to_string(entities[idxA].getId()) + "_" + std::to_string(entities[idxB].getId())) :
+                                  (std::to_string(entities[idxB].getId()) + "_" + std::to_string(entities[idxA].getId()));
                 
                 // 登记在当前帧的碰撞名单上
                 currentOverlapPairs.push_back(key);
@@ -789,8 +834,8 @@ void Level::updateOverlapEvents()
                 // 如果上一帧并没有碰过它，才打印日志（防止控制台疯狂刷屏）
                 if (!contains(lastOverlapPairs, key))
                 {
-                    cout << "检测到新重叠事件：实体 ID [" << entities[idxA].getId() 
-                         << "] 碰到了 实体 ID [" << entities[idxB].getId() << "]" << endl;
+                    cout << "检测到新重叠事件：实体 [" << entities[idxA].getName() << "] (ID: " << entities[idxA].getId() 
+                         << ") 碰到了 实体 [" << entities[idxB].getName() << "] (ID: " << entities[idxB].getId() << ")" << endl;
                 }
             }
         }

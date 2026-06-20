@@ -39,7 +39,7 @@ private:
     RenderFrameStats renderFrameStats;       // 渲染计数器：统计本帧画了多少背景、有多少实体、多少瓦片
     Renderer renderer;                       // 画笔：负责调用 EasyX 将各类游戏精灵、文本及 UI 框真正绘制到屏幕上
 
-    std::string controlledEntityName;        // 当前操控的演员名字 ID（例如 "Player1"）
+    EntityID controlledPlayerId;             // 当前操控的演员 EntityID
     
     // 重叠日志历史缓存：记录上一帧已经发生重叠的配对 ID（如 "Player1_Coin1"），用 vector 记录，防止每帧重复打印刷屏
     std::vector<std::string> lastOverlapPairs;
@@ -74,9 +74,9 @@ private:
     // input: 输入管理箱，用来查询本帧哪些键被按下了
     void updateEntities(InputManager& input);
 
-    // 步骤函数：将操控权转移给指定 ID 的角色，并将其它实体的 control 标记设为 false
-    // name: 想要控制的实体 ID
-    void setControlTarget(const std::string& name);
+    void setControlTarget(EntityID targetId);
+    void setControlTargetByName(const std::string& name);
+    void setCameraFollowTargetByName(const std::string& name);
 
     // 步骤函数：监控按键 1、2、3、4，允许玩家在游戏中动态切人控制
     void handleControlInput(InputManager& input);

@@ -27,7 +27,8 @@ struct RenderFrameStats
 // Debug 面板一帧要显示的数据快照，数据由 Level 在当前帧收集后交给 Renderer 显示。
 struct DebugPanelData
 {
-    std::string targetId;
+    EntityID targetId;
+    std::string targetName;
 
     double entityX;
     double entityY;

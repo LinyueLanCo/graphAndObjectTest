@@ -6,7 +6,8 @@ static int gNextEntityId = 1;
 // 功能：初始化一个默认实体及其基础状态。
 Entity::Entity()
 {
-    id = "Entity_" + std::to_string(gNextEntityId++);
+    instanceId = INVALID_ENTITY_ID;
+    name = "Entity_" + std::to_string(gNextEntityId++);
     x = 0;
     y = 0;
     speed = 5;
@@ -55,7 +56,8 @@ Entity::Entity(
     bool alive
 )
 {
-    id = "Entity_" + std::to_string(gNextEntityId++);
+    instanceId = INVALID_ENTITY_ID;
+    name = "Entity_" + std::to_string(gNextEntityId++);
     animation.load(imagePath, frameCount);
     animation.setSpeed(4);
     animation.setLoop(true);
@@ -102,7 +104,8 @@ Entity::Entity(
 
 // 功能：按初始逻辑状态和动画资源模板创建实体，不再直接从构造函数加载图片路径。
 Entity::Entity(
-    std::string entityId,
+    EntityID instanceId,
+    const std::string& entityName,
     double startX,
     double startY,
     bool isControlled,
@@ -116,7 +119,8 @@ Entity::Entity(
     bool alive
 )
 {
-    id = entityId;
+    this->instanceId = instanceId;
+    name = entityName;
     x = startX;
     y = startY;
 
@@ -157,7 +161,8 @@ Entity::Entity(
 
 // 功能：按默认朝向和默认待机状态创建绑定动画资源模板的实体。
 Entity::Entity(
-    std::string entityId,
+    EntityID instanceId,
+    const std::string& entityName,
     double startX,
     double startY,
     bool isControlled,
@@ -169,7 +174,8 @@ Entity::Entity(
     bool alive
 )
     : Entity(
-        entityId,
+        instanceId,
+        entityName,
         startX,
         startY,
         isControlled,
@@ -187,7 +193,8 @@ Entity::Entity(
 
 // 功能：重置实体的所有属性以重用槽位。
 void Entity::reset(
-    std::string entityId,
+    EntityID instanceId,
+    const std::string& entityName,
     double startX,
     double startY,
     bool isControlled,
@@ -199,7 +206,8 @@ void Entity::reset(
     bool alive
 )
 {
-    id = entityId;
+    this->instanceId = instanceId;
+    name = entityName;
     x = startX;
     y = startY;
     controlled = isControlled;
@@ -236,9 +244,9 @@ void Entity::reset(
 }
 
 // 功能：获取实体唯一标识 ID。
-std::string Entity::getId() const
+EntityID Entity::getId() const
 {
-    return id;
+    return instanceId;
 }
 
 // 功能：获取实体类型标签。
@@ -407,7 +415,7 @@ void Entity::setOverlapping(bool value)
 }
 
 // 功能：向实体中追加一条重叠对象记录。
-void Entity::addOverlap(const std::string& otherId, EntityType otherType)
+void Entity::addOverlap(EntityID otherId, EntityType otherType)
 {
     OverlapInfo info;
     info.otherEntityId = otherId;
@@ -438,7 +446,7 @@ void Entity::resolveOverlaps(EntityManager& entityManager)
     // 循环遍历我这帧碰到的所有对象
     for (int i = 0; i < (int)currentOverlaps.size(); i++)
     {
-        std::string otherId = currentOverlaps[i].otherEntityId;
+        EntityID otherId = currentOverlaps[i].otherEntityId;
         EntityType otherType = currentOverlaps[i].otherType;
 
         // 1. 如果我是玩家操控的主角：
@@ -447,14 +455,18 @@ void Entity::resolveOverlaps(EntityManager& entityManager)
         {
             if (otherType == COIN)
             {
-                cout << "主角 (ID: " << id << ") 碰到了金币 (ID: " << otherId << ") - [准备执行加分]" << endl;
+                Entity* otherEntity = entityManager.getEntity(otherId);
+                if (otherEntity)
+                {
+                    cout << "主角 [" << name << "] (ID: " << instanceId << ") 碰到了金币 [" << otherEntity->getName() << "] (ID: " << otherId << ") - [准备执行加分]" << endl;
+                }
             }
         }
 
         // 2. 如果我是可拾取物（COIN）：
         if (entityType == COIN)
         {
-            Entity* otherEntity = entityManager.getEntityById(otherId);
+            Entity* otherEntity = entityManager.getEntity(otherId);
 
             if (otherEntity != nullptr && otherEntity->isControlled())
             {
@@ -462,17 +474,17 @@ void Entity::resolveOverlaps(EntityManager& entityManager)
                 collidable = false;
 
                 // 通用调试日志：直接输出本实体的具体 ID
-                std::cout << "玩家拾取了物品: [ID: " << id << "]" << std::endl;
+                std::cout << "玩家拾取了物品: [" << name << "] (ID: " << instanceId << ")" << std::endl;
 
                 // --- 特判区 ---
                 // 如果你需要对某些特殊物品进行特判逻辑，可以直接根据 ID 判定：
-                if (id == "SpecialGoldApple")
+                if (name == "SpecialGoldApple")
                 {
                     // 比如吃到了特殊的黄金苹果，触发回满血或者无敌逻辑
                     std::cout << "【特殊事件】吃到了黄金苹果，主角获得无敌状态！" << std::endl;
                     // otherEntity->setGod(true); 等等
                 }
-                else if (id.rfind("Apple", 0) == 0) // 以 "Apple" 开头的实体
+                else if (name.rfind("Apple", 0) == 0) // 以 "Apple" 开头的实体
                 {
                     // 普通苹果的行为
                 }
@@ -490,7 +502,7 @@ void Entity::resolveOverlaps(EntityManager& entityManager)
         //    一旦玩家操控的角色碰到了我，只要我还没升过旗，我就开始切换升旗动画。
         if (entityType == CHECKPOINT)
         {
-            Entity* otherEntity = entityManager.getEntityById(otherId);
+            Entity* otherEntity = entityManager.getEntity(otherId);
 
             // 如果确实碰到了主角，并且我还没升过旗（不处于 FLAG_OUT 和 FLAG_IDLE 状态）
             if (otherEntity != nullptr && otherEntity->isControlled())
@@ -499,14 +511,14 @@ void Entity::resolveOverlaps(EntityManager& entityManager)
                 {
                     // 切换到升旗动画
                     animator.changeAnimation(*this, "flag_out");
-                    std::cout << "旗杆 (ID: " << id << ") 被玩家触碰，开始升旗！" << std::endl;
+                    std::cout << "旗杆 [" << name << "] (ID: " << instanceId << ") 被玩家触碰，开始升旗！" << std::endl;
                 }
             }
         }
         // 4. 如果我是终点（ENDPOINT）：
         if (entityType == ENDPOINT)
         {
-            Entity* otherEntity = entityManager.getEntityById(otherId);
+            Entity* otherEntity = entityManager.getEntity(otherId);
 
             if (otherEntity != nullptr && otherEntity->isControlled())
             {
@@ -515,7 +527,7 @@ void Entity::resolveOverlaps(EntityManager& entityManager)
                     collidable = false;
                     animator.changeAnimation(*this, "pressed");
                 }
-                std::cout << "玩家触碰到了终点 (ID: " << id << ")" << std::endl;
+                std::cout << "玩家触碰到了终点 [" << name << "] (ID: " << instanceId << ")" << std::endl;
                 // 这里可以添加过关逻辑，比如切换到下一关或者显示胜利界面
             }
         }
@@ -601,7 +613,7 @@ void Entity::updateAnimatedSprite()
     if (entityType == COIN && getAnimationState() == "collected" && isAnimationFinished())
     {
         killEntity();
-        std::cout << "Coin (ID: " << id << ") destroyed after collected animation finished." << std::endl;
+        std::cout << "Coin [" << name << "] (ID: " << instanceId << ") destroyed after collected animation finished." << std::endl;
     }
 
     // 如果是旗帜且播放完了升旗动画，标记以动态生成金币
@@ -614,7 +626,7 @@ void Entity::updateAnimatedSprite()
     if (entityType == ENDPOINT && getAnimationState() == "collected" && isAnimationFinished())
     {
         killEntity();
-        std::cout << "Endpoint (ID: " << id << ") collected and processed." << std::endl;
+        std::cout << "Endpoint [" << name << "] (ID: " << instanceId << ") collected and processed." << std::endl;
     }
 }
 

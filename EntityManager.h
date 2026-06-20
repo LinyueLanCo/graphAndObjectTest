@@ -9,7 +9,6 @@
 // SpawnRequest: 动态生成实体的请求参数。
 struct SpawnRequest
 {
-    std::string id;          // 给新实体起个唯一的名字（比如 "SpawnedCoin_1"）
     double x;                // 诞生位置的世界坐标 X
     double y;                // 诞生位置的世界坐标 Y
     std::string templateName;// 实体模板名（如 "CoinSilver"）
@@ -45,8 +44,9 @@ class EntityManager
 {
 private:
     std::vector<Entity> entities;                        // 对象池本尊：固定存放 200 个实体实例的连续大箱子
-    std::unordered_map<std::string, size_t> nameToIndex; // 导航地图：记录实体 ID 到大箱子下标的映射。
+    std::unordered_map<EntityID, size_t> idToIndex;      // 导航地图：记录实体 ID 到大箱子下标的映射。
     std::vector<SpawnRequest> spawnQueue;                // 临时寄存处：本帧内请求动态生成但还没落地的演员队列
+    EntityID nextEntityId;                               // 自增唯一标识符计数器
 
     // 双索引列表，高效遍历与复用的核心
     std::vector<size_t> activeIndices;                   // 活跃索引名单：目前活在游戏世界里的实体下标
@@ -68,7 +68,6 @@ public:
 
     // 把实时生成新实体的请求放入队列，等帧末安全处理
     void queueSpawnEntity(
-        const std::string& id,
         double x,
         double y,
         const std::string& templateName
@@ -77,9 +76,9 @@ public:
     // 帧末安全大扫除与新生实体的生成
     void processSpawns(AnimationClipManager& animationClips);
 
-    // 两个极速 ID 导航函数，支持通过名字拿取实体的读写/只读指针（找不到就回 nullptr）
-    Entity* getEntityById(const std::string& id);
-    const Entity* getEntityById(const std::string& id) const;
+    // 两个极速 ID 导航函数，支持通过 EntityID 拿取实体的读写/只读指针（找不到就回 nullptr）
+    Entity* getEntity(EntityID id);
+    const Entity* getEntity(EntityID id) const;
 
     // 兼容老系统的 entities 数组引用接口，不推荐频繁遍历
     std::vector<Entity>& getEntities();

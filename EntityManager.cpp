@@ -106,8 +106,9 @@ bool EntityManager::loadEntities(const std::string& filepath, AnimationClipManag
     // 清理索引、队列和哈希定位器，准备重新分配
     activeIndices.clear();
     deadIndices.clear();
-    nameToIndex.clear();
+    idToIndex.clear();
     spawnQueue.clear();
+    nextEntityId = 1;
 
     size_t activeCount = data.size();
     if (activeCount > 200)
@@ -120,7 +121,7 @@ bool EntityManager::loadEntities(const std::string& filepath, AnimationClipManag
     for (size_t i = 0; i < activeCount; i++)
     {
         auto& item = data[i];
-        std::string name = item.value("id", "");
+        std::string name = item.value("name", "");
         std::string tempName = item.value("template", "");
         double x = item.value("x", 0.0);
         double y = item.value("y", 0.0);
@@ -140,13 +141,16 @@ bool EntityManager::loadEntities(const std::string& filepath, AnimationClipManag
         bool god = item.value("god", temp.god);
         EntityType type = (EntityType)item.value("type", (int)temp.type);
 
+        EntityID iid = nextEntityId++;
+
         // 用 reset 函数重写这块槽位上实体的所有属性，“赋予新生命”
         entities[i].reset(
+            iid,
             name,
             x, y,
             controlled, collidable, blocking, god,
             type, tempName,
-            1 // 初始活泼状态为 1（alive = 1）
+            true // 初始活泼状态为 1（alive = 1）
         );
 
         // 同步加载并本地缓存实体的所有状态动画片段，重置朝向和初始动画状态
@@ -204,10 +208,10 @@ bool EntityManager::loadEntities(const std::string& filepath, AnimationClipManag
 }
 
 // 极其高效的导航查询：基于哈希表 O(1) 瞬间获取实体的内存地址
-Entity* EntityManager::getEntityById(const std::string& id)
+Entity* EntityManager::getEntity(EntityID id)
 {
-    auto it = nameToIndex.find(id);
-    if (it != nameToIndex.end())
+    auto it = idToIndex.find(id);
+    if (it != idToIndex.end())
     {
         return &entities[it->second];
     }
@@ -215,10 +219,10 @@ Entity* EntityManager::getEntityById(const std::string& id)
 }
 
 // 极其高效的导航查询（常量版本）
-const Entity* EntityManager::getEntityById(const std::string& id) const
+const Entity* EntityManager::getEntity(EntityID id) const
 {
-    auto it = nameToIndex.find(id);
-    if (it != nameToIndex.end())
+    auto it = idToIndex.find(id);
+    if (it != idToIndex.end())
     {
         return &entities[it->second];
     }
@@ -241,32 +245,31 @@ const std::vector<Entity>& EntityManager::getEntities() const
 void EntityManager::clear()
 {
     entities.clear();
-    nameToIndex.clear();
+    idToIndex.clear();
     spawnQueue.clear();
     activeIndices.clear();
     deadIndices.clear();
+    nextEntityId = 1;
 }
 
-// 重新建立“名字ID -> vector下标”的对照表。
+// 重新建立“ID -> vector下标”的对照表。
 void EntityManager::rebuildMap()
 {
-    nameToIndex.clear();
+    idToIndex.clear();
     for (size_t idx : activeIndices)
     {
-        nameToIndex[entities[idx].getId()] = idx;
+        idToIndex[entities[idx].getId()] = idx;
     }
 }
 
 // 将实时生成的动态请求填入待处理小本子（存入请求队列，不当场生成以防指针失效）
 void EntityManager::queueSpawnEntity(
-    const std::string& id,
     double x,
     double y,
     const std::string& templateName
 )
 {
     SpawnRequest req;
-    req.id = id;
     req.x = x;
     req.y = y;
     req.templateName = templateName;
@@ -284,7 +287,7 @@ void EntityManager::processSpawns(AnimationClipManager& animationClips)
         if (!entities[idx].getIsAlive()) // 如果它已经死了（比如被吃掉的硬币）
         {
             // 从哈希导航图中注销该 ID。
-            nameToIndex.erase(entities[idx].getId());
+            idToIndex.erase(entities[idx].getId());
             
             // 归还到死亡索引列表中，以便将来别的请求复用这个坑位
             deadIndices.push_back(idx);
@@ -309,7 +312,7 @@ void EntityManager::processSpawns(AnimationClipManager& animationClips)
         {
             if (deadIndices.empty())
             {
-                std::cout << "警告：对象池爆满！无法在游戏中生成新演员 \"" << req.id << "\"！" << std::endl;
+                std::cout << "警告：对象池爆满！无法在游戏中生成新演员！" << std::endl;
                 break;
             }
 
@@ -325,9 +328,13 @@ void EntityManager::processSpawns(AnimationClipManager& animationClips)
             size_t idx = deadIndices.back();
             deadIndices.pop_back();
 
+            EntityID iid = nextEntityId++;
+            std::string generatedName = "Spawned_" + std::to_string(iid);
+
             // 调用 reset 重塑这块槽位的属性
             entities[idx].reset(
-                req.id,
+                iid,
+                generatedName,
                 req.x,
                 req.y,
                 temp.controlled,
@@ -336,7 +343,7 @@ void EntityManager::processSpawns(AnimationClipManager& animationClips)
                 temp.god,
                 temp.type,
                 req.templateName,
-                1 // 重新复活状态
+                true // 重新复活状态
             );
 
             // 初始化新实体的动画状态、朝向与片段映射
@@ -363,10 +370,10 @@ void EntityManager::processSpawns(AnimationClipManager& animationClips)
 
             // 将其放回活人名单，并在哈希地图上重新注册它的名字。
             activeIndices.push_back(idx);
-            nameToIndex[req.id] = idx;
+            idToIndex[iid] = idx;
 
             std::cout << "实时动态生成（复用对象池槽位 " << idx << "）：实体 \"" 
-                      << req.id << "\" 已在世界坐标 (" << req.x << ", " << req.y << ") 顺利复活！" << std::endl;
+                      << generatedName << "\" (ID: " << iid << ") 已在世界坐标 (" << req.x << ", " << req.y << ") 顺利复活！" << std::endl;
         }
         
         // 记得清空本次请求本子，留待下一帧记录

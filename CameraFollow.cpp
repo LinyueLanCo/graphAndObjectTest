@@ -2,11 +2,11 @@
 #include <iostream>
 #include "Camera.h"
 
-std::string gCameraFollowTargetId = "Player1";
+EntityID gCameraFollowTargetId = INVALID_ENTITY_ID;
 
-void setCameraFollowTarget(const std::string& newTargetId, const EntityManager& entityManager)
+void setCameraFollowTarget(EntityID newTargetId, const EntityManager& entityManager)
 {
-    const Entity* target = entityManager.getEntityById(newTargetId);
+    const Entity* target = entityManager.getEntity(newTargetId);
     if (!target)
     {
         return;
@@ -19,8 +19,8 @@ void setCameraFollowTarget(const std::string& newTargetId, const EntityManager& 
 
     gCameraFollowTargetId = newTargetId;
 
-    std::cout << "Camera follow target changed to Entity "
-        << gCameraFollowTargetId << std::endl;
+    std::cout << "Camera follow target changed to Entity [" << target->getName() << "] (ID: "
+        << gCameraFollowTargetId << ")" << std::endl;
 }
 
 void updateCameraFollow(
@@ -37,20 +37,27 @@ void updateCameraFollow(
         return;
     }
 
-    Entity* target = entityManager.getEntityById(gCameraFollowTargetId);
+    Entity* target = entityManager.getEntity(gCameraFollowTargetId);
     if (!target || !target->getIsAlive())
     {
-        // 尝试回退到默认的 Player1
-        target = entityManager.getEntityById("Player1");
-        if (target && target->getIsAlive())
+        // 尝试寻找一个活着的 PLAYER 角色作为跟随目标
+        target = nullptr;
+        for (size_t idx : entityManager.getActiveIndices())
         {
-            gCameraFollowTargetId = "Player1";
+            Entity& e = entityManager.getEntities()[idx];
+            if (e.getIsAlive() && e.getEntityType() == PLAYER)
+            {
+                target = &e;
+                gCameraFollowTargetId = e.getId();
+                break;
+            }
         }
-        else
+        if (!target)
         {
             // 回退到第一个存活的实体
-            for (auto& e : entityManager.getEntities())
+            for (size_t idx : entityManager.getActiveIndices())
             {
+                Entity& e = entityManager.getEntities()[idx];
                 if (e.getIsAlive())
                 {
                     target = &e;

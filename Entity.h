@@ -25,7 +25,8 @@ class Entity
     friend class Animator;
 
 private:
-    std::string id;
+    EntityID instanceId;
+    std::string name;
     std::vector<OverlapInfo> currentOverlaps;
 
     animatedSprite animation;
@@ -89,7 +90,8 @@ public:
         bool alive = 1
     );
     Entity(
-        std::string entityId,
+        EntityID instanceId,
+        const std::string& entityName,
         double startX,
         double startY,
         bool isControlled,
@@ -100,10 +102,11 @@ public:
         const std::string& tempName,
         facingDirection initialFacing,
         const std::string& initialAnim,
-        bool alive = 1
+        bool alive = true
     );
     Entity(
-        std::string entityId,
+        EntityID instanceId,
+        const std::string& entityName,
         double startX,
         double startY,
         bool isControlled,
@@ -112,10 +115,11 @@ public:
         bool isGod,
         EntityType Type,
         const std::string& tempName,
-        bool alive = 1
+        bool alive = true
     );
 
-    std::string getId() const;
+    EntityID getId() const;
+    const std::string& getName() const { return name; }
     std::string getTemplateName() const { return templateName; }
     EntityType getEntityType();
     bool isCollidable();
@@ -146,7 +150,8 @@ public:
 
     // 重置大复活术：擦除槽位中实体上辈子的各种状态残留，直接将新的参数重新装载到当前对象上
     void reset(
-        std::string entityId,
+        EntityID instanceId,
+        const std::string& entityName,
         double startX,
         double startY,
         bool isControlled,
@@ -155,7 +160,7 @@ public:
         bool isGod,
         EntityType Type,
         const std::string& tempName,
-        bool alive = 1
+        bool alive = true
     );
 
     double getX();
@@ -165,7 +170,7 @@ public:
     const sprite& getSprite() const;
 
     void setOverlapping(bool value);
-    void addOverlap(const std::string& otherId, EntityType otherType);
+    void addOverlap(EntityID otherId, EntityType otherType);
     const std::vector<OverlapInfo>& getCurrentOverlaps() const;
 
     // 实体自治逻辑：让实体自己去处理本帧记录在 currentOverlaps 里的碰撞对象并执行动作

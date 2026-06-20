@@ -20,7 +20,8 @@ void RenderFrameStats::refreshTotal()
 
 DebugPanelData::DebugPanelData()
 {
-    targetId = "";
+    targetId = INVALID_ENTITY_ID;
+    targetName = "";
 
     entityX = 0;
     entityY = 0;
@@ -370,7 +371,11 @@ void Renderer::drawDebugEntitySectionText(const UIElement& content, DebugPanelDa
     outtextxy(x, y, text);
     y += lineH;
 
-    _stprintf_s(text, _T("Entity ID: %hs"), data.targetId.c_str());
+    _stprintf_s(text, _T("Entity Name: %hs"), data.targetName.c_str());
+    outtextxy(x, y, text);
+    y += lineH;
+
+    _stprintf_s(text, _T("Entity IID: %d"), data.targetId);
     outtextxy(x, y, text);
     y += lineH;
 
