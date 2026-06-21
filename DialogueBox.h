@@ -46,6 +46,9 @@ private:
     bool isAutoCloseEnabled;    // 是否启用了自动收回
     double autoCloseTimer;      // 自动收回倒计时剩余帧数
 
+    // 预计算文字排版所需的总高度
+    double calculateRequiredHeight(const std::string& text) const;
+
 public:
     DialogueBox();
 

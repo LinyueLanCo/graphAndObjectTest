@@ -1,4 +1,4 @@
-﻿#include "UI.h"
+#include "UI.h"
 #include "MathUtils.h"
 
 // 功能：获取当前窗口对应的顶层 UI 区域。
@@ -104,6 +104,8 @@ UIElement::UIElement()
 
     w = 0;
     h = 0;
+    targetW = 0;
+    targetH = 0;
 
     anchor = UI_TOP_LEFT;
     marginX = 0;
@@ -170,6 +172,8 @@ void UIElement::init(int newW, int newH, UIAnchor newAnchor, int newMarginX, int
 {
     w = newW;
     h = newH;
+    targetW = newW;
+    targetH = newH;
 
     anchor = newAnchor;
     marginX = newMarginX;
@@ -207,8 +211,8 @@ void UIElement::refreshTargetByParentBox(UIBox parentBox)
 {
     UIBox box = makeUIBoxByParentAnchor(
         parentBox,
-        w,
-        h,
+        (int)targetW,
+        (int)targetH,
         anchor,
         marginX,
         marginY
@@ -275,6 +279,9 @@ void UIElement::update()
     x = MathUtils::smoothTo(x, targetX, moveSpeed);
     y = MathUtils::smoothTo(y, targetY, moveSpeed);
 
+    w = MathUtils::smoothTo(w, targetW, moveSpeed);
+    h = MathUtils::smoothTo(h, targetH, moveSpeed);
+
     if (fabs(targetX - x) < 0.1)
     {
         x = targetX;
@@ -285,13 +292,23 @@ void UIElement::update()
         y = targetY;
     }
 
-    if (state == UI_SHOWING && x == targetX && y == targetY)
+    if (fabs(targetW - w) < 0.1)
+    {
+        w = targetW;
+    }
+
+    if (fabs(targetH - h) < 0.1)
+    {
+        h = targetH;
+    }
+
+    if (state == UI_SHOWING && x == targetX && y == targetY && w == targetW && h == targetH)
     {
         interactable = true;
         state = UI_VISIBLE;
     }
 
-    if (state == UI_HIDING && x == targetX && y == targetY)
+    if (state == UI_HIDING && x == targetX && y == targetY && w == targetW && h == targetH)
     {
         active = false;
         visible = false;
@@ -335,6 +352,36 @@ bool UIElement::isInteractable() const
 UIElementState UIElement::getState() const
 {
     return state;
+}
+
+// 功能：设置目标宽高，并刷新目标定位位置。
+void UIElement::setTargetSize(double newTargetW, double newTargetH)
+{
+    targetW = newTargetW;
+    targetH = newTargetH;
+    refreshTarget();
+}
+
+// 功能：直接设置当前宽高与目标宽高，并刷新目标位置。
+void UIElement::setSize(double newW, double newH)
+{
+    w = newW;
+    h = newH;
+    targetW = newW;
+    targetH = newH;
+    refreshTarget();
+}
+
+// 功能：获取目标宽度。
+double UIElement::getTargetW() const
+{
+    return targetW;
+}
+
+// 功能：获取目标高度。
+double UIElement::getTargetH() const
+{
+    return targetH;
 }
 
 // 功能：添加一个 UI 元素，返回它在 UIManager 中的下标。

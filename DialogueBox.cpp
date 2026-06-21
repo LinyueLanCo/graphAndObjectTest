@@ -41,13 +41,6 @@ void DialogueBox::startDialogue(const std::string& text, const DialogueConfig& n
     config = newConfig;
     isAutoCloseEnabled = config.autoClose;
     autoCloseTimer = config.autoCloseDuration;
-    
-    // 重新根据配置更新 UIElement 的位置与大小
-    this->init(config.boxW, config.boxH, UI_CENTER, 0, config.marginY);
-    // 保持隐藏状态，初始置于窗口下边界之外
-    this->hide();
-    this->refreshTarget();
-    this->setPosition(this->getTargetX(), this->getTargetY() + 400.0);
 
     fullText = text;
     
@@ -55,6 +48,19 @@ void DialogueBox::startDialogue(const std::string& text, const DialogueConfig& n
     std::transform(fullText.begin(), fullText.end(), fullText.begin(), [](unsigned char c) {
         return std::toupper(c);
     });
+
+    // 1. 预先算出本句对话文本排版所需的自适应高度
+    double neededH = calculateRequiredHeight(fullText);
+
+    // 2. 重新根据配置初始化 UIElement 的位置与大小（以默认 boxH 起步）
+    this->init(config.boxW, config.boxH, UI_CENTER, 0, config.marginY);
+    // 保持隐藏状态，初始置于窗口下边界之外
+    this->hide();
+    this->refreshTarget();
+    this->setPosition(this->getTargetX(), this->getTargetY() + 400.0);
+
+    // 3. 将目标高度设为自适应计算的高度，触发高度插值平滑拉伸
+    this->setTargetSize(config.boxW, neededH);
 
     displayText = "";
     textProgress = 0.0;
@@ -136,6 +142,66 @@ void DialogueBox::updateDialogue()
             this->hideDialogueWithOffset(0, 400);
         }
     }
+}
+
+double DialogueBox::calculateRequiredHeight(const std::string& text) const
+{
+    // 模拟排版换行过程
+    int lines = 1;
+    int drawCharW = (int)(config.charWidth * config.charScale);
+    int drawCharH = (int)(config.charHeight * config.charScale);
+    int maxRight = config.boxW - config.paddingLeft;
+    int drawX = config.paddingLeft;
+
+    // 5行10列的字集图对照字符串映射定义
+    static const std::string FONT_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ    0123456789.,:?!()+- ";
+
+    for (char c : text)
+    {
+        if (c == '\n')
+        {
+            drawX = config.paddingLeft;
+            lines++;
+            continue;
+        }
+
+        if (c == ' ')
+        {
+            drawX += drawCharW + config.charSpacing;
+            if (drawX + drawCharW > maxRight)
+            {
+                drawX = config.paddingLeft;
+                lines++;
+            }
+            continue;
+        }
+
+        // 步进到下一个字位置
+        drawX += drawCharW + config.charSpacing;
+
+        // 自动换行检查
+        if (drawX + drawCharW > maxRight)
+        {
+            drawX = config.paddingLeft;
+            lines++;
+        }
+    }
+
+    // 理想高度 = paddingTop + paddingBottom + 行数 * 字符高 + (行数 - 1) * 行间距
+    // 我们假设 paddingBottom 和 paddingTop 一致，均使用 paddingTop
+    double neededH = config.paddingTop + config.paddingTop + lines * drawCharH;
+    if (lines > 1)
+    {
+        neededH += (lines - 1) * config.lineSpacing;
+    }
+
+    // 限制最小高度为配置的 boxH，防止过短的文本使对话框缩得太小
+    if (neededH < config.boxH)
+    {
+        neededH = config.boxH;
+    }
+
+    return neededH;
 }
 
 

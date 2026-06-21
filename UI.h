@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include "Config.h"
 
@@ -62,8 +62,11 @@ private:
     double targetX;
     double targetY;
 
-    int w;
-    int h;
+    double w;
+    double h;
+
+    double targetW;
+    double targetH;
 
     UIAnchor anchor;
     int marginX;
@@ -91,6 +94,11 @@ public:
     void setTargetPosition(double newTargetX, double newTargetY);
     double getTargetX() const;
     double getTargetY() const;
+
+    void setTargetSize(double newTargetW, double newTargetH);
+    void setSize(double newW, double newH);
+    double getTargetW() const;
+    double getTargetH() const;
 
     void init(int newW, int newH, UIAnchor newAnchor, int newMarginX, int newMarginY);
     void refreshTarget();
