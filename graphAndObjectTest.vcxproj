@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|Win32">
@@ -168,6 +168,8 @@
     <ClCompile Include="TileTypes.cpp" />
     <ClCompile Include="UI.cpp" />
     <ClCompile Include="RenderQueue.cpp" />
+    <ClCompile Include="DialogueBox.cpp" />
+    <ClCompile Include="LocalizationManager.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="AnimationPlayer.h" />
@@ -202,6 +204,8 @@
     <ClInclude Include="TileTypes.h" />
     <ClInclude Include="UI.h" />
     <ClInclude Include="RenderQueue.h" />
+    <ClInclude Include="DialogueBox.h" />
+    <ClInclude Include="LocalizationManager.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

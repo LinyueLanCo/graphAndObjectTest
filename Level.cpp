@@ -80,6 +80,13 @@ void Level::init()
 
     // 9. 摆放天空、云朵和树木图层
     initBackground();
+
+    // 10. 初始化本地化文本与像素对话框
+    localizationManager.loadLanguage("assets/data/localization.json");
+    IMAGE* fontImg = resources.getRawImage("font_white_8x10");
+    dialogueBox.initDialogue(fontImg);
+    dialogueBox.refreshTarget();
+    dialogueBox.snapToTarget();
 }
 
 // Level::update: 每一帧的核心更新流程（数据流动中枢）。
@@ -155,6 +162,41 @@ void Level::update(InputManager& input)
     // 帧末垃圾回收与动态生成落地
     entityManager.processSpawns(animationClips);
 
+    // 关卡临时交互事件：玩家站在旗杆附近按 E 键可以看路牌
+    Entity* player = entityManager.getEntity(controlledPlayerId);
+    if (player)
+    {
+        bool nearSign = (fabs(player->getX() - 1500.0) < 100.0);
+        if (nearSign)
+        {
+            if (input.isKeyPressed('E'))
+            {
+                if (dialogueBox.getState() == UI_HIDDEN)
+                {
+                    std::string text = localizationManager.getString("signpost_level1_intro");
+                    dialogueBox.startDialogue(text);
+                    dialogueBox.showDialogueWithOffset(0, 200);
+                }
+                else
+                {
+                    dialogueBox.advance();
+                }
+            }
+        }
+        else
+        {
+            // 远离后自动隐藏
+            if (dialogueBox.getState() != UI_HIDDEN && dialogueBox.getState() != UI_HIDING)
+            {
+                dialogueBox.hideDialogueWithOffset(0, 200);
+            }
+        }
+    }
+
+    // 更新对话框本身的位置插值与打字机状态
+    dialogueBox.update();
+    dialogueBox.updateDialogue();
+
     // UI 数据变化缓动更新
     uiManager.update();
 }
@@ -187,6 +229,8 @@ void Level::draw()
 
     levelDebugger.draw(renderer, uiManager, entityManager, renderFrameStats);
 
+    // 6. 绘制像素字体对话框（始终处于屏幕最顶层）
+    dialogueBox.draw(renderer);
 }
 
 void Level::initResources()

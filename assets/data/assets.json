@@ -1,4 +1,4 @@
-{
+﻿{
   "images":
    [
     { "name": "bg_sky", "path": "assets\\tex\\maps\\bg1\\Sky_1920x1080.png" },
@@ -37,7 +37,8 @@
     { "name": "pineapple", "path": "assets\\tex\\entities\\items\\Pineapple.png" },
     { "name": "strawberry", "path": "assets\\tex\\entities\\items\\Strawberry.png" },
     { "name": "kiwi", "path": "assets\\tex\\entities\\items\\Kiwi.png" },
-    { "name": "cherry", "path": "assets\\tex\\entities\\items\\Cherries.png" }
+    { "name": "cherry", "path": "assets\\tex\\entities\\items\\Cherries.png" },
+    { "name": "font_white_8x10", "path": "assets\\tex\\text\\Text (White) (8x10).png" }
    ],
   "texts":
    [

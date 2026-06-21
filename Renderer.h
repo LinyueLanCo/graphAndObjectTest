@@ -69,6 +69,13 @@ private:
     // 是否显示所有可绘制对象的屏幕绘制边界。
     bool showRenderBounds;
 
+    // 功能：绘制实体当前世界碰撞盒的调试矩形。
+    void drawEntityCollisionBox(Entity& entity);
+
+    // 功能：在屏幕坐标中绘制渲染对象的实际绘制边界。
+    void drawRenderBounds(int x, int y, int w, int h, COLORREF color);
+
+public:
     // 功能：从图集中裁剪指定区域，并以 Alpha 混合绘制到屏幕目标矩形。
     void drawImageTileAlpha(
         int destX,
@@ -82,13 +89,6 @@ private:
         int srcH
     );
 
-    // 功能：绘制实体当前世界碰撞盒的调试矩形。
-    void drawEntityCollisionBox(Entity& entity);
-
-    // 功能：在屏幕坐标中绘制渲染对象的实际绘制边界。
-    void drawRenderBounds(int x, int y, int w, int h, COLORREF color);
-
-public:
     // 功能：初始化渲染器的调试绘制开关。
     Renderer();
 

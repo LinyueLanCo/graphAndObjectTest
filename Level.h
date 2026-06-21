@@ -15,6 +15,8 @@
 #include "UI.h"
 #include "RenderQueue.h"
 #include "LevelDebugger.h"
+#include "DialogueBox.h"
+#include "LocalizationManager.h"
 
 // Level: 关卡大舞台（场景控制器）。
 // 它是当前关卡的核心组织者，整合了地图、视差背景、实体、UI以及物理/渲染引擎。
@@ -32,6 +34,9 @@ private:
 
     UIManager uiManager;                     // UI大本营：管理整个关卡的调试 UI 元素、父子层级关系和渐变动画
     LevelDebugger levelDebugger;             // 调试器组件：管理调试面板的组装与状态显示
+    DialogueBox dialogueBox;                 // 对话框组件：独立类，继承自 UIElement，自理文本打字机与逐字渲染
+    LocalizationManager localizationManager; // 本地化管理器：管理外部 JSON 文本映射
+    int dialogueBoxUIIndex;                  // 对话框在 UIManager 容器中的下标索引
 
     RenderFrameStats renderFrameStats;       // 渲染计数器：统计本帧画了多少背景、有多少实体、多少瓦片
     Renderer renderer;                       // 画笔：负责调用 EasyX 将各类游戏精灵、文本及 UI 框真正绘制到屏幕上
