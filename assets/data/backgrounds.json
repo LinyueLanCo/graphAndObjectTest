@@ -1,4 +1,4 @@
-[
+﻿[
   {
     "image": "bg_sky",
     "renderOrder": 0,
@@ -15,7 +15,7 @@
   },
   {
     "image": "bg_clouds",
-    "renderOrder": 1,
+    "renderOrder": 0,
     "parallaxFactor": 0.15,
     "zoomFactor": 0.15,
     "useAlphaBlend": true,
@@ -29,7 +29,7 @@
   },
   {
     "image": "bg_flora1",
-    "renderOrder": 2,
+    "renderOrder": 0,
     "parallaxFactor": 0.35,
     "zoomFactor": 0.35,
     "useAlphaBlend": true,
@@ -43,7 +43,7 @@
   },
   {
     "image": "bg_flora2",
-    "renderOrder": 3,
+    "renderOrder": 0,
     "parallaxFactor": 0.65,
     "zoomFactor": 0.65,
     "useAlphaBlend": true,
@@ -51,6 +51,20 @@
     "useCameraCenter": true,
     "offsetX": 0.0,
     "offsetY": 500.0,
+    "drawW": -1.0,
+    "drawH": -1.0,
+    "autoScrollSpeedX": 0.0
+  },
+  {
+    "image": "bg_sea_front",
+    "renderOrder": 2,
+    "parallaxFactor": 1.5,
+    "zoomFactor": 1.0,
+    "useAlphaBlend": true,
+    "drawMode": "BACKGROUND_REPEAT_X",
+    "useCameraCenter": true,
+    "offsetX": 0.0,
+    "offsetY": 259.0,
     "drawW": -1.0,
     "drawH": -1.0,
     "autoScrollSpeedX": 0.0

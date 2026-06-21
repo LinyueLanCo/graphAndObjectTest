@@ -38,6 +38,7 @@
     { "name": "strawberry", "path": "assets\\tex\\entities\\items\\Strawberry.png" },
     { "name": "kiwi", "path": "assets\\tex\\entities\\items\\Kiwi.png" },
     { "name": "cherry", "path": "assets\\tex\\entities\\items\\Cherries.png" },
+    { "name": "bg_sea_front", "path": "assets\\tex\\maps\\sea_front.png" },
     { "name": "font_white_8x10", "path": "assets\\tex\\text\\Text (White) (8x10).png" }
    ],
   "texts":

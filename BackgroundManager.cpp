@@ -127,8 +127,8 @@ void BackgroundManager::rebuildRenderObjects()
     }
 
     // 5. 将这一帧收集好的所有背景切片按照渲染深度 (renderOrder) 从小到大排序
-    //    保证远景先画、近景后画，遮挡关系正确
-    sort(
+    //    保证远景先画、近景后画，遮挡关系正确（使用 stable_sort 保留同 renderOrder 背景的加载先后顺序）
+    stable_sort(
         renderPool.begin(),
         renderPool.begin() + activeRenderCount,
         [](const BackgroundObject& a, const BackgroundObject& b)
@@ -271,8 +271,8 @@ void BackgroundManager::collectSprites(RenderQueue& queue)
             continue;
         }
 
-        // 背景对象的 zIndex 默认设为 0，因为它们最先提交，利用稳定排序会保持在最底层
-        obj.renderSprite.zIndex = 0;
+        // 使用 renderOrder 作为 zIndex，以便有些背景（前景）可以在 tiles/entities 之上！
+        obj.renderSprite.zIndex = obj.renderOrder;
         queue.submit(obj.renderSprite, SPRITE_TYPE_BACKGROUND, RGB(120, 160, 255));
     }
 }
