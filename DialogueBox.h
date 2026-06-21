@@ -3,6 +3,8 @@
 #include "UI.h"
 #include <string>
 
+class Image2D;
+
 // DialogueConfig：对话框样式与打字机配置结构体
 struct DialogueConfig
 {
@@ -39,7 +41,7 @@ private:
     double textProgress;        // 字符裁剪进度计数器（每帧增加）
     bool isFinished;            // 是否已打完当前页的所有文字
 
-    IMAGE* fontTexture;         // 指向 8x10.png 像素白字体大图的指针
+    Image2D* fontTexture;         // 指向 8x10.png 像素白字体大图的指针
     
     DialogueConfig config;      // 当前正在使用的对话框配置
 
@@ -53,7 +55,7 @@ public:
     DialogueBox();
 
     // 初始化对话框基本属性并绑定字体贴图
-    void initDialogue(IMAGE* newFontTexture, const DialogueConfig& newConfig = DialogueConfig::Default());
+    void initDialogue(Image2D* newFontTexture, const DialogueConfig& newConfig = DialogueConfig::Default());
 
     // 载入新文本，重置打字机所有状态，并可按需提供覆盖配置
     void startDialogue(const std::string& text, const DialogueConfig& newConfig = DialogueConfig::Default());
@@ -64,7 +66,7 @@ public:
 
     const std::string& getFullText() const { return fullText; }
     const DialogueConfig& getConfig() const { return config; }
-    IMAGE* getFontTexture() const { return fontTexture; }
+    Image2D* getFontTexture() const { return fontTexture; }
     const std::string& getDisplayText() const { return displayText; }
 
     // 对话交互推进接口：

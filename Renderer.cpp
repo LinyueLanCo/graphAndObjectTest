@@ -2,6 +2,7 @@
 
 #include "Camera.h"
 #include "DialogueBox.h"
+#include "Image2D.h"
 
 RenderFrameStats::RenderFrameStats()
 {
@@ -320,7 +321,7 @@ void Renderer::drawDialogueBox(const DialogueBox& dialogueBox)
     }
 
     const DialogueConfig& config = dialogueBox.getConfig();
-    IMAGE* fontTexture = dialogueBox.getFontTexture();
+    Image2D* fontTexture = dialogueBox.getFontTexture();
     const std::string& displayText = dialogueBox.getDisplayText();
 
     // 1. 绘制复古双边框深色底座圆角面板背景
@@ -396,7 +397,7 @@ void Renderer::drawDialogueBox(const DialogueBox& dialogueBox)
                 drawY,
                 drawCharW,
                 drawCharH,
-                fontTexture,
+                fontTexture->getImage(),
                 srcX,
                 srcY,
                 config.charWidth,

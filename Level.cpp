@@ -77,7 +77,7 @@ void Level::init()
 
     // 10. 初始化本地化文本与像素对话框
     localizationManager.loadLanguage("assets/data/localization.json");
-    IMAGE* fontImg = resources.getRawImage("font_white_8x10");
+    Image2D* fontImg = resources.getImage2D("font_white_8x10");
     dialogueBox.initDialogue(fontImg);
 
     // 运行关卡自定义初始化事件

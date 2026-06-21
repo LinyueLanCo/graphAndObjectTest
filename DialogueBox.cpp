@@ -1,5 +1,6 @@
 ﻿#include "DialogueBox.h"
 #include "Renderer.h"
+#include "Image2D.h"
 #include <cmath>
 #include <iostream>
 #include <algorithm>
@@ -20,7 +21,7 @@ DialogueBox::DialogueBox() : UIElement()
     autoCloseTimer = 0.0;
 }
 
-void DialogueBox::initDialogue(IMAGE* newFontTexture, const DialogueConfig& newConfig)
+void DialogueBox::initDialogue(Image2D* newFontTexture, const DialogueConfig& newConfig)
 {
     fontTexture = newFontTexture;
     config = newConfig;
