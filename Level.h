@@ -17,12 +17,18 @@
 #include "LevelDebugger.h"
 #include "DialogueBox.h"
 #include "LocalizationManager.h"
+#include "TimerManager.h"
 
 // Level: 关卡大舞台（场景控制器）。
 // 它是当前关卡的核心组织者，整合了地图、视差背景、实体、UI以及物理/渲染引擎。
 // 它就像导演一样，在每一帧的 update 中按照固定流程调用各个模块，指挥大家协作。
 class Level
 {
+public:
+    // 关卡事件函数指针定义
+    typedef void (*InitEventFn)(Level&);
+    typedef void (*UpdateEventFn)(Level&, class InputManager&);
+
 private:
     ResourceManager resources;               // 资源箱：用来加载和保存当前关卡需要的所有图片和文本路径
     AnimationClipManager animationClips;     // 动画本子：根据图片资源切割成的角色动作帧片段表
@@ -36,6 +42,7 @@ private:
     LevelDebugger levelDebugger;             // 调试器组件：管理调试面板的组装与状态显示
     DialogueBox dialogueBox;                 // 对话框组件：独立类，继承自 UIElement，自理文本打字机与逐字渲染
     LocalizationManager localizationManager; // 本地化管理器：管理外部 JSON 文本映射
+    TimerManager timerManager;               // 通用时间管理器
     int dialogueBoxUIIndex;                  // 对话框在 UIManager 容器中的下标索引
 
     RenderFrameStats renderFrameStats;       // 渲染计数器：统计本帧画了多少背景、有多少实体、多少瓦片
@@ -50,6 +57,10 @@ private:
 
     int worldWidth;                          // 关卡世界的像素总宽度
     int worldHeight;                         // 关卡世界的像素总高度
+
+    // 关卡自定义事件回调指针
+    InitEventFn onInitEvent;
+    UpdateEventFn onUpdateEvent;
 
 
 
@@ -109,4 +120,29 @@ public:
 
     // 每帧的画面渲染：依次画背景、瓦片地图、活跃演员角色、UI 调试层
     void draw();
+
+    // 关卡事件绑定接口
+    void setInitEvent(InitEventFn fn) { onInitEvent = fn; }
+    void setUpdateEvent(UpdateEventFn fn) { onUpdateEvent = fn; }
+
+    // 公共 Getter 接口
+    EntityManager& getEntityManager() { return entityManager; }
+    const EntityManager& getEntityManager() const { return entityManager; }
+
+    DialogueBox& getDialogueBox() { return dialogueBox; }
+    const DialogueBox& getDialogueBox() const { return dialogueBox; }
+
+    LocalizationManager& getLocalizationManager() { return localizationManager; }
+    const LocalizationManager& getLocalizationManager() const { return localizationManager; }
+
+    ResourceManager& getResources() { return resources; }
+    const ResourceManager& getResources() const { return resources; }
+
+    AnimationClipManager& getAnimationClipManager() { return animationClips; }
+    const AnimationClipManager& getAnimationClipManager() const { return animationClips; }
+
+    EntityID getControlledPlayerId() const { return controlledPlayerId; }
+
+    TimerManager& getTimerManager() { return timerManager; }
+    const TimerManager& getTimerManager() const { return timerManager; }
 };

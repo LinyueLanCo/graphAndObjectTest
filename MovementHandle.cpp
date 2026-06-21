@@ -77,7 +77,7 @@ void MovementHandle::update(
     // 1. 处理起跳意图：只有在踩着地面（onGround）时，才允许弹起
     if (intent.wantJump && self.onGround)
     {
-        self.velocityY = JUMP_SPEED; // 给一个向上的跳跃初速度
+        self.velocityY = self.jumpSpeed; // 给一个向上的跳跃初速度
         self.onGround = false;       // 瞬间腾空
         self.InAir = true;           // 悬空标记
         self.jumping = true;         // 跳跃状态激活
@@ -108,7 +108,7 @@ void MovementHandle::update(
 
     // 3. 垂直移动处理（Y轴）
     // 速度公式：本帧速度 = 上帧速度 - 重力（velocityY 随时间越来越小，形成坠落）
-    self.velocityY -= GRAVITY;
+    self.velocityY -= self.gravity;
 
     // 物理限制：落体速度不能超过终端最大速度（MAX_FALL_SPEED 为负数，比如 -16 像素/帧）
     if (self.velocityY < MAX_FALL_SPEED)

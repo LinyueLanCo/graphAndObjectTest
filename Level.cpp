@@ -12,6 +12,9 @@ Level::Level()
  
     worldWidth = WINDOW_WIDTH;
     worldHeight = WINDOW_HEIGHT;
+
+    onInitEvent = nullptr;
+    onUpdateEvent = nullptr;
 }
 
 // 演员动画皮肤初始化：在关卡资源准备妥当后，给对象池中活着的实体同步绑定其动画包里的第一段待机动画
@@ -38,15 +41,6 @@ void Level::init()
 
     // 3. 从 JSON 配置文件加载本关的初始实体，放入对象池大箱子里
     entityManager.loadEntities("assets/data/entities.json", animationClips);
-
-    // Find checkpoint and offset its collision box (rule-based lookup)
-    for (size_t idx : entityManager.getActiveIndices())
-    {
-        if (entityManager.getEntities()[idx].getEntityType() == CHECKPOINT)
-        {
-            entityManager.getEntities()[idx].getCollisionBox().setOffset(0.0, -30.0);
-        }
-    }
 
     // 4. 拼装屏幕右上角的调试 UI 控制台
     levelDebugger.init(uiManager);
@@ -85,8 +79,12 @@ void Level::init()
     localizationManager.loadLanguage("assets/data/localization.json");
     IMAGE* fontImg = resources.getRawImage("font_white_8x10");
     dialogueBox.initDialogue(fontImg);
-    dialogueBox.refreshTarget();
-    dialogueBox.snapToTarget();
+
+    // 运行关卡自定义初始化事件
+    if (onInitEvent)
+    {
+        onInitEvent(*this);
+    }
 }
 
 // Level::update: 每一帧的核心更新流程（数据流动中枢）。
@@ -141,57 +139,17 @@ void Level::update(InputManager& input)
     collisionManager.updateOverlapEvents(entityManager);
     collisionManager.resolveEntityOverlaps(entityManager);
 
-    // 事件联动：检查是否有旗子刚刚播完升旗动画，如果是，立马让管家生成银币（Coin2）
-    static int spawnedCoinCounter = 1;
-    auto& entities = entityManager.getEntities();
-    for (size_t idx : entityManager.getActiveIndices())
+    // 运行关卡自定义帧更新事件
+    if (onUpdateEvent)
     {
-        Entity& ent = entities[idx];
-        if (ent.getEntityType() == CHECKPOINT && ent.flagActivatedJustNow)
-        {
-            ent.flagActivatedJustNow = false; // 消费掉这个标记，重置它
-
-            entityManager.queueSpawnEntity(
-                ent.getX(),
-                ent.getY() + 64.0,     // 放置在新位置
-                "Banana"
-            );
-        }
+        onUpdateEvent(*this, input);
     }
 
     // 帧末垃圾回收与动态生成落地
     entityManager.processSpawns(animationClips);
 
-    // 关卡临时交互事件：玩家站在旗杆附近按 E 键可以看路牌
-    Entity* player = entityManager.getEntity(controlledPlayerId);
-    if (player)
-    {
-        bool nearSign = (fabs(player->getX() - 1500.0) < 100.0);
-        if (nearSign)
-        {
-            if (input.isKeyPressed('E'))
-            {
-                if (dialogueBox.getState() == UI_HIDDEN)
-                {
-                    std::string text = localizationManager.getString("signpost_level1_intro");
-                    dialogueBox.startDialogue(text);
-                    dialogueBox.showDialogueWithOffset(0, 200);
-                }
-                else
-                {
-                    dialogueBox.advance();
-                }
-            }
-        }
-        else
-        {
-            // 远离后自动隐藏
-            if (dialogueBox.getState() != UI_HIDDEN && dialogueBox.getState() != UI_HIDING)
-            {
-                dialogueBox.hideDialogueWithOffset(0, 200);
-            }
-        }
-    }
+    // 每一帧推进全局事件计时器时间
+    timerManager.update();
 
     // 更新对话框本身的位置插值与打字机状态
     dialogueBox.update();
@@ -224,13 +182,13 @@ void Level::draw()
     }
     if (renderer.getShowTileCollisionBox())
     {
-        tileMap.drawDebugCollisionBoxes();
+        renderer.drawTileCollisionBoxes(tileMap);
     }
 
     levelDebugger.draw(renderer, uiManager, entityManager, renderFrameStats);
 
     // 6. 绘制像素字体对话框（始终处于屏幕最顶层）
-    dialogueBox.draw(renderer);
+    renderer.drawDialogueBox(dialogueBox);
 }
 
 void Level::initResources()
@@ -552,6 +510,7 @@ void Level::updateCamera(InputManager& input)
     double oldCenterY = gCamera.centerY;
 
     updateCameraFollow(
+        gCamera,
         entityManager,
         worldWidth,
         worldHeight,

@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include "Camera.h"
 #include "Collision.h"
@@ -91,7 +91,6 @@ public:
     bool hasTileCollision(int row, int col);
     RectBox getTileWorldBox(int row, int col);
     RectBox getTileCollisionWorldBox(int row, int col);
-    void drawDebugCollisionBoxes();
     void collectSprites(class RenderQueue& queue);
 
     int getworldWidth();

@@ -2,6 +2,7 @@
 #include "GraphicsUtils.h"
 #include "Input.h"
 #include "Level.h"
+#include "LevelEvents.h"
 // 功能：程序入口，初始化窗口并运行主游戏循环。
 int main()
 {
@@ -25,6 +26,10 @@ int main()
 
     InputManager input;
     Level level;
+
+    // 绑定 Level 1 的专属事件函数
+    level.setInitEvent(level1_InitEvent);
+    level.setUpdateEvent(level1_UpdateEvent);
 
     level.init();
 

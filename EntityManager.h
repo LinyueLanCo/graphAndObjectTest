@@ -34,6 +34,7 @@ struct EntityTemplate
     int animSpeed = -1;
     std::string initialAnim = "idle";
     facingDirection initialFacing = RIGHT;
+    double shakeDuration = 90.0;
     
     // std::unordered_map 是标准模板库（STL）中的哈希表关联容器。
     // 这里用于状态映射：将动画状态名称关联到实际的剪辑名称，提供常数平均时间复杂度的快速查询。

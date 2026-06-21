@@ -1,4 +1,4 @@
-﻿#include "CameraFollow.h"
+#include "CameraFollow.h"
 #include <iostream>
 #include "Camera.h"
 
@@ -24,6 +24,7 @@ void setCameraFollowTarget(EntityID newTargetId, const EntityManager& entityMana
 }
 
 void updateCameraFollow(
+    Camera& camera,
     EntityManager& entityManager,
     int worldWidth,
     int worldHeight,
@@ -74,7 +75,7 @@ void updateCameraFollow(
     }
 
     // 先更新 zoom，再用新的可见视口范围限制 camera center。
-    gCamera.updateZoom();
+    camera.updateZoom();
 
     // 鼠标引导相机偏移强度：0.25 表示鼠标偏移的 25% 用于相机偏移。
     double lookStrength = 0.25;
@@ -93,12 +94,12 @@ void updateCameraFollow(
     }
 
     // 屏幕像素偏移除以 zoom，得到对应的世界坐标偏移。
-    double offsetWorldX = mouseOffsetX / gCamera.zoom * lookStrength;
+    double offsetWorldX = mouseOffsetX / camera.zoom * lookStrength;
 
     // 屏幕 Y 轴向下为正，世界 Y 轴向上为正，所以这里用负号翻转方向。
-    double offsetWorldY = -mouseOffsetY / gCamera.zoom * lookStrength;
+    double offsetWorldY = -mouseOffsetY / camera.zoom * lookStrength;
 
-    gCamera.followSmooth(
+    camera.followSmooth(
         target->getX(),
         target->getY(),
         worldWidth,

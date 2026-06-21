@@ -1,4 +1,4 @@
-﻿#include "TileMap.h"
+#include "TileMap.h"
 // 引入 std::stringstream（字符串输入输出流模板类）。
 // 为什么用它？因为在解析地图文件文本数据（rows, cols, 以及具体的二维瓦片网格 ID）时，
 // 将地图文本字符串封装进 std::stringstream 中，能让我们像操作 std::ifstream 文件流一样，
@@ -630,36 +630,6 @@ RectBox TileMap::getTileCollisionWorldBox(int row, int col)
     }
 
     return collisionBox;
-}
-
-// 功能：绘制所有拥有地图碰撞类型的 tile 调试碰撞框。
-void TileMap::drawDebugCollisionBoxes()
-{
-    for (const TileInstance& tile : tileInstances)
-    {
-        if (!tile.visible || tile.tileId == TILE_EMPTY || tile.collisionType == TILE_COLLISION_NONE)
-        {
-            continue;
-        }
-
-        if (tile.collisionType == TILE_COLLISION_FULL_SOLID)
-        {
-            setlinecolor(YELLOW);
-        }
-        else
-        {
-            setlinecolor(GREEN);
-        }
-
-        RectBox box = getTileInstanceCollisionWorldBox(tile);
-
-        int screenLeft = worldToScreenX(box.left);
-        int screenRight = worldToScreenX(box.right);
-        int screenTop = worldToScreenY(box.top);
-        int screenBottom = worldToScreenY(box.bottom);
-
-        rectangle(screenLeft, screenTop, screenRight, screenBottom);
-    }
 }
 
 // 功能：获取当前 tile map 对应的世界宽度。

@@ -103,6 +103,12 @@
     <ClCompile Include="LocalizationManager.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="LevelEvents.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="TimerManager.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="AnimationPlayer.h">
@@ -207,6 +213,12 @@
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="LocalizationManager.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="LevelEvents.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="TimerManager.h">
       <Filter>头文件</Filter>
     </ClInclude>
   </ItemGroup>

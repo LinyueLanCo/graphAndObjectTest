@@ -3,6 +3,9 @@
 #include "CameraFollow.h"
 #include "Config.h"
 #include <iostream>
+#include <vector>
+#include <string>
+#include <cstdio>
 
 LevelDebugger::LevelDebugger()
 {
@@ -22,7 +25,7 @@ void LevelDebugger::init(UIManager& uiManager)
 
     // Debug Entity 区域：显示当前相机跟随目标实体的数据。
     UIElement debugEntitySection;
-    debugEntitySection.init(388, 110, UI_TOP_LEFT, 16, 16);
+    debugEntitySection.init(388, 130, UI_TOP_LEFT, 16, 16);
     debugEntitySection.setParentIndex(debugPanelIndex);
     debugEntitySection.refreshTargetByParentBox(uiManager.getElement(debugPanelIndex).getBox());
     debugEntitySection.snapToTarget();
@@ -30,7 +33,7 @@ void LevelDebugger::init(UIManager& uiManager)
 
     // Debug Render 区域：显示当前渲染相关数据。
     UIElement debugRenderSection;
-    debugRenderSection.init(388, 130, UI_TOP_LEFT, 16, 140);
+    debugRenderSection.init(388, 130, UI_TOP_LEFT, 16, 160);
     debugRenderSection.setParentIndex(debugPanelIndex);
     debugRenderSection.refreshTargetByParentBox(uiManager.getElement(debugPanelIndex).getBox());
     debugRenderSection.snapToTarget();
@@ -38,54 +41,14 @@ void LevelDebugger::init(UIManager& uiManager)
 
     // Debug Camera 区域：显示当前相机和视口数据。
     UIElement debugCameraSection;
-    debugCameraSection.init(388, 180, UI_TOP_LEFT, 16, 300);
+    debugCameraSection.init(388, 180, UI_TOP_LEFT, 16, 310);
     debugCameraSection.setParentIndex(debugPanelIndex);
     debugCameraSection.refreshTargetByParentBox(uiManager.getElement(debugPanelIndex).getBox());
     debugCameraSection.snapToTarget();
     debugCameraSectionIndex = uiManager.addElement(debugCameraSection);
 }
 
-DebugPanelData LevelDebugger::buildDebugPanelData(
-    EntityManager& entityManager,
-    const RenderFrameStats& renderFrameStats
-)
-{
-    DebugPanelData data;
 
-    // 拿到焦点跟随目标的 ID
-    data.targetId = gCameraFollowTargetId;
-
-    // 如果这个目标演员还活着，把它的世界坐标和屏幕坐标取出来传给 UI 面板
-    Entity* target = entityManager.getEntity(gCameraFollowTargetId);
-    if (target)
-    {
-        data.targetName = target->getName();
-        data.entityX = target->getX();
-        data.entityY = target->getY();
-
-        data.entityScreenX = gCamera.worldToScreenX(target->getX());
-        data.entityScreenY = gCamera.worldToScreenY(target->getY());
-    }
-
-    // 统计本帧画图开销数据
-    data.renderedBackgroundSprites = renderFrameStats.backgroundSpriteCount;
-    data.renderedTileSprites = renderFrameStats.tileSpriteCount;
-    data.renderedEntitySprites = renderFrameStats.entitySpriteCount;
-    data.renderedTotalSprites = renderFrameStats.totalSpriteCount;
-
-    // 获取相机的中心点和当前焦距缩放倍率
-    data.cameraCenterX = gCamera.centerX;
-    data.cameraCenterY = gCamera.centerY;
-    data.cameraZoom = gCamera.zoom;
-
-    // 获取当前相机世界视口的四个边界线坐标
-    data.viewLeft = gCamera.getViewLeft();
-    data.viewRight = gCamera.getViewRight();
-    data.viewBottom = gCamera.getViewBottom();
-    data.viewTop = gCamera.getViewTop();
-
-    return data;
-}
 
 void LevelDebugger::toggleUIElementVisible(UIManager& uiManager, int elementIndex)
 {
@@ -285,29 +248,76 @@ void LevelDebugger::draw(
         renderer.drawUIElementPanel(uiManager.getElement(debugPanelIndex));
     }
 
-    DebugPanelData data = buildDebugPanelData(entityManager, renderFrameStats);
+    char buf[128];
 
     if (uiManager.isElementEffectivelyVisible(debugEntitySectionIndex))
     {
-        renderer.drawDebugEntitySectionText(
-            uiManager.getElement(debugEntitySectionIndex),
-            data
-        );
+        std::vector<std::string> lines;
+        lines.push_back("Debug Target");
+
+        Entity* target = entityManager.getEntity(gCameraFollowTargetId);
+        if (target)
+        {
+            sprintf_s(buf, "Entity Name: %s", target->getName().c_str());
+            lines.push_back(buf);
+
+            sprintf_s(buf, "Entity IID: %d", target->getId());
+            lines.push_back(buf);
+
+            sprintf_s(buf, "World Pos: %.1f, %.1f", target->getX(), target->getY());
+            lines.push_back(buf);
+
+            sprintf_s(buf, "Screen Pos: %d, %d", (int)gCamera.worldToScreenX(target->getX()), (int)gCamera.worldToScreenY(target->getY()));
+            lines.push_back(buf);
+
+            sprintf_s(buf, "Anim State: %s", target->getAnimator().getCurrentState().c_str());
+            lines.push_back(buf);
+        }
+        else
+        {
+            lines.push_back("No target entity");
+        }
+
+        renderer.drawDebugSectionText(uiManager.getElement(debugEntitySectionIndex), lines);
     }
 
     if (uiManager.isElementEffectivelyVisible(debugRenderSectionIndex))
     {
-        renderer.drawDebugRenderSectionText(
-            uiManager.getElement(debugRenderSectionIndex),
-            data
-        );
+        std::vector<std::string> lines;
+        lines.push_back("Render");
+
+        sprintf_s(buf, "Bg Sprites: %d", renderFrameStats.backgroundSpriteCount);
+        lines.push_back(buf);
+
+        sprintf_s(buf, "Tile Sprites: %d", renderFrameStats.tileSpriteCount);
+        lines.push_back(buf);
+
+        sprintf_s(buf, "Entity Sprites: %d", renderFrameStats.entitySpriteCount);
+        lines.push_back(buf);
+
+        sprintf_s(buf, "Total Sprites: %d", renderFrameStats.totalSpriteCount);
+        lines.push_back(buf);
+
+        renderer.drawDebugSectionText(uiManager.getElement(debugRenderSectionIndex), lines);
     }
 
     if (uiManager.isElementEffectivelyVisible(debugCameraSectionIndex))
     {
-        renderer.drawDebugCameraSectionText(
-            uiManager.getElement(debugCameraSectionIndex),
-            data
-        );
+        std::vector<std::string> lines;
+        lines.push_back("Camera");
+
+        sprintf_s(buf, "Center: %.1f, %.1f", gCamera.centerX, gCamera.centerY);
+        lines.push_back(buf);
+
+        sprintf_s(buf, "Zoom: %.2f", gCamera.zoom);
+        lines.push_back(buf);
+
+        sprintf_s(buf, "View L/R: %.1f / %.1f", gCamera.getViewLeft(), gCamera.getViewRight());
+        lines.push_back(buf);
+
+        sprintf_s(buf, "View B/T: %.1f / %.1f", gCamera.getViewBottom(), gCamera.getViewTop());
+        lines.push_back(buf);
+
+        renderer.drawDebugSectionText(uiManager.getElement(debugCameraSectionIndex), lines);
     }
 }

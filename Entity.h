@@ -41,6 +41,8 @@ private:
 
     double speed;
     double velocityY;
+    double jumpSpeed;
+    double gravity;
 
     bool controlled;
     bool collidable;
@@ -66,6 +68,7 @@ private:
     // 下落平台相关变量
     int platformState;    // 0: STATIC, 1: SHAKING, 2: FALLING
     double platformTimer; // 计时器（用于抖动时间）
+    double shakeDuration; // 晃动持续时间 (单位：帧)
 
     // 数据驱动动画扩展：当前实体所使用的模板名以及本地缓存的状态-动画片段池
     std::string templateName;
@@ -133,6 +136,9 @@ public:
 
     EntityID getId() const;
     const std::string& getName() const { return name; }
+
+    double getShakeDuration() const { return shakeDuration; }
+    void setShakeDuration(double duration) { shakeDuration = duration; }
     void setName(const std::string& newName) { name = newName; }
     std::string getTemplateName() const { return templateName; }
     EntityType getEntityType();
@@ -176,6 +182,18 @@ public:
 
     double getX();
     double getY();
+    void setX(double newX);
+    void setY(double newY);
+    void setPosition(double newX, double newY);
+
+    double getSpeed() const { return speed; }
+    void setSpeed(double newSpeed) { speed = newSpeed; }
+
+    double getJumpSpeed() const { return jumpSpeed; }
+    void setJumpSpeed(double val) { jumpSpeed = val; }
+
+    double getGravity() const { return gravity; }
+    void setGravity(double val) { gravity = val; }
 
     sprite& getRenderSprite();
     const sprite& getSprite() const;

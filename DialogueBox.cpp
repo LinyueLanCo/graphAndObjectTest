@@ -13,33 +13,42 @@ DialogueBox::DialogueBox() : UIElement()
     fullText = "";
     displayText = "";
     textProgress = 0.0;
-    readSpeed = 0.35; // 默认打字速度（每帧增加0.35个字，约每秒21个字）
     isFinished = true;
     fontTexture = nullptr;
-
-    charWidth = 8;
-    charHeight = 10;
-    charScale = 2.0;   // 默认放大两倍，显示为 16x20 像素的清晰字符
-    charSpacing = 2;
-    lineSpacing = 8;
-    paddingLeft = 30;
-    paddingTop = 25;
+    config = DialogueConfig::Default();
+    isAutoCloseEnabled = false;
+    autoCloseTimer = 0.0;
 }
 
-void DialogueBox::initDialogue(IMAGE* newFontTexture)
+void DialogueBox::initDialogue(IMAGE* newFontTexture, const DialogueConfig& newConfig)
 {
     fontTexture = newFontTexture;
+    config = newConfig;
+    isAutoCloseEnabled = false;
+    autoCloseTimer = 0.0;
     
-    // 设置对话框大小为宽度 560，高度 110 像素
-    int boxW = 560;
-    int boxH = 110;
+    // 初始化父类 UIElement：屏幕底端水平居中对齐，距离屏幕底边缘 marginY 像素作为目标位置
+    this->init(config.boxW, config.boxH, UI_CENTER, 0, config.marginY);
     
-    // 初始化父类 UIElement：屏幕底端水平居中对齐，距离屏幕底边缘 140 像素作为目标位置
-    this->init(boxW, boxH, UI_CENTER, 0, 140);
+    // 初始状态强制隐藏，且将当前位置设为完全在屏幕下边界（900 像素）之外 (即 targetY + 400)
+    this->hide();
+    this->refreshTarget();
+    this->setPosition(this->getTargetX(), this->getTargetY() + 400.0);
 }
 
-void DialogueBox::startDialogue(const std::string& text)
+void DialogueBox::startDialogue(const std::string& text, const DialogueConfig& newConfig)
 {
+    config = newConfig;
+    isAutoCloseEnabled = config.autoClose;
+    autoCloseTimer = config.autoCloseDuration;
+    
+    // 重新根据配置更新 UIElement 的位置与大小
+    this->init(config.boxW, config.boxH, UI_CENTER, 0, config.marginY);
+    // 保持隐藏状态，初始置于窗口下边界之外
+    this->hide();
+    this->refreshTarget();
+    this->setPosition(this->getTargetX(), this->getTargetY() + 400.0);
+
     fullText = text;
     
     // 强制把所有输入字符转换为大写，因为贴图上只有大写字母
@@ -57,16 +66,27 @@ void DialogueBox::showDialogueWithOffset(double offsetX, double offsetY)
     this->refreshTarget();
     double tx = this->getTargetX();
     double ty = this->getTargetY();
-    this->setPosition(tx + offsetX, ty + offsetY);
+    
+    // 固定的 400 像素偏移量
+    double finalOffsetY = (offsetY > 0) ? 400.0 : offsetY;
+    
+    this->setPosition(tx + offsetX, ty + finalOffsetY);
     this->showAnimated();
 }
 
 void DialogueBox::hideDialogueWithOffset(double offsetX, double offsetY)
 {
+    // 统一收回入口：一旦执行收回，立即重置并注销自动关闭状态
+    isAutoCloseEnabled = false;
+    autoCloseTimer = 0.0;
+
     this->refreshTarget();
     double tx = this->getTargetX();
     double ty = this->getTargetY();
-    this->setTargetPosition(tx + offsetX, ty + offsetY);
+    
+    double finalOffsetY = (offsetY > 0) ? 400.0 : offsetY;
+    
+    this->setTargetPosition(tx + offsetX, ty + finalOffsetY);
     this->hideAnimated();
 }
 
@@ -81,112 +101,41 @@ void DialogueBox::advance()
     }
     else
     {
-        // 如果打字已结束，向下滑动收回隐藏对话框 (偏移量设为 200 像素)
-        this->hideDialogueWithOffset(0, 200);
+        // 如果打字已结束，向下滑动收回隐藏对话框 (使用 400 像素偏移)
+        this->hideDialogueWithOffset(0, 400);
     }
 }
 
 void DialogueBox::updateDialogue()
 {
-    if (!this->isActive() || isFinished)
+    if (!this->isActive())
     {
         return;
     }
 
-    textProgress += readSpeed;
-    if (textProgress >= (double)fullText.length())
+    // 1. 如果打字机未播完，推进打字机文本截取进度
+    if (!isFinished)
     {
-        textProgress = (double)fullText.length();
-        isFinished = true;
-    }
-
-    int visibleCount = (int)textProgress;
-    displayText = fullText.substr(0, visibleCount);
-}
-
-void DialogueBox::draw(Renderer& renderer)
-{
-    if (!this->isVisible())
-    {
-        return;
-    }
-
-    // 1. 绘制对话框底座圆角面板背景（白色背景加灰色边框）
-    renderer.drawUIElementPanel(*this);
-
-    if (fontTexture == nullptr || displayText.empty())
-    {
-        return;
-    }
-
-    // 2. 逐字换行排版并直接调用公开化的底层贴图切片绘制
-    UIBox box = this->getBox();
-    
-    int drawX = box.x + paddingLeft;
-    int drawY = box.y + paddingTop;
-    
-    int drawCharW = (int)(charWidth * charScale);
-    int drawCharH = (int)(charHeight * charScale);
-
-    // 最大可绘制宽度限制，超过此坐标即自动换行
-    int maxRight = box.x + box.w - paddingLeft;
-
-    for (char c : displayText)
-    {
-        if (c == '\n')
+        textProgress += config.readSpeed;
+        if (textProgress >= (double)fullText.length())
         {
-            // 显式换行
-            drawX = box.x + paddingLeft;
-            drawY += drawCharH + lineSpacing;
-            continue;
+            textProgress = (double)fullText.length();
+            isFinished = true;
         }
 
-        if (c == ' ')
+        int visibleCount = (int)textProgress;
+        displayText = fullText.substr(0, visibleCount);
+    }
+
+    // 2. 如果打字全部完成，且配置了自动收回，则更新倒计时并在到期后收回
+    if (isFinished && isAutoCloseEnabled)
+    {
+        autoCloseTimer -= 1.0;
+        if (autoCloseTimer <= 0.0)
         {
-            // 空格不绘制图像，直接横坐标步进
-            drawX += drawCharW + charSpacing;
-            
-            // 自动折行检测
-            if (drawX + drawCharW > maxRight)
-            {
-                drawX = box.x + paddingLeft;
-                drawY += drawCharH + lineSpacing;
-            }
-            continue;
-        }
-
-        // 查找字符在映射对照串中的索引
-        size_t found = FONT_CHARS.find(c);
-        if (found != std::string::npos)
-        {
-            int index = (int)found;
-            int col = index % 10;
-            int row = index / 10;
-            int srcX = col * charWidth;
-            int srcY = row * charHeight;
-
-            // 统一调用已经公有化的 drawImageTileAlpha 完成 Alpha 混合透明像素绘制
-            renderer.drawImageTileAlpha(
-                drawX,
-                drawY,
-                drawCharW,
-                drawCharH,
-                fontTexture,
-                srcX,
-                srcY,
-                charWidth,
-                charHeight
-            );
-        }
-
-        // 步进到下一个字位置
-        drawX += drawCharW + charSpacing;
-
-        // 自动换行检查：如果下一个字的位置超出了对话框右边缘，则提前换行
-        if (drawX + drawCharW > maxRight)
-        {
-            drawX = box.x + paddingLeft;
-            drawY += drawCharH + lineSpacing;
+            this->hideDialogueWithOffset(0, 400);
         }
     }
 }
+
+

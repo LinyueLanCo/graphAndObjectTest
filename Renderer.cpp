@@ -1,6 +1,7 @@
 ﻿#include "Renderer.h"
 
 #include "Camera.h"
+#include "DialogueBox.h"
 
 RenderFrameStats::RenderFrameStats()
 {
@@ -18,31 +19,6 @@ void RenderFrameStats::refreshTotal()
         entitySpriteCount;
 }
 
-DebugPanelData::DebugPanelData()
-{
-    targetId = INVALID_ENTITY_ID;
-    targetName = "";
-
-    entityX = 0;
-    entityY = 0;
-
-    entityScreenX = 0;
-    entityScreenY = 0;
-
-    renderedBackgroundSprites = 0;
-    renderedTileSprites = 0;
-    renderedEntitySprites = 0;
-    renderedTotalSprites = 0;
-
-    cameraCenterX = 0;
-    cameraCenterY = 0;
-    cameraZoom = 1.0;
-
-    viewLeft = 0;
-    viewRight = 0;
-    viewBottom = 0;
-    viewTop = 0;
-}
 
 void Renderer::drawImageTileAlpha(
     int destX,
@@ -281,7 +257,7 @@ void Renderer::drawUIElementPanel(const UIElement& element)
     );
 }
 
-void Renderer::drawDebugEntitySectionText(const UIElement& content, DebugPanelData data)
+void Renderer::drawDebugSectionText(const UIElement& content, const std::vector<std::string>& lines)
 {
     if (!content.isVisible())
     {
@@ -298,102 +274,144 @@ void Renderer::drawDebugEntitySectionText(const UIElement& content, DebugPanelDa
     int y = box.y;
     int lineH = 22;
 
-    TCHAR text[128];
-
-    _stprintf_s(text, _T("Debug Target"));
-    outtextxy(x, y, text);
-    y += lineH;
-
-    _stprintf_s(text, _T("Entity Name: %hs"), data.targetName.c_str());
-    outtextxy(x, y, text);
-    y += lineH;
-
-    _stprintf_s(text, _T("Entity IID: %d"), data.targetId);
-    outtextxy(x, y, text);
-    y += lineH;
-
-    _stprintf_s(text, _T("World Pos: %.1f, %.1f"), data.entityX, data.entityY);
-    outtextxy(x, y, text);
-    y += lineH;
-
-    _stprintf_s(text, _T("Screen Pos: %d, %d"), data.entityScreenX, data.entityScreenY);
-    outtextxy(x, y, text);
+    for (size_t i = 0; i < lines.size(); ++i)
+    {
+        TCHAR text[128];
+        _stprintf_s(text, _T("%hs"), lines[i].c_str());
+        outtextxy(x, y, text);
+        y += lineH;
+    }
 }
 
-void Renderer::drawDebugRenderSectionText(const UIElement& content, DebugPanelData data)
+void Renderer::drawTileCollisionBoxes(const TileMap& tileMap)
 {
-    if (!content.isVisible())
+    for (const TileInstance& tile : tileMap.getTileInstances())
     {
-        return;
+        if (!tile.visible || tile.tileId == TILE_EMPTY || tile.collisionType == TILE_COLLISION_NONE)
+        {
+            continue;
+        }
+
+        if (tile.collisionType == TILE_COLLISION_FULL_SOLID)
+        {
+            setlinecolor(YELLOW);
+        }
+        else
+        {
+            setlinecolor(GREEN);
+        }
+
+        RectBox box = tileMap.getTileInstanceCollisionWorldBox(tile);
+
+        int screenLeft = gCamera.worldToScreenX(box.left);
+        int screenRight = gCamera.worldToScreenX(box.right);
+        int screenTop = gCamera.worldToScreenY(box.top);
+        int screenBottom = gCamera.worldToScreenY(box.bottom);
+
+        rectangle(screenLeft, screenTop, screenRight, screenBottom);
     }
-
-    UIBox box = content.getBox();
-
-    setbkmode(TRANSPARENT);
-    settextcolor(RGB(40, 40, 40));
-    settextstyle(18, 0, _T("Mojangles"));
-
-    int x = box.x;
-    int y = box.y;
-    int lineH = 22;
-
-    TCHAR text[128];
-
-    _stprintf_s(text, _T("Render"));
-    outtextxy(x, y, text);
-    y += lineH;
-
-    _stprintf_s(text, _T("Bg Sprites: %d"), data.renderedBackgroundSprites);
-    outtextxy(x, y, text);
-    y += lineH;
-
-    _stprintf_s(text, _T("Tile Sprites: %d"), data.renderedTileSprites);
-    outtextxy(x, y, text);
-    y += lineH;
-
-    _stprintf_s(text, _T("Entity Sprites: %d"), data.renderedEntitySprites);
-    outtextxy(x, y, text);
-    y += lineH;
-
-    _stprintf_s(text, _T("Total Sprites: %d"), data.renderedTotalSprites);
-    outtextxy(x, y, text);
 }
 
-void Renderer::drawDebugCameraSectionText(const UIElement& content, DebugPanelData data)
+void Renderer::drawDialogueBox(const DialogueBox& dialogueBox)
 {
-    if (!content.isVisible())
+    if (!dialogueBox.isVisible())
     {
         return;
     }
 
-    UIBox box = content.getBox();
+    const DialogueConfig& config = dialogueBox.getConfig();
+    IMAGE* fontTexture = dialogueBox.getFontTexture();
+    const std::string& displayText = dialogueBox.getDisplayText();
 
-    setbkmode(TRANSPARENT);
-    settextcolor(RGB(40, 40, 40));
-    settextstyle(18, 0, _T("Mojangles"));
+    // 1. 绘制复古双边框深色底座圆角面板背景
+    UIBox box = dialogueBox.getBox();
+    drawUIBox(box, config.bgColor, config.borderColor);
 
-    int x = box.x;
-    int y = box.y;
-    int lineH = 22;
+    // 绘制内嵌的第二层圆角内边框线框 (无填充)
+    int indent = 4;
+    setlinecolor(config.borderColor);
+    roundrect(
+        box.x + indent,
+        box.y + indent,
+        box.x + box.w - indent,
+        box.y + box.h - indent,
+        22,
+        22
+    );
 
-    TCHAR text[128];
+    if (fontTexture == nullptr || displayText.empty())
+    {
+        return;
+    }
 
-    _stprintf_s(text, _T("Camera"));
-    outtextxy(x, y, text);
-    y += lineH;
+    // 2. 逐字换行排版并直接调用公开化的底层贴图切片绘制
+    int drawX = box.x + config.paddingLeft;
+    int drawY = box.y + config.paddingTop;
+    
+    int drawCharW = (int)(config.charWidth * config.charScale);
+    int drawCharH = (int)(config.charHeight * config.charScale);
 
-    _stprintf_s(text, _T("Center: %.1f, %.1f"), data.cameraCenterX, data.cameraCenterY);
-    outtextxy(x, y, text);
-    y += lineH;
+    // 最大可绘制宽度限制，超过此坐标即自动换行
+    int maxRight = box.x + box.w - config.paddingLeft;
 
-    _stprintf_s(text, _T("Zoom: %.2f"), data.cameraZoom);
-    outtextxy(x, y, text);
-    y += lineH;
+    static const std::string FONT_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ    0123456789.,:?!()+- ";
 
-    _stprintf_s(text, _T("View L/R: %.1f / %.1f"), data.viewLeft, data.viewRight);
-    outtextxy(x, y, text);
-    y += lineH;
+    for (char c : displayText)
+    {
+        if (c == '\n')
+        {
+            // 显式换行
+            drawX = box.x + config.paddingLeft;
+            drawY += drawCharH + config.lineSpacing;
+            continue;
+        }
 
-    _stprintf_s(text, _T("View B/T: %.1f / %.1f"), data.viewBottom, data.viewTop);
-    outtextxy(x, y, text);
+        if (c == ' ')
+        {
+            // 空格不绘制图像，直接横坐标步进
+            drawX += drawCharW + config.charSpacing;
+            
+            // 自动折行检测
+            if (drawX + drawCharW > maxRight)
+            {
+                drawX = box.x + config.paddingLeft;
+                drawY += drawCharH + config.lineSpacing;
+            }
+            continue;
+        }
+
+        // 查找字符在映射对照串中的索引
+        size_t found = FONT_CHARS.find(c);
+        if (found != std::string::npos)
+        {
+            int index = (int)found;
+            int col = index % 10;
+            int row = index / 10;
+            int srcX = col * config.charWidth;
+            int srcY = row * config.charHeight;
+
+            // 统一调用已经公有化的 drawImageTileAlpha 完成 Alpha 混合透明像素绘制
+            this->drawImageTileAlpha(
+                drawX,
+                drawY,
+                drawCharW,
+                drawCharH,
+                fontTexture,
+                srcX,
+                srcY,
+                config.charWidth,
+                config.charHeight
+            );
+        }
+
+        // 步进到下一个字位置
+        drawX += drawCharW + config.charSpacing;
+
+        // 自动换行检查：如果下一个字的位置超出了对话框右边缘，则提前换行
+        if (drawX + drawCharW > maxRight)
+        {
+            drawX = box.x + config.paddingLeft;
+            drawY += drawCharH + config.lineSpacing;
+        }
+    }
 }

@@ -63,6 +63,7 @@ bool EntityManager::loadTemplates(const std::string& filepath)
         temp.colOffsetY = config.value("colOffsetY", 0.0);
         temp.animSpeed = config.value("animSpeed", -1);
         temp.initialAnim = config.value("initialAnim", "idle");
+        temp.shakeDuration = config.value("shakeDuration", 90.0);
 
         std::string facingStr = config.value("facing", "RIGHT");
         if (facingStr == "LEFT") temp.initialFacing = LEFT;
@@ -207,6 +208,10 @@ bool EntityManager::loadEntities(const std::string& filepath, AnimationClipManag
         {
             entities[i].getAnimation().setSpeed(animSpeed);
         }
+
+        // 读取下落平台的晃动时间参数（有覆盖用覆盖，无则用模板）
+        double shakeDuration = item.value("shakeDuration", temp.shakeDuration);
+        entities[i].setShakeDuration(shakeDuration);
 
         // 登记到活跃名单中
         activeIndices.push_back(i);

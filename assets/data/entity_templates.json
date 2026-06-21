@@ -112,7 +112,6 @@
         "to": "run_r",
         "conditions": [
           { "param": "inAir", "expected": 0.0 },
-          { "param": "isJumpEnd", "expected": 0.0 },
           { "param": "moving", "expected": 1.0 },
           { "param": "sprinting", "expected": 1.0 },
           { "param": "facing", "expected": 1.0 }
@@ -123,7 +122,6 @@
         "to": "run_l",
         "conditions": [
           { "param": "inAir", "expected": 0.0 },
-          { "param": "isJumpEnd", "expected": 0.0 },
           { "param": "moving", "expected": 1.0 },
           { "param": "sprinting", "expected": 1.0 },
           { "param": "facing", "expected": -1.0 }
@@ -134,7 +132,6 @@
         "to": "walk_r",
         "conditions": [
           { "param": "inAir", "expected": 0.0 },
-          { "param": "isJumpEnd", "expected": 0.0 },
           { "param": "moving", "expected": 1.0 },
           { "param": "facing", "expected": 1.0 }
         ]
@@ -144,7 +141,6 @@
         "to": "walk_l",
         "conditions": [
           { "param": "inAir", "expected": 0.0 },
-          { "param": "isJumpEnd", "expected": 0.0 },
           { "param": "moving", "expected": 1.0 },
           { "param": "facing", "expected": -1.0 }
         ]

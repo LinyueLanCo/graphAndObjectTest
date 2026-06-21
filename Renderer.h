@@ -7,6 +7,8 @@
 #include "TileMap.h"
 #include "UI.h"
 
+class DialogueBox;
+
 // RenderFrameStats：
 // 记录当前帧真实通过 Renderer::drawSprite 绘制成功的 sprite 数量。
 struct RenderFrameStats
@@ -23,35 +25,6 @@ struct RenderFrameStats
     void refreshTotal();
 };
 
-// DebugPanelData：
-// Debug 面板一帧要显示的数据快照，数据由 Level 在当前帧收集后交给 Renderer 显示。
-struct DebugPanelData
-{
-    EntityID targetId;
-    std::string targetName;
-
-    double entityX;
-    double entityY;
-
-    int entityScreenX;
-    int entityScreenY;
-
-    int renderedBackgroundSprites;
-    int renderedTileSprites;
-    int renderedEntitySprites;
-    int renderedTotalSprites;
-
-    double cameraCenterX;
-    double cameraCenterY;
-    double cameraZoom;
-
-    double viewLeft;
-    double viewRight;
-    double viewBottom;
-    double viewTop;
-
-    DebugPanelData();
-};
 
 // Renderer：
 // 统一管理当前关卡中的可渲染对象。
@@ -122,12 +95,12 @@ public:
     // 功能：绘制一个通用 UIElement 面板。
     void drawUIElementPanel(const UIElement& element);
 
-    // 功能：绘制 Debug 面板中的实体数据区。
-    void drawDebugEntitySectionText(const UIElement& content, DebugPanelData data);
+    // 功能：绘制 Debug 面板中某一个区块的多行文本。
+    void drawDebugSectionText(const UIElement& content, const std::vector<std::string>& lines);
 
-    // 功能：绘制 Debug 面板中的渲染数据区。
-    void drawDebugRenderSectionText(const UIElement& content, DebugPanelData data);
+    // 功能：绘制地图瓦片的调试碰撞框层
+    void drawTileCollisionBoxes(const TileMap& tileMap);
 
-    // 功能：绘制 Debug 面板中的相机数据区。
-    void drawDebugCameraSectionText(const UIElement& content, DebugPanelData data);
+    // 功能：在屏幕上绘制打字机对话框
+    void drawDialogueBox(const DialogueBox& dialogueBox);
 };

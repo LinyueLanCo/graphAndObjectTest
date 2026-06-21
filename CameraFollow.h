@@ -1,7 +1,9 @@
-﻿#pragma once
+#pragma once
 
 #include <string>
 #include "EntityManager.h"
+
+struct Camera;
 
 // 当前相机跟随目标 ID。
 extern EntityID gCameraFollowTargetId;
@@ -11,6 +13,7 @@ void setCameraFollowTarget(EntityID newTargetId, const EntityManager& entityMana
 
 // 功能：根据跟随目标、鼠标偏移和缩放输入更新相机。
 void updateCameraFollow(
+    Camera& camera,
     EntityManager& entityManager,
     int worldWidth,
     int worldHeight,

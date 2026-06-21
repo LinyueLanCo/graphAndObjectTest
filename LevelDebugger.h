@@ -15,10 +15,7 @@ private:
     int debugRenderSectionIndex;
     int debugCameraSectionIndex;
 
-    DebugPanelData buildDebugPanelData(
-        EntityManager& entityManager,
-        const RenderFrameStats& renderFrameStats
-    );
+
 
     void toggleUIElementVisible(UIManager& uiManager, int elementIndex);
     void toggleDebugEntitySectionVisible(UIManager& uiManager);

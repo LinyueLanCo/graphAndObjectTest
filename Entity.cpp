@@ -12,6 +12,8 @@ Entity::Entity()
     y = 0;
     speed = 5;
     velocityY = 0;
+    jumpSpeed = JUMP_SPEED;
+    gravity = GRAVITY;
 
     controlled = false;
     collidable = false;
@@ -43,6 +45,7 @@ Entity::Entity()
 
     platformState = 0;
     platformTimer = 0.0;
+    shakeDuration = 90.0;
     animParams.clear();
 }
 
@@ -71,6 +74,8 @@ Entity::Entity(
 
     speed = 5;
     velocityY = 0;
+    jumpSpeed = JUMP_SPEED;
+    gravity = GRAVITY;
 
     controlled = isControlled;
     collidable = isCollidable;
@@ -107,6 +112,7 @@ Entity::Entity(
 
     platformState = 0;
     platformTimer = 0.0;
+    shakeDuration = 90.0;
     animParams.clear();
 }
 
@@ -134,6 +140,8 @@ Entity::Entity(
 
     speed = 5;
     velocityY = 0;
+    jumpSpeed = JUMP_SPEED;
+    gravity = GRAVITY;
 
     controlled = isControlled;
     collidable = isCollidable;
@@ -168,6 +176,7 @@ Entity::Entity(
 
     platformState = 0;
     platformTimer = 0.0;
+    shakeDuration = 90.0;
     animParams.clear();
 }
 
@@ -232,6 +241,8 @@ void Entity::reset(
 
     speed = 5;
     velocityY = 0;
+    jumpSpeed = JUMP_SPEED;
+    gravity = GRAVITY;
     overlapping = false;
     collisionState = false;
     onGround = false;
@@ -256,6 +267,7 @@ void Entity::reset(
 
     platformState = 0;
     platformTimer = 0.0;
+    shakeDuration = 90.0;
     animParams.clear();
 }
 
@@ -390,6 +402,28 @@ double Entity::getX()
 double Entity::getY()
 {
     return y;
+}
+
+// 功能：设置实体中心点的世界 X 坐标，并即时同步渲染精灵数据。
+void Entity::setX(double newX)
+{
+    x = newX;
+    syncRenderSpriteWorldDrawData();
+}
+
+// 功能：设置实体中心点的世界 Y 坐标，并即时同步渲染精灵数据。
+void Entity::setY(double newY)
+{
+    y = newY;
+    syncRenderSpriteWorldDrawData();
+}
+
+// 功能：设置实体中心点的世界 X、Y 坐标，并即时同步渲染精灵数据。
+void Entity::setPosition(double newX, double newY)
+{
+    x = newX;
+    y = newY;
+    syncRenderSpriteWorldDrawData();
 }
 
 // 功能：获取实体当前用于渲染的 sprite 可写接口。
@@ -642,7 +676,7 @@ void Entity::updateFallingPlatform(EntityManager& entityManager)
                 if (xOverlap && onTop && other.isOnGround())
                 {
                     platformState = 1; // 开启摇晃
-                    platformTimer = 90; // 摇晃 90 帧 (约 1.5 秒)
+                    platformTimer = shakeDuration; // 使用自定义抖动时间
                     break;
                 }
             }
