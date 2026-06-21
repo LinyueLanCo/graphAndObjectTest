@@ -131,14 +131,14 @@ Renderer:
 
 ## 当前主要模块
 
-项目所有核心类都已迁移到了独立的 `.h/.cpp` 文件中。下面详细介绍当前项目包含的所有类/结构体及其具体功能、关键成员和核心接口：
+我目前已经把项目里的所有核心类都迁移到了独立的 `.h/.cpp` 文件中。下面是我整理的当前项目里所有类和结构体的具体功能、关键成员和核心接口，方便我自己以后查阅和维护：
 
 ---
 
 ### 1. 关卡核心调度模块
 
 #### [Level](file:///c:/Users/lpy16/OneDrive/Desktop/c++/GraphAndObjTest/graphAndObjectTest/Level.h)
-* **核心职责**：关卡的中央调度器与管理者，负责协调初始化资源载入、世界地图构建、实体生命周期、背景图层、UI 元素、调试面板的更新与渲染管线。
+* **核心职责**：我用它来作为关卡的中央调度器与管理者，负责协调初始化资源载入、世界地图构建、实体生命周期、背景图层、UI 元素、调试面板的更新与渲染管线。
 * **主要成员**：
   * 地图与渲染：`TileMap tileMap`、`Renderer renderer`、`RenderQueue renderQueue`、`RenderFrameStats renderFrameStats`。
   * 管理器：`ResourceManager resources`、`EntityManager entityManager`、`CollisionManager collisionManager`、`BackgroundManager backgroundManager`、`UIManager uiManager`。
@@ -154,7 +154,7 @@ Renderer:
 ### 2. 渲染与精灵流水线模块
 
 #### [Renderer](file:///c:/Users/lpy16/OneDrive/Desktop/c++/GraphAndObjTest/graphAndObjectTest/Renderer.h)
-* **核心职责**：底层的 2D 绘图接口封装，实现逻辑坐标与屏幕坐标的自动转换，负责具体把精灵、UI和调试框绘制到 EasyX 双缓冲上，与业务逻辑完全解耦。
+* **核心职责**：我封装的底层 2D 绘图接口，实现逻辑坐标与屏幕坐标的自动转换，负责具体把精灵、UI和调试框绘制到 EasyX 双缓冲上，与业务逻辑完全解耦。
 * **主要成员**：
   * 控制开关：`bool showCollisionBox`、`bool showTileCollisionBox`、`bool showSpriteBorder` 是否显示调试边界。
   * 字体参数等绘制缓冲。
@@ -164,7 +164,7 @@ Renderer:
   * `drawEntityCollisionBoxes() / drawTileCollisionBoxes()`：负责在场景中叠画红色/绿色的物理包围盒。
 
 #### [RenderQueue](file:///c:/Users/lpy16/OneDrive/Desktop/c++/GraphAndObjTest/graphAndObjectTest/RenderQueue.h)
-* **核心职责**：精灵渲染缓冲队列，用于收集单帧中所有的精灵，在最终渲染前对其进行统一排序以解决绘制遮挡问题。
+* **核心职责**：我为了控制层级渲染而设计的精灵渲染缓冲队列，用于收集单帧中所有的精灵，在最终渲染前对其进行统一排序以解决绘制遮挡问题。
 * **主要成员**：
   * `std::vector<sprite> items`：本帧所有被提交的待画精灵列表。
 * **核心接口**：
@@ -174,9 +174,9 @@ Renderer:
   * `drawAll(Renderer& renderer, RenderFrameStats& stats)`：遍历排好序的队列，分发给 `Renderer::drawSprite` 实际绘制，并将数量统计写入 `RenderFrameStats`。
 
 #### [Sprite](file:///c:/Users/lpy16/OneDrive/Desktop/c++/GraphAndObjTest/graphAndObjectTest/Sprite.h)
-* **核心职责**：渲染精灵单帧数据的中间载体结构体（所有可见元素如背景、瓦片、实体最终均转换为 `Sprite` 交付队列）。
+* **核心职责**：我用来统一表示待渲染单帧数据的中间结构体（所有可见元素如背景、瓦片、实体最终均转换为 `Sprite` 交付队列）。
 * **主要成员**：
-  * 源数据：`Image2D* texture` 贴图指针，`int srcX, srcY, srcW, srcH` 纹理裁剪区域。
+  * 贴图源：`Image2D* texture` 贴图指针，`int srcX, srcY, srcW, srcH` 纹理裁剪区域。
   * 变换属性：`double scaleX, scaleY` 缩放倍率，`double offsetX, offsetY` 渲染中心相对实体位置的偏移量，`int zIndex` 渲染图层深度。
   * 世界坐标数据：`double worldCenterX, worldCenterY, worldDrawW, worldDrawH`（自动在逻辑层算出）。
 * **核心接口**：
@@ -188,7 +188,7 @@ Renderer:
 ### 3. 实体系统模块
 
 #### [Entity](file:///c:/Users/lpy16/OneDrive/Desktop/c++/GraphAndObjTest/graphAndObjectTest/Entity.h)
-* **核心职责**：游戏实体数据容器与组件持有者。维护实体的空间位置、朝向和运动状态，持有碰撞盒、状态机及动画播放器等组件。
+* **核心职责**：我的游戏实体数据容器与组件持有者。维护实体的空间位置、朝向和运动状态，持有碰撞盒、状态机及动画播放器等组件。
 * **主要成员**：
   * 基本信息：`EntityID instanceId`，`std::string name`，`EntityType entityType`。
   * 空间与速度：`double x, y`（中心世界坐标），`double speed`，`double velocityY`，`facingDirection currentFacingDirection`。
@@ -201,7 +201,7 @@ Renderer:
   * `resolveOverlaps(EntityManager& entityManager)`：实体根据自身重叠列表决定动作响应，如玩家捡金币、触发旗杆动画等。
 
 #### [EntityManager](file:///c:/Users/lpy16/OneDrive/Desktop/c++/GraphAndObjTest/graphAndObjectTest/EntityManager.h)
-* **核心职责**：对象池设计。预分配连续内存空间管理全部实体实例，维护活跃和死亡索引，保证迭代与动态生成的高效安全。
+* **核心职责**：我的实体对象池管理器。我预分配了连续的内存空间来避免频繁分配，维护活跃和死亡索引，保证迭代与动态生成的高效安全。
 * **主要成员**：
   * 池容器：`std::vector<Entity> entities`（固定分配 200 个槽位）。
   * 索引：`std::vector<size_t> activeIndices` 活跃实体槽下标，`std::vector<size_t> deadIndices` 死亡复用槽下标。
@@ -233,7 +233,7 @@ Renderer:
   * `init(const std::string& jsonPath, ResourceManager& res)`：解析 animations.json 并拉取纹理对象指针存入剪辑库。
 
 #### [AnimationPlayer](file:///c:/Users/lpy16/OneDrive/Desktop/c++/GraphAndObjTest/graphAndObjectTest/AnimationPlayer.h) (原 `animatedSprite`)
-* **核心职责**：动画播放控制器。负责驱动单个实体当前片段的时间轴推进，计算本帧裁剪框并将其写入对应的 `sprite` 供渲染器绘制。
+* **核心职责**：我用来驱动单个实体动画播放的控制器。负责驱动单个实体当前片段的时间轴推进，计算本帧裁剪框并将其写入对应的 `sprite` 供渲染器绘制。
 * **主要成员**：
   * 运行状态：`int currentFrame` 当前序列帧号，`int frameTimer` 时间计数器，`bool isPlaying`，`bool isLoop`。
   * 裁剪定位：`int sourceStartX, sourceStartY`，`int frameWidth, frameHeight`，`int frameSpacingX, frameSpacingY`，`int frameColumns`。
@@ -243,7 +243,7 @@ Renderer:
   * `writeCurrentFrameTo(sprite& targetSprite)`：换算当前帧在贴图上的二维行列位置，算出精确的裁剪矩形起点并写入目标精灵中。
 
 #### [Animator](file:///c:/Users/lpy16/OneDrive/Desktop/c++/GraphAndObjTest/graphAndObjectTest/Animator.h)
-* **核心职责**：实体动画状态机。基于当前实体的物理物理状态与传入的行为意图，决策实体当前应当处于什么动画状态，并在变化时更新播放器片段。
+* **核心职责**：我为实体设计的动画状态机。根据实体当前的物理状态和行为意图，决策实体当前应当处于什么动画状态，并在变化时更新播放器片段。
 * **主要成员**：
   * 状态：`std::string currentState` 当前状态名（如 "idle", "run", "jump"）。
   * 转换表：`std::vector<TransitionRule> transitionRules` 动作过渡条件规则。
@@ -256,7 +256,7 @@ Renderer:
 ### 5. 运动与碰撞逻辑模块
 
 #### [MovementHandle](file:///c:/Users/lpy16/OneDrive/Desktop/c++/GraphAndObjTest/graphAndObjectTest/MovementHandle.h)
-* **核心职责**：运动物理模拟系统。根据实体的移动意图和自身物理属性，计算重力、起跳初速度、冲刺速度，并结合碰撞检测更新实体的坐标。
+* **核心职责**：我移动物理模拟的逻辑处理器。根据实体的移动意图和自身物理属性，计算重力、起跳初速度、冲刺速度，并结合碰撞检测更新实体的坐标。
 * **核心接口**：
   * `update(...)`：处理物理更新的核心入口：
     1. 意图解析：当 `intent.wantJump` 且 `owner.onGround` 时赋予起跳瞬时向上速度，重置落地标记。
@@ -266,7 +266,7 @@ Renderer:
     5. 垂直碰撞过滤：通过 `collisionManager.getAllowedMoveY` 探测头顶 solid 瓦片或脚底单向平台，获得安全位移，更新 Y 坐标。
 
 #### [CollisionManager](file:///c:/Users/lpy16/OneDrive/Desktop/c++/GraphAndObjTest/graphAndObjectTest/CollisionManager.h) (原 `CollisionHandle`)
-* **核心职责**：碰撞与重叠检测的核心处理器，计算物理位移阻挡限制，并分发状态去重的重叠 overlap 事件。
+* **核心职责**：我用来做碰撞与重叠检测的核心处理器，计算物理位移阻挡限制，并分发状态去重的重叠 overlap 事件。
 * **主要成员**：
   * 状态缓存：`std::unordered_set<std::string> lastOverlapPairs` 上一帧发生重叠的实体对唯一键集合，用于去重；`std::vector<OverlapPair> currentOverlapPairs` 本帧重叠实体对。
 * **核心接口**：
@@ -287,7 +287,7 @@ Renderer:
 ### 6. 多层视差背景模块
 
 #### [BackgroundObject](file:///c:/Users/lpy16/OneDrive/Desktop/c++/GraphAndObjTest/graphAndObjectTest/BackgroundObject.h) (又称 `BackgroundLayer`)
-* **核心职责**：代表单个独立的视差背景图层，保存它的材质信息、视差因子、平铺模式，并负责生成它本帧的世界空间精灵数据。
+* **核心职责**：我设计的独立视差背景图层对象，保存它的材质信息、视差因子、平铺模式，并负责生成它本帧的世界空间精灵数据。
 * **主要成员**：
   * 资源信息：`Image2D* image` 贴图指针。
   * 配置：`int renderOrder`（排序深度，用于映射 zIndex），`double parallaxFactor`（视差滑动比率），`double zoomFactor`（缩放响应比率），`BackgroundDrawMode drawMode`（平铺模式：单张、横向平铺、固定相机模式）。
@@ -297,7 +297,7 @@ Renderer:
   * `collectSprites(RenderQueue& queue)`：根据 `drawMode` 生成精灵。在 `BACKGROUND_REPEAT_X` 下会以 `runtimeCenterX` 为核心向左右复制并生成多个精灵压入队列以覆盖整个相机视口。
 
 #### [BackgroundManager](file:///c:/Users/lpy16/OneDrive/Desktop/c++/GraphAndObjTest/graphAndObjectTest/BackgroundManager.h)
-* **核心职责**：多层背景图层集合管理器，负责更新所有图层由于相机位移产生的运行时位置偏移，并决定其渲染排序深度。
+* **核心职责**：我用来管理多层背景图层集合的管理器，负责更新所有图层由于相机位移产生的运行时位置偏移，并决定其渲染排序深度。
 * **主要成员**：
   * `std::vector<BackgroundObject> layers`：背景图层容器列表。
 * **核心接口**：
@@ -309,7 +309,7 @@ Renderer:
 ### 7. 地图与瓦片系统
 
 #### [TileMap](file:///c:/Users/lpy16/OneDrive/Desktop/c++/GraphAndObjTest/graphAndObjectTest/TileMap.h)
-* **核心职责**：瓦片地图的宿主，负责解析文本地图格栅，根据配置自动判定各图块格子的物理碰撞特性（Solid，单向，None），并为相机可视区生成瓦片精灵数据。
+* **核心职责**：我地图系统的宿主，负责解析文本地图格栅，根据配置自动判定各图块格子的物理碰撞特性（Solid，单向，None），并为相机可视区生成瓦片精灵数据。
 * **主要成员**：
   * 尺寸定义：`int tileW, tileH` 贴图格子宽高，`int drawW, drawH` 实际绘制世界宽高，`int mapRows, mapCols` 格子行列数。
   * 地图网格：`int** grid` 存放格子的二维数组，`TileInstance** instances` 对应的瓦片实例二维数据，`TileCollisionType** collisions` 碰撞阻挡定义网格。
@@ -319,7 +319,7 @@ Renderer:
   * `collectSprites(RenderQueue& queue)`：读取当前 `gCamera` 的世界视口边界，换算出左上至右下的可视行列区间（粗裁剪剔除），仅为视口内的瓦片实例生成 `Sprite` 压入渲染队列。
 
 #### [TileInstance](file:///c:/Users/lpy16/OneDrive/Desktop/c++/GraphAndObjTest/graphAndObjectTest/TileTypes.h) (以及 `TileTypes.h`)
-* **核心职责**：单个瓦片实例的数据对象。由于每个瓦片可能包含独立的空间位移偏置或材质大小缩放，由此对象具体承载，为后续的瓦片动态特效或精细编辑打下基础。
+* **核心职责**：我为单个瓦片实例设计的数据对象。由于每个瓦片可能包含独立的空间位移偏置或材质大小缩放，由此对象具体承载，为后续的瓦片动态特效或精细编辑打下基础。
 * **主要成员**：
   * `int tileId` 对应 tileset 上的格号。
   * `int row, col` 所在网格行列。
@@ -332,7 +332,7 @@ Renderer:
 ### 8. UI 与本地化文本模块
 
 #### [UIElement](file:///c:/Users/lpy16/OneDrive/Desktop/c++/GraphAndObjTest/graphAndObjectTest/UI.h) (以及 `UIBox`, `UIAnchor`, `UIElementState`)
-* **核心职责**：UI控件基础类，工作在纯屏幕空间坐标下。具备对齐定位（靠边、居中）能力，实现 UI 位置和尺寸向期望目标滑动的插值过渡。
+* **核心职责**：我设计的屏幕空间 UI 控件基类，在屏幕坐标系下进行锚点对齐并支持尺寸插值缓动。
 * **主要成员**：
   * 物理状态：`double x, y`（当前屏幕坐标），`double w, h`（当前物理尺寸）。
   * 动画目标：`double targetX, targetY`，`double targetW, targetH` 渐变插值目标。
@@ -344,7 +344,7 @@ Renderer:
   * `update()`：平滑动画插值入口：使用 `MathUtils::smoothTo` 驱动当前 `x, y` 逼近 `targetX, targetY`，驱动 `w, h` 逼近 `targetW, targetH`，在达到误差范围内后校正状态并置入 `VISIBLE` 或 `HIDDEN`。
 
 #### [DialogueBox](file:///c:/Users/lpy16/OneDrive/Desktop/c++/GraphAndObjTest/graphAndObjectTest/DialogueBox.h)
-* **核心职责**：继承自 `UIElement` 的打字机对话框组件。处理大写像素文字自动换行排版、最终所需高度的预计算，实现对话框尺寸根据文本内容的动态插值拉伸与自动延时收回。
+* **核心职责**：我写的像素打字机对话框组件，继承自 UIElement。负责处理大写像素文字折行、高度自动折行高度预估、打字尺寸同步生长与延迟自动收回。
 * **主要成员**：
   * 文字载荷：`std::string fullText` 目标完整大写文本，`std::string displayText` 当前帧已截取的打字文本。
   * 进度：`double textProgress` 字符裁剪推进进度计数器。
@@ -358,15 +358,15 @@ Renderer:
   * `calculateRequiredHeight(...)`：文字换行高度预计算逻辑。模拟字符渲染排版：每个字符物理宽度为 `charWidth * scale`，累加 `charSpacing`。若加上一个字符后宽度超出了对话框边距，则将 `lines` 计数加 1 并重置起始 X。最后计算出理想排版高度。
 
 #### [LocalizationManager](file:///c:/Users/lpy16/OneDrive/Desktop/c++/GraphAndObjTest/graphAndObjectTest/LocalizationManager.h)
-* **核心职责**：本地化多语言词典。从 JSON 文件载入不同语言下的翻译键值对，提供统一的字符串获取接口。
+* **核心职责**：我实现的多语言词典。从 JSON 文件载入不同语言下的翻译键值对，提供统一的字符串获取接口。
 * **主要成员**：
-  * `std::unordered_map<std::string, std::string> strings`：加载进内存的翻译词典。
+  * `std::unordered_map<std::string, std::string> strings`：加载进内存 of 翻译词典。
 * **核心接口**：
   * `loadLanguage(const std::string& path)`：读取 JSON 键值对文本并写入哈希表中。
   * `getString(const std::string& key)`：根据 ID 返回翻译字符串，未找到时返回原 key。
 
 #### [UIManager](file:///c:/Users/lpy16/OneDrive/Desktop/c++/GraphAndObjTest/graphAndObjectTest/UI.h)
-* **核心职责**：管理当前界面中的所有 UI 元素，负责层级关系、父子树对齐刷新和统一 update 迭代。
+* **核心职责**：我用来管理界面中所有 UI 元素的管理器，负责层级关系、父子树对齐刷新和统一 update 迭代。
 * **主要成员**：
   * `std::vector<UIElement> elements`：UI 元素实例集合。
 * **核心接口**：
@@ -378,7 +378,7 @@ Renderer:
 ### 9. 时间、工具与底层封装
 
 #### [TimerManager](file:///c:/Users/lpy16/OneDrive/Desktop/c++/GraphAndObjTest/graphAndObjectTest/TimerManager.h)
-* **核心职责**：基于游戏帧更新驱动的通用倒计时计时器管理器。用于处理延时发生的逻辑，如踩中旗子后延迟动态生成奖励道具。
+* **核心职责**：我写的高效帧计数计时器，基于游戏帧更新驱动。用于处理延时发生的逻辑，如踩中旗子后延迟动态生成奖励道具。
 * **主要成员**：
   * `std::unordered_map<std::string, double> timers`：计时器键名与剩余帧数倒计时的映射关系。
 * **核心接口**：
@@ -387,17 +387,17 @@ Renderer:
   * `isFinished(const std::string& name)`：轮询特定计时器，若其余额小于等于 0 且存在，则返回 true 并销毁该计时器。
 
 #### [Image2D](file:///c:/Users/lpy16/OneDrive/Desktop/c++/GraphAndObjTest/graphAndObjectTest/Image2D.h)
-* **核心职责**：智能贴图资源包装类，保存图片的像素宽高规格并持有 EasyX 底层 IMAGE 结构，避免了裸指针生命周期错乱。
+* **核心职责**：智能贴图资源包装类，保存图片的像素宽高规格并持有 EasyX 底层 IMAGE 结构，避免了物理资源反复释放。
 * **主要成员**：
   * `IMAGE img` EasyX 真实图片存储，`int width, height` 图片的物理像素尺寸。
 
 #### [ResourceManager](file:///c:/Users/lpy16/OneDrive/Desktop/c++/GraphAndObjTest/graphAndObjectTest/Resource.h)
-* **核心职责**：集中缓存加载中心，利用哈希表保存已加载的图片和文本，防范因在循环中重复读写物理磁盘导致的性能卡顿。
+* **核心职责**：我集中的缓存加载中心，防止在循环中重复读写物理磁盘导致卡顿。
 * **主要成员**：
   * `std::unordered_map<std::string, Image2D*> images` 贴图资源库，`std::unordered_map<std::string, std::string> textContents` 文本配置库。
 
 #### [Camera](file:///c:/Users/lpy16/OneDrive/Desktop/c++/GraphAndObjTest/graphAndObjectTest/Camera.h)
-* **核心职责**：逻辑相机视口状态定义。以屏幕中心为首要锚点，管理场景的世界坐标、屏幕坐标、缩放与世界边界限制。
+* **核心职责**：我定义的逻辑相机视口状态。以屏幕中心为首要锚点，管理场景的世界坐标、屏幕坐标、缩放与世界边界限制。
 * **主要成员**：
   * `centerX, centerY` 当前视口中心世界坐标，`zoom` 全局图像放大比例。
   * `targetCenterX, targetCenterY` 目标跟随点。
@@ -407,33 +407,33 @@ Renderer:
   * `limitInWorld()`：结合最新的 `zoom` 算得当前逻辑可视宽高的半高 `halfW, halfH`，使用 `clamp` 钳制 `centerX / centerY` 保证相机不能滑出地图边界。
 
 #### [CameraFollow](file:///c:/Users/lpy16/OneDrive/Desktop/c++/GraphAndObjTest/graphAndObjectTest/CameraFollow.h)
-* **核心职责**：相机跟随插值追踪逻辑，根据目标坐标与鼠标在屏幕中的偏移，计算平滑的跟随目的地。
+* **核心职责**：我设计的相机平滑追随插值逻辑。
 * **核心接口**：
   * `followSmooth()`：结合 Lerp 对目标位置进行追随，调用相机的坐标钳制方法，并计算相机的水平与垂直位移差值。
 
 #### [Controller](file:///c:/Users/lpy16/OneDrive/Desktop/c++/GraphAndObjTest/graphAndObjectTest/Controller.h) 与 `PlayerController`
-* **核心职责**：动作输入意图解耦器。负责将键盘硬件输入翻译为游戏逻辑通用的控制意图 `BehaviorIntent`，使实体物理更新不直接依赖键盘读取。
+* **核心职责**：动作输入意图解耦器。负责将键盘硬件输入翻译为游戏逻辑通用的控制意图 `BehaviorIntent`。
 * **核心接口**：
-  * `makeIntent(InputManager& input, bool isGod)`：根据按键（左右、Shift冲刺、Space跳跃、E交互等），生成标准意图载荷并返回。
+  * `makeIntent(InputManager& input, bool isGod)`：根据按键生成标准意图载荷并返回。
 
 #### [InputManager](file:///c:/Users/lpy16/OneDrive/Desktop/c++/GraphAndObjTest/graphAndObjectTest/Input.h)
-* **核心职责**：EasyX 输入状态监听器，管理按键的单次按下、按下状态和鼠标屏幕物理坐标。
+* **核心职责**：EasyX 输入状态监听器，管理按键的按压及鼠标状态。
 * **核心接口**：
-  * `update()`：调用 Win32 的 `GetKeyState` 等 API，刷新这一帧的按键映射状态与鼠标屏幕坐标。
+  * `update()`：调用 Win32 API 刷新本帧按键与鼠标屏幕坐标。
 
 #### [LevelDebugger](file:///c:/Users/lpy16/OneDrive/Desktop/c++/GraphAndObjTest/graphAndObjectTest/LevelDebugger.h)
-* **核心职责**：独立的调试数据搜集与交互诊断工具，隔离调试渲染和常规关卡调度。
+* **核心职责**：我为了调试方便而从 Level 中剥离出来的调试管理器，隔离调试渲染和常规关卡更新逻辑。
 * **主要成员**：
-  * `DebugPanelData` 实时帧率及实体的最新坐标、速度结构体。
+  * `DebugPanelData` 实时帧率及实体的最新坐标、速度。
 * **核心接口**：
-  * `handleInput(...)`：响应 `F5-F11`，控制是否渲染碰撞包围盒或隐藏 Debug UI 面板。
-  * `updateDebugLogs(...)`：监听实体落地 `onGround`、撞墙 `blockedByWorld` 等布尔值变化，打印带精确帧时间戳的终端日志。
+  * `handleInput(...)`：响应 `F5-F11` 控制框绘制调试按键。
+  * `updateDebugLogs(...)`：监听实体落地与撞墙逻辑布尔标志改变，打印控制台日志。
 
 #### [MathUtils](file:///c:/Users/lpy16/OneDrive/Desktop/c++/GraphAndObjTest/graphAndObjectTest/MathUtils.h)
-* **核心职责**：提供纯数学算法。包含 `clamp` 区间限定、`lerp` 线性插值，以及 `smoothTo(current, target, speed)` 差值衰减阻尼器（公式为 `current + (target - current) * speed`）。
+* **核心职责**：提供纯数学算法，包含 `clamp` 区间限定、`lerp` 线性插值，以及 `smoothTo` 平滑插值。
 
 #### [GraphicsUtils](file:///c:/Users/lpy16/OneDrive/Desktop/c++/GraphAndObjTest/graphAndObjectTest/GraphicsUtils.h)
-* **核心职责**：提供 EasyX 图像绘制的辅助处理，主要是透明通道的 `transparentimage` 和带有 alpha 混合的自定义绘图扩展方法。
+* **核心职责**：提供 EasyX 图像绘制的辅助处理，主要是透明通道的 `transparentimage` 方法。
 
 ---
 ---
@@ -1191,7 +1191,7 @@ Zoom：
 
 ## 游戏初始化与生命周期数据流
 
-为了让你能够深刻理解底层代码的运作顺序，下面按照调用堆栈和帧循环机制，对“初始化阶段”与“某一帧 Tick 逻辑更新”的数据流动进行拆解。
+为了方便我自己随时回顾和理解底层代码的运作顺序，下面我按照调用堆栈和帧循环机制，对“初始化阶段”与“某一帧 Tick 逻辑更新”的数据流动进行详细梳理。
 
 ---
 
@@ -1251,17 +1251,17 @@ main() [game.cpp]
 
 ### 2. 游戏循环中的某一 Tick 发生了什么？（典型 Tick 场景）
 
-在进入 `while(true)` 循环后，游戏以每秒约 60 帧的速度不断 Tick。下面通过两个高频的经典案例，详细剖析本帧中各系统的具体数据流动和执行流：
+在进入 `while(true)` 循环后，游戏以每秒约 60 帧的速度不断 Tick。这部分以我写的两个典型运行场景为例，详细剖析我各系统在此帧里的具体数据流动和执行流：
 
 #### 场景 A：玩家触发旗帜 ➡️ 延时生成金币并弹出 Dialog（复合事件行为）
 
-当玩家运动包围盒在某帧与旗杆发生重叠，到生成香蕉奖励并弹出对话框的系列 Tick 级演进如下：
+这部分以我写的“玩家触旗触发旗子动画，延时 30 帧在旗杆顶生成香蕉，并弹出对话框”为例，梳理我的各系统在 Tick 里的运作链条：
 
 ##### 【Tick 1：触旗碰撞检测与状态自治】
 1. **重叠扫描 (`CollisionManager::updateOverlapEvents`)**：
    * 在 `Level::update` 阶段，调用 `collisionManager.updateOverlapEvents` 遍历 `EntityManager::getActiveIndices`。
    * 检测到 **[Player 实体 ID: 0]** 与 **[Checkpoint 实体 ID: 1]** 的 AABB 包围盒（由各自的 `CollisionBox` 结合 `x, y` 坐标算得）发生重叠相交。
-   * 双方实体的 `overlapping` 状态位被置为 true，同时将对方实体的信息写入各自的 `currentOverlaps` 向量容器中。
+   * 双方实体的 `overlapping` 状态位被置为 true，同时将对方实体的信息写入各自的 `currentOverlaps` 容器中。
    * 碰撞去重与日志：生成配对唯一键 `"0_1"` 并与上一帧 `lastOverlapPairs` 缓存比对。发现是新发生的重叠，控制台打印调试日志，并将键登记入 `lastOverlapPairs`。
 2. **重叠反馈分发 (`CollisionManager::resolveEntityOverlaps`)**：
    * 调用实体的自治函数 `resolveOverlaps()`。
@@ -1270,9 +1270,9 @@ main() [game.cpp]
 
 ##### 【Tick 2：事件触发与计时器注册】
 1. **关卡事件监听与 Timer 注册 (`LevelEvents.cpp::level1_UpdateEvent`)**：
-   * 在本 Tick 的逻辑处理阶段，执行绑定的关卡更新回调。
-   * 回调函数遍历活跃实体，发现 **[Checkpoint 实体 ID: 1]** 的 `flagActivatedJustNow` 值为 `true`。
-   * 脚本立即消费该信号（重置为 `false`），并调用管理器：`timerManager.setTimer("checkpoint_spawn_banana", 30.0)`。这会在 `TimerManager` 内部哈希表注册一个剩余 30 帧（约 0.5 秒）的倒计时计时器。
+   * 在本 Tick 的逻辑处理阶段，执行我绑定的关卡更新回调。
+   * 回调函数发现 **[Checkpoint 实体 ID: 1]** 的 `flagActivatedJustNow` 值为 `true`。
+   * 脚本立即消费该信号（重置为 `false`），并调用管理器：`timerManager.setTimer("checkpoint_spawn_banana", 30.0)`。这会在 `TimerManager` 内部哈希表注册一个剩余 30 帧的倒计时。
 
 ##### 【Tick 3 至 Tick 32：计时器推进】
 1. **计时器自减与动画推进**：
@@ -1284,7 +1284,7 @@ main() [game.cpp]
    * `LevelEvents.cpp::level1_UpdateEvent` 轮询检测 `timerManager.isFinished("checkpoint_spawn_banana")` 返回 `true`。
 2. **动态香蕉延迟生成请求**：
    * 脚本读取旗杆实体当前的坐标 X，在其上方偏移 64 像素计算出香蕉生成位置。
-   * 调用 `entityManager.queueSpawnEntity(spawnX, spawnY, "Banana")`。这不会立即往活跃数组插入，而是将新实体的生成请求（包括坐标、模板名等）缓存入 `spawnQueue` 中。
+   * 调用 `entityManager.queueSpawnEntity(spawnX, spawnY, "Banana")`。这不会立即插入活跃数组，而是缓存入 `spawnQueue` 中。
 3. **加载本地化多语言文本**：
    * 调用 `localizationManager.getString("checkpoint_hit")`，根据当前语言，查得翻译文本为 `"CHECKPOINT REACHED. PROGRESS SAVED."`。
 4. **对话框装载与滑入动画激活 (`DialogueBox`)**：
@@ -1298,24 +1298,24 @@ main() [game.cpp]
      * 自动执行：`y = MathUtils::smoothTo(y, targetY, moveSpeed)`，`h = MathUtils::smoothTo(h, targetH, moveSpeed)`。
      * 对话框在打字机逐字蹦出的过程中，不仅从屏幕下方平滑往上滑，而且高度也随着排版行数的变多平滑拉伸。
 6. **帧末实体落地 (`EntityManager::processSpawns`)**：
-   * 逻辑末端执行 `entityManager.processSpawns`。系统将从 `deadIndices` 中获取空闲槽位索引（假设为槽位号 5），清空其“上辈子”的残留状态，调用 `Entity::reset` 装载 `"Banana"` 模板属性，将其状态与首帧剪辑赋予完毕，最后把索引 5 登记进 `activeIndices`。香蕉正式动态降临关卡。
+   * 逻辑末端执行 `entityManager.processSpawns`。系统从 `deadIndices` 中获取空闲槽位索引（假设为槽位号 5），调用 `Entity::reset` 装载 `"Banana"` 模板属性，将其状态与首帧剪辑赋予完毕，最后把索引 5 登记进 `activeIndices`，香蕉正式动态降临关卡。
 7. **精灵渲染与稳定排序**：
    * `Level::draw()`：
      * 清空 `RenderQueue`。
      * 收集所有演员的 Sprite 并设定 `zIndex`：背景图层 `zIndex` 为负数，瓦片 `zIndex` 为 0，主角和香蕉 `zIndex` 为 0，UI 和调试框 `zIndex` 设为最大。
-     * 排序：`renderQueue.sort()` 采用稳定排序，香蕉和玩家同样是 Z-Index = 0，但它们由于被依次提交，会根据提交的物理顺序安全排在背景后方绘制。
+     * 排序：`renderQueue.sort()` 采用稳定排序，保证被依次提交的香蕉和玩家安全排在背景后方绘制。
      * 画面输出：渲染器顺序循环 `drawSprite` 呈现在 EasyX 双缓冲区。在最上层绘制 `dialogueBox`，玩家看到对话框一边上滑一边变长，打字机白字在对话框内跳跃。
 
 ---
 
 #### 场景 B：键盘输入向右狂奔 ➡️ 物理位移阻挡限制 ➡️ 角色动画状态机实时切换
 
-玩家从原地站立，按下向右方向键和 Shift 狂奔的这一帧 Tick 中，底层的数据流动过程如下：
+这部分以我控制主角‘按下向右键+Shift触发狂奔状态机，遭遇墙体阻挡限速’为例，梳理我的物理与动画系统的协作流程：
 
 ##### 1. 输入接收与翻译 (`InputManager` & `PlayerController`)
 * 全局最外层循环中，`input.update()` 捕获到当前键盘按键：**[右方向键]** 和 **[Left Shift 键]** 处于压下状态。
 * 实体 ID 0 标识为 `controlled = true`，进入受控分支。
-* `playerController.makeIntent` 将捕获状态翻译为统一行为意图：
+* `playerController.makeIntent` 将捕获状态翻译为我定义的统一行为意图：
   ```cpp
   BehaviorIntent (moveX = 1.0, wantSprint = true, wantJump = false)
   ```
@@ -1329,7 +1329,7 @@ main() [game.cpp]
   * `CollisionManager` 获取实体的 CollisionBox 局部偏移，并叠加实体 X 坐标，生成世界空间包围盒 `RectBox`。
   * 将该包围盒沿 X 轴向右拉伸延伸 7.5 像素，遍历周围 solid 瓦片。如果检测到右方 4 像素处有 solid 墙体格子：
     * 碰撞检测逻辑阻断多余位移，将原本 7.5 像素的位移截断，修正并返回仅允许移动的极限安全距离 `allowedDx = 4.0`。
-  * 实体的世界中心 X 坐标被安全设定为 `x = x + 4.0`，同时更新 `syncRenderSpriteWorldDrawData()` 精灵世界坐标。
+  * 实体的世界中心 X 坐标被设定为 `x = x + 4.0`，同时更新 `syncRenderSpriteWorldDrawData()` 精灵世界坐标。
 
 ##### 3. 动画状态机状态判断与切换规则匹配 (`Animator`)
 * `Level::updateEntities` 调用 `entities[idx].updateAnimator(intent)`。
@@ -1352,7 +1352,7 @@ main() [game.cpp]
     int srcX = sourceStartX + (currentFrame % columns) * (frameWidth + spacingX);
     int srcY = sourceStartY + (currentFrame / columns) * (frameHeight + spacingY);
     ```
-  * 将贴图资源指针 `imageSource` 及该裁剪矩形（`srcX, srcY, frameWidth, frameHeight`）写入实体的 `renderSprite` 精灵实例中。
+  * 将贴图资源指针 `imageSource` 及该裁剪矩形（`srcX, srcY, frameWidth, frameHeight`）写入实体的 `renderSprite` 精灵中。
 * **同步世界绘制中心**：
   * 调用 `syncRenderSpriteWorldDrawData()`。结合实体最新的 X 坐标与 `renderSprite` 的偏移量，算出该精灵在世界中的中心坐标，完成一帧内的数据封闭。
 
