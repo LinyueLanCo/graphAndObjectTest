@@ -49,18 +49,15 @@ void DialogueBox::startDialogue(const std::string& text, const DialogueConfig& n
         return std::toupper(c);
     });
 
-    // 1. 预先算出本句对话文本排版所需的自适应高度
-    double neededH = calculateRequiredHeight(fullText);
-
-    // 2. 重新根据配置初始化 UIElement 的位置与大小（以默认 boxH 起步）
+    // 1. 重新根据配置初始化 UIElement 的位置与大小（以默认 boxH，即两行高起步）
     this->init(config.boxW, config.boxH, UI_CENTER, 0, config.marginY);
     // 保持隐藏状态，初始置于窗口下边界之外
     this->hide();
     this->refreshTarget();
     this->setPosition(this->getTargetX(), this->getTargetY() + 400.0);
 
-    // 3. 将目标高度设为自适应计算的高度，触发高度插值平滑拉伸
-    this->setTargetSize(config.boxW, neededH);
+    // 2. 将初始目标高度设为起步高度，不在此处提前拉伸
+    this->setTargetSize(config.boxW, config.boxH);
 
     displayText = "";
     textProgress = 0.0;
@@ -131,6 +128,10 @@ void DialogueBox::updateDialogue()
 
         int visibleCount = (int)textProgress;
         displayText = fullText.substr(0, visibleCount);
+
+        // 实时根据当前已显示的文字计算所需的高度，并动态设置目标高度以触发平滑插值拉伸
+        double currentH = calculateRequiredHeight(displayText);
+        this->setTargetSize(config.boxW, currentH);
     }
 
     // 2. 如果打字全部完成，且配置了自动收回，则更新倒计时并在到期后收回

@@ -9,7 +9,7 @@ struct DialogueConfig
     double readSpeed = 0.35;               // 打字速度（字符数/帧）
     double charScale = 2.0;                // 字符缩放倍数
     int boxW = 560;                        // 对话框宽度
-    int boxH = 110;                        // 对话框高度
+    int boxH = 98;                         // 对话框高度（刚好两行）
     int marginY = 140;                     // 距离底部的边距
     int paddingLeft = 30;                  // 文字排版左边距
     int paddingTop = 25;                   // 文字排版顶边距
