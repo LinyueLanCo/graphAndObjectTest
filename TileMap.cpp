@@ -1,4 +1,4 @@
-#include "TileMap.h"
+﻿#include "TileMap.h"
 // 引入 std::stringstream（字符串输入输出流模板类）。
 // 为什么用它？因为在解析地图文件文本数据（rows, cols, 以及具体的二维瓦片网格 ID）时，
 // 将地图文本字符串封装进 std::stringstream 中，能让我们像操作 std::ifstream 文件流一样，

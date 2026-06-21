@@ -101,6 +101,10 @@ void DialogueBox::advance()
         textProgress = (double)fullText.length();
         displayText = fullText;
         isFinished = true;
+
+        // 瞬间跳过时，利用提前计算高度将目标高度拉伸至完整文本所需高度，从而正常触发高度平滑拉伸
+        double neededH = calculateRequiredHeight(fullText);
+        this->setTargetSize(config.boxW, neededH);
     }
     else
     {
