@@ -62,10 +62,13 @@ void MovementHandle::update(
     // 上帝模式的特殊飞行逻辑：不管碰撞和重力，直接飞过去。
     if (self.god)
     {
-        MathUtils::normalize2D(inputX, inputY);
+        Vector2D moveDirection(inputX, inputY);
+        moveDirection = moveDirection.normalized();
 
-        self.x += inputX * currentSpeed;
-        self.y += inputY * currentSpeed;
+        Vector2D moveDelta = moveDirection * currentSpeed;
+
+        self.x += moveDelta.x;
+        self.y += moveDelta.y;
 
         // 依然要限制不能飞到屏幕外面去，调用 collisionManager 进行强制锁边
         collisionManager.limitInWorld(self, worldWidth, worldHeight);
