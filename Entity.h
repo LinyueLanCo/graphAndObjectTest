@@ -11,6 +11,7 @@
 #include "Sprite.h"
 #include "Sprite.h"
 #include "AnimationPlayer.h"
+#include "Vector2D.h"
 
 class CollisionManager;
 class MovementHandle;
@@ -182,9 +183,21 @@ public:
 
     double getX();
     double getY();
+
+    // 新的二维位置接口。旧的 X/Y Getter 继续保留，避免一次性打破现有 Gameplay 代码。
+    Vector2D getPosition() const
+    {
+        return Vector2D(x, y);
+    }
+
     void setX(double newX);
     void setY(double newY);
     void setPosition(double newX, double newY);
+
+    void setPosition(const Vector2D& newPosition)
+    {
+        setPosition(newPosition.x, newPosition.y);
+    }
 
     double getSpeed() const { return speed; }
     void setSpeed(double newSpeed) { speed = newSpeed; }
