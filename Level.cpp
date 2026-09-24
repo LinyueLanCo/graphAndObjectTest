@@ -146,24 +146,24 @@ void Level::update(InputManager& input)
     updateCamera(input);
 
     if (
-        gCamera.viewDx != 0.0 || gCamera.viewDy != 0.0 ||
-        gCamera.logicalDx != 0.0 || gCamera.logicalDy != 0.0
+        !gCamera.viewDelta.isNearlyZero() ||
+        !gCamera.logicalDelta.isNearlyZero()
         )
     {
         cout << "Camera Move: logical=("
-             << gCamera.logicalDx << ", " << gCamera.logicalDy
+             << gCamera.logicalDelta.x << ", " << gCamera.logicalDelta.y
              << "), actual=("
-             << gCamera.actualDx << ", " << gCamera.actualDy
+             << gCamera.actualDelta.x << ", " << gCamera.actualDelta.y
              << "), view=("
-             << gCamera.viewDx << ", " << gCamera.viewDy
+             << gCamera.viewDelta.x << ", " << gCamera.viewDelta.y
              << "), zoom=("
-             << gCamera.zoomDx << ", " << gCamera.zoomDy
+             << gCamera.zoomDelta.x << ", " << gCamera.zoomDelta.y
              << ")" << endl;
     }
 
     // 视差只消费“真正由跟随产生且实际通过边界约束的 Camera 位移”。
     // Zoom 改变视口合法范围造成的 View 重定位不会再被二次当成视差运动。
-    backgroundManager.updateRuntimeTransforms(gCamera.parallaxDx, gCamera.parallaxDy);
+    backgroundManager.updateRuntimeTransforms(gCamera.parallaxDelta);
 
     // 轮询并打印状态转移日志
     levelDebugger.updateDebugLogs(entityManager);
@@ -276,7 +276,7 @@ void Level::initBackground()
     // backgrounds.json 中的 offset 是按“Camera 参考原点 (0,0)”创作的。
     // Camera 当前 View 位置不再直接烘进每个背景的 baseCenter，
     // 而是交给 BackgroundManager 的独立 Parallax Camera 状态统一解释。
-    backgroundManager.setParallaxCameraPosition(gCamera.centerX, gCamera.centerY);
+    backgroundManager.setParallaxCameraPosition(gCamera.viewCenter);
 
     for (const auto& item : data)
     {
