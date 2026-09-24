@@ -103,10 +103,8 @@ void BackgroundObject::updateSprite()
     }
 
     renderSprite.setWorldDrawData(
-        runtimeCenter.x,
-        runtimeCenter.y,
-        finalDrawW,
-        finalDrawH
+        runtimeCenter,
+        Vector2D(finalDrawW, finalDrawH)
     );
 }
 
