@@ -13,6 +13,12 @@ private:
     vector<BackgroundObject> renderPool;                 // 预分配的背景渲染对象池，避免每一帧 push_back 造成动态内存扩容和结构体拷贝
     int activeRenderCount;                               // 本帧当前激活并参与实际绘制的背景图块实例数量
 
+    // 视差系统自己的“相机参考位置”。
+    // 它只累加 Camera 明确提供的 parallax delta，不直接绑定最终 View Camera，
+    // 因此 Zoom / Clamp 导致的 View 重定位不会污染背景位置。
+    double parallaxCameraX;
+    double parallaxCameraY;
+
 public:
     BackgroundManager();                                 // 构造函数：预置渲染池的大小
 
@@ -24,6 +30,7 @@ public:
 
     void rebuildRenderObjects();
     void clear();
+    void setParallaxCameraPosition(double x, double y);
     void addObjectFromImage2D(
         Image2D* imageResource,
         int newRenderOrder,
