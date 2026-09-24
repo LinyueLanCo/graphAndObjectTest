@@ -41,5 +41,5 @@ struct BackgroundObject
     );
     void setDrawData(double newCenterX, double newCenterY, double newDrawW, double newDrawH);
     void updateSprite();
-    void updateRuntimeTransform(double parallaxInputDx, double parallaxInputDy);
+    void updateRuntimeTransform(double parallaxCameraX, double parallaxCameraY);
 };
