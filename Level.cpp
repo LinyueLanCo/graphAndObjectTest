@@ -273,8 +273,10 @@ void Level::initBackground()
         return;
     }
 
-    double backgroundCenterX = gCamera.centerX;
-    double backgroundCenterY = gCamera.centerY;
+    // backgrounds.json 中的 offset 是按“Camera 参考原点 (0,0)”创作的。
+    // Camera 当前 View 位置不再直接烘进每个背景的 baseCenter，
+    // 而是交给 BackgroundManager 的独立 Parallax Camera 状态统一解释。
+    backgroundManager.setParallaxCameraPosition(gCamera.centerX, gCamera.centerY);
 
     for (const auto& item : data)
     {
@@ -306,8 +308,14 @@ void Level::initBackground()
         double offsetX = item.value("offsetX", 0.0);
         double offsetY = item.value("offsetY", 0.0);
 
-        double centerX = useCameraCenter ? (backgroundCenterX + offsetX) : offsetX;
-        double centerY = useCameraCenter ? (backgroundCenterY + offsetY) : offsetY;
+        // 旧配置中的 useCameraCenter 表达“这个 offset 以视差 Camera 原点为参考”。
+        // 参考 Camera 的实际位置现在由 BackgroundManager 单独保存，
+        // 所以这里的 baseCenter 保持创作数据本身，不再重复加 gCamera.center。
+        double centerX = offsetX;
+        double centerY = offsetY;
+
+        // 保留字段读取，兼容现有 JSON 格式。
+        (void)useCameraCenter;
 
         double drawW = item.value("drawW", -1.0);
         double drawH = item.value("drawH", -1.0);
