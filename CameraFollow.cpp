@@ -94,17 +94,15 @@ void updateCameraFollow(
     }
 
     // 屏幕像素偏移除以 zoom，得到对应的世界坐标偏移。
-    double offsetWorldX = mouseOffsetX / camera.zoom * lookStrength;
-
-    // 屏幕 Y 轴向下为正，世界 Y 轴向上为正，所以这里用负号翻转方向。
-    double offsetWorldY = -mouseOffsetY / camera.zoom * lookStrength;
+    Vector2D offsetWorld(
+        mouseOffsetX / camera.zoom * lookStrength,
+        -mouseOffsetY / camera.zoom * lookStrength
+    );
 
     camera.followSmooth(
-        target->getX(),
-        target->getY(),
+        Vector2D(target->getX(), target->getY()),
         worldWidth,
         worldHeight,
-        offsetWorldX,
-        offsetWorldY
+        offsetWorld
     );
 }
