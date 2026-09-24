@@ -83,8 +83,7 @@ void Level::init()
         if (initialCameraTarget)
         {
             gCamera.followInstant(
-                initialCameraTarget->getX(),
-                initialCameraTarget->getY(),
+                initialCameraTarget->getPosition(),
                 worldWidth,
                 worldHeight
             );
