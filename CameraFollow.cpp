@@ -100,7 +100,7 @@ void updateCameraFollow(
     );
 
     camera.followSmooth(
-        Vector2D(target->getX(), target->getY()),
+        target->getPosition(),
         worldWidth,
         worldHeight,
         offsetWorld
