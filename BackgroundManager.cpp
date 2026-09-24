@@ -8,8 +8,7 @@ BackgroundManager::BackgroundManager()
     // 预分配 32 个背景槽位，通常足够覆盖多图层的平铺需求，避免每帧动态分配内存导致的卡顿（堆碎片）
     renderPool.resize(32);
     activeRenderCount = 0;
-    parallaxCameraX = 0.0;
-    parallaxCameraY = 0.0;
+    parallaxCamera = Vector2D();
 }
 
 // 功能：获取当前帧内经过平铺裁剪后，实际需要提交给渲染器的背景实例列表。
@@ -82,8 +81,8 @@ void BackgroundManager::rebuildRenderObjects()
         double viewRight = gCamera.getViewRight();
 
         // 1. 计算背景模板图的左边缘世界坐标 (baseLeftX = 逻辑中心点 - 半宽)
-        double baseLeftX = object.runtimeCenterX - repeatDrawW / 2.0;
-        double renderCenterY = object.runtimeCenterY;
+        double baseLeftX = object.runtimeCenter.x - repeatDrawW / 2.0;
+        double renderCenterY = object.runtimeCenter.y;
 
         // 2. 网格坐标投影定位：
         //    - (viewLeft - baseLeftX)：算出了从当前背景左边缘到视口左边缘的物理距离空缺。
@@ -112,8 +111,7 @@ void BackgroundManager::rebuildRenderObjects()
 
             // 将当前瓦片的“左边缘”加回半宽，转换为 Sprite 渲染所需的“中心点坐标”
             double currentCenterX = currentLeftX + repeatDrawW / 2.0;
-            repeatedObject.runtimeCenterX = currentCenterX;
-            repeatedObject.runtimeCenterY = renderCenterY;
+            repeatedObject.runtimeCenter = Vector2D(currentCenterX, renderCenterY);
 
             // 同步更新精灵的世界绘制数据
             repeatedObject.renderSprite.setWorldDrawData(
@@ -149,10 +147,9 @@ void BackgroundManager::clear()
     parallaxCameraY = 0.0;
 }
 
-void BackgroundManager::setParallaxCameraPosition(double x, double y)
+void BackgroundManager::setParallaxCameraPosition(const Vector2D& position)
 {
-    parallaxCameraX = x;
-    parallaxCameraY = y;
+    parallaxCamera = position;
 }
 
 // 功能：辅助方法，直接基于图片资源、渲染顺序、视差缩放系数和自动飘动速度等参数，
@@ -202,7 +199,7 @@ void BackgroundManager::addObjectFromImage2D(
     // 4. 绑定纹理，并直接根据当前“视差相机参考位置”计算初始运行时位置。
     // 不再依赖第一帧的大 Camera Delta 把背景推到正确位置。
     object.bindSpriteSource(imageResource);
-    object.updateRuntimeTransform(parallaxCameraX, parallaxCameraY);
+    object.updateRuntimeTransform(parallaxCamera);
     object.updateSprite();
 
     // 5. 将该图层模板登记到列表中
@@ -215,17 +212,16 @@ void BackgroundManager::addObjectFromImage2D(
 
 // 功能：每帧调用。先驱动所有背景模板更新自主漂移，并消费 Camera 明确提供的 Parallax Input Delta。
 //       然后再调用平铺算法更新最终的绘制列表。
-void BackgroundManager::updateRuntimeTransforms(double parallaxInputDx, double parallaxInputDy)
+void BackgroundManager::updateRuntimeTransforms(const Vector2D& parallaxInputDelta)
 {
     // 只累加 Camera 明确允许进入视差系统的位移。
-    parallaxCameraX += parallaxInputDx;
-    parallaxCameraY += parallaxInputDy;
+    parallaxCamera += parallaxInputDelta;
 
     // 背景对象每帧都由“基础位置 + 当前视差相机位置”直接计算运行时位置，
     // 不再把错误 delta 永久积分进 runtimeCenter。
     for (int i = 0; i < (int)objects.size(); i++)
     {
-        objects[i].updateRuntimeTransform(parallaxCameraX, parallaxCameraY);
+        objects[i].updateRuntimeTransform(parallaxCamera);
         objects[i].updateSprite();
     }
 
