@@ -111,7 +111,7 @@ void BackgroundObject::updateSprite()
 }
 
 // 功能：根据背景模式更新本帧用于绘制的运行时逻辑中心点。
-void BackgroundObject::updateRuntimeTransform(double cameraVx, double cameraVy)
+void BackgroundObject::updateRuntimeTransform(double parallaxInputDx, double parallaxInputDy)
 {
     centerX += autoScrollSpeedX;
 
@@ -120,8 +120,8 @@ void BackgroundObject::updateRuntimeTransform(double cameraVx, double cameraVy)
         // fixed 背景把运行时中心锁到 Camera 中心，使背景看起来固定在视口里。
         runtimeCenterX = gCamera.centerX;
         runtimeCenterY = gCamera.centerY;
-        vx = cameraVx;
-        vy = cameraVy;
+        vx = parallaxInputDx;
+        vy = parallaxInputDy;
         return;
     }
 
@@ -139,8 +139,8 @@ void BackgroundObject::updateRuntimeTransform(double cameraVx, double cameraVy)
     {
         // parallaxFactor 表示背景在屏幕上相对地图的移动比例。
         // 0.0 接近固定在屏幕上，1.0 接近普通世界物体。
-        vx = cameraVx * (1.0 - parallaxFactor);
-        vy = cameraVy * (1.0 - parallaxFactor);
+        vx = parallaxInputDx * (1.0 - parallaxFactor);
+        vy = parallaxInputDy * (1.0 - parallaxFactor);
         runtimeCenterX += vx + autoScrollSpeedX;
         runtimeCenterY += vy;
         return;

@@ -13,13 +13,14 @@ LevelDebugger::LevelDebugger()
     debugEntitySectionIndex = -1;
     debugRenderSectionIndex = -1;
     debugCameraSectionIndex = -1;
+    showCameraMotionDetails = true;
 }
 
 void LevelDebugger::init(UIManager& uiManager)
 {
     // Debug 面板是顶层 UI，相对于窗口右上角定位。
     UIElement debugPanel;
-    debugPanel.init(420, 520, UI_TOP_RIGHT, 24, 24);
+    debugPanel.init(420, 720, UI_TOP_RIGHT, 24, 24);
 
     debugPanelIndex = uiManager.addElement(debugPanel);
 
@@ -41,7 +42,7 @@ void LevelDebugger::init(UIManager& uiManager)
 
     // Debug Camera 区域：显示当前相机和视口数据。
     UIElement debugCameraSection;
-    debugCameraSection.init(388, 180, UI_TOP_LEFT, 16, 310);
+    debugCameraSection.init(388, 370, UI_TOP_LEFT, 16, 310);
     debugCameraSection.setParentIndex(debugPanelIndex);
     debugCameraSection.refreshTargetByParentBox(uiManager.getElement(debugPanelIndex).getBox());
     debugCameraSection.snapToTarget();
@@ -160,6 +161,15 @@ void LevelDebugger::handleInput(
     {
         toggleDebugCameraSectionVisible(uiManager);
         std::cout << "Toggle debug camera section." << std::endl;
+    }
+
+    // F12: 只切换 Camera 详细运动分层，不隐藏基础 Camera 信息。
+    if (input.isKeyPressed(VK_F12))
+    {
+        showCameraMotionDetails = !showCameraMotionDetails;
+        std::cout << "Toggle camera motion details: "
+                  << (showCameraMotionDetails ? "ON" : "OFF")
+                  << std::endl;
     }
 }
 
@@ -306,10 +316,16 @@ void LevelDebugger::draw(
         std::vector<std::string> lines;
         lines.push_back("Camera");
 
-        sprintf_s(buf, "Center: %.1f, %.1f", gCamera.centerX, gCamera.centerY);
+        sprintf_s(buf, "Target: %.1f, %.1f", gCamera.targetCenterX, gCamera.targetCenterY);
         lines.push_back(buf);
 
-        sprintf_s(buf, "Zoom: %.2f", gCamera.zoom);
+        sprintf_s(buf, "Logical: %.1f, %.1f", gCamera.logicalCenterX, gCamera.logicalCenterY);
+        lines.push_back(buf);
+
+        sprintf_s(buf, "View: %.1f, %.1f", gCamera.centerX, gCamera.centerY);
+        lines.push_back(buf);
+
+        sprintf_s(buf, "Zoom: %.2f -> %.2f", gCamera.zoom, gCamera.targetZoom);
         lines.push_back(buf);
 
         sprintf_s(buf, "View L/R: %.1f / %.1f", gCamera.getViewLeft(), gCamera.getViewRight());
@@ -317,6 +333,39 @@ void LevelDebugger::draw(
 
         sprintf_s(buf, "View B/T: %.1f / %.1f", gCamera.getViewBottom(), gCamera.getViewTop());
         lines.push_back(buf);
+
+        if (showCameraMotionDetails)
+        {
+            lines.push_back("Motion Detail [F12]");
+
+            sprintf_s(buf, "Desired Dist: %.1f, %.1f", gCamera.desiredMoveX, gCamera.desiredMoveY);
+            lines.push_back(buf);
+
+            sprintf_s(buf, "Logical D: %.2f, %.2f", gCamera.logicalDx, gCamera.logicalDy);
+            lines.push_back(buf);
+
+            sprintf_s(buf, "Actual D: %.2f, %.2f", gCamera.actualDx, gCamera.actualDy);
+            lines.push_back(buf);
+
+            sprintf_s(buf, "View D: %.2f, %.2f", gCamera.viewDx, gCamera.viewDy);
+            lines.push_back(buf);
+
+            sprintf_s(buf, "Zoom D: %.2f, %.2f", gCamera.zoomDx, gCamera.zoomDy);
+            lines.push_back(buf);
+
+            sprintf_s(buf, "Constraint: %.1f, %.1f", gCamera.constraintOffsetX, gCamera.constraintOffsetY);
+            lines.push_back(buf);
+
+            sprintf_s(buf, "Constraint D: %.2f, %.2f", gCamera.constraintDx, gCamera.constraintDy);
+            lines.push_back(buf);
+
+            sprintf_s(buf, "Parallax In: %.2f, %.2f", gCamera.parallaxDx, gCamera.parallaxDy);
+            lines.push_back(buf);
+        }
+        else
+        {
+            lines.push_back("Motion Detail: OFF [F12]");
+        }
 
         renderer.drawDebugSectionText(uiManager.getElement(debugCameraSectionIndex), lines);
     }

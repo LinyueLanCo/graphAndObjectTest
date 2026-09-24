@@ -37,7 +37,7 @@ public:
         double newDrawH,
         double newAutoScrollSpeedX = 0.0
     );
-    void updateRuntimeTransforms(double cameraVx, double cameraVy);
+    void updateRuntimeTransforms(double parallaxInputDx, double parallaxInputDy);
     void sortObjectsByRenderOrder();
     void clearObjects();
     void addObject(const BackgroundObject& object);

@@ -15,7 +15,8 @@ private:
     int debugRenderSectionIndex;
     int debugCameraSectionIndex;
 
-
+    // F12 控制是否显示 Camera 的详细运动分层数据。
+    bool showCameraMotionDetails;
 
     void toggleUIElementVisible(UIManager& uiManager, int elementIndex);
     void toggleDebugEntitySectionVisible(UIManager& uiManager);

@@ -72,6 +72,25 @@ void Level::init()
     // 8. 默认激活被控角色的键盘操纵权限
     setControlTarget(controlledPlayerId);
 
+    // 8.5. 在创建视差背景前先把 Camera 初始化到当前控制角色。
+    // 这样背景的初始基准位置来自一个已经合法化的 View Camera，
+    // 不需要依赖第一帧巨大的 Camera Delta 来“补”到正确位置。
+    if (controlledPlayerId != INVALID_ENTITY_ID)
+    {
+        setCameraFollowTarget(controlledPlayerId, entityManager);
+
+        Entity* initialCameraTarget = entityManager.getEntity(controlledPlayerId);
+        if (initialCameraTarget)
+        {
+            gCamera.followInstant(
+                initialCameraTarget->getX(),
+                initialCameraTarget->getY(),
+                worldWidth,
+                worldHeight
+            );
+        }
+    }
+
     // 9. 摆放天空、云朵和树木图层
     initBackground();
 
@@ -125,12 +144,26 @@ void Level::update(InputManager& input)
 
     // 更新镜头和平滑背景视差
     updateCamera(input);
-    if (gCamera.dx != 0.0 || gCamera.dy != 0.0)
+
+    if (
+        gCamera.viewDx != 0.0 || gCamera.viewDy != 0.0 ||
+        gCamera.logicalDx != 0.0 || gCamera.logicalDy != 0.0
+        )
     {
-        cout << "Camera Move: vx=" << gCamera.dx << ", vy=" << gCamera.dy 
-             << ", center=" << gCamera.centerX << ", " << gCamera.centerY << endl;
+        cout << "Camera Move: logical=("
+             << gCamera.logicalDx << ", " << gCamera.logicalDy
+             << "), actual=("
+             << gCamera.actualDx << ", " << gCamera.actualDy
+             << "), view=("
+             << gCamera.viewDx << ", " << gCamera.viewDy
+             << "), zoom=("
+             << gCamera.zoomDx << ", " << gCamera.zoomDy
+             << ")" << endl;
     }
-    backgroundManager.updateRuntimeTransforms(gCamera.dx, gCamera.dy);
+
+    // 视差只消费“真正由跟随产生且实际通过边界约束的 Camera 位移”。
+    // Zoom 改变视口合法范围造成的 View 重定位不会再被二次当成视差运动。
+    backgroundManager.updateRuntimeTransforms(gCamera.parallaxDx, gCamera.parallaxDy);
 
     // 轮询并打印状态转移日志
     levelDebugger.updateDebugLogs(entityManager);
@@ -506,17 +539,11 @@ void Level::handleCameraInput(InputManager& input)
 
 void Level::updateCamera(InputManager& input)
 {
-    double oldCenterX = gCamera.centerX;
-    double oldCenterY = gCamera.centerY;
-
     updateCameraFollow(
         gCamera,
         entityManager,
         worldWidth,
         worldHeight,
-        0,0
+        0, 0
     );
-
-    gCamera.dx = gCamera.centerX - oldCenterX;
-    gCamera.dy = gCamera.centerY - oldCenterY;
 }
