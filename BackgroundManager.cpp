@@ -8,6 +8,8 @@ BackgroundManager::BackgroundManager()
     // 预分配 32 个背景槽位，通常足够覆盖多图层的平铺需求，避免每帧动态分配内存导致的卡顿（堆碎片）
     renderPool.resize(32);
     activeRenderCount = 0;
+    parallaxCameraX = 0.0;
+    parallaxCameraY = 0.0;
 }
 
 // 功能：获取当前帧内经过平铺裁剪后，实际需要提交给渲染器的背景实例列表。
@@ -143,6 +145,14 @@ void BackgroundManager::clear()
 {
     objects.clear();
     activeRenderCount = 0;
+    parallaxCameraX = 0.0;
+    parallaxCameraY = 0.0;
+}
+
+void BackgroundManager::setParallaxCameraPosition(double x, double y)
+{
+    parallaxCameraX = x;
+    parallaxCameraY = y;
 }
 
 // 功能：辅助方法，直接基于图片资源、渲染顺序、视差缩放系数和自动飘动速度等参数，
@@ -189,9 +199,10 @@ void BackgroundManager::addObjectFromImage2D(
     // 3. 设定自主移动速度（如云层风力漂移速度，正数向右，负数向左）
     object.autoScrollSpeedX = newAutoScrollSpeedX;
 
-    // 4. 绑定纹理并完成初次变换更新
+    // 4. 绑定纹理，并直接根据当前“视差相机参考位置”计算初始运行时位置。
+    // 不再依赖第一帧的大 Camera Delta 把背景推到正确位置。
     object.bindSpriteSource(imageResource);
-    object.updateRuntimeTransform(0.0, 0.0);
+    object.updateRuntimeTransform(parallaxCameraX, parallaxCameraY);
     object.updateSprite();
 
     // 5. 将该图层模板登记到列表中
@@ -206,10 +217,15 @@ void BackgroundManager::addObjectFromImage2D(
 //       然后再调用平铺算法更新最终的绘制列表。
 void BackgroundManager::updateRuntimeTransforms(double parallaxInputDx, double parallaxInputDy)
 {
-    // 遍历每一个注册 of 背景层模板，更新其坐标并同步到 Sprite 数据
+    // 只累加 Camera 明确允许进入视差系统的位移。
+    parallaxCameraX += parallaxInputDx;
+    parallaxCameraY += parallaxInputDy;
+
+    // 背景对象每帧都由“基础位置 + 当前视差相机位置”直接计算运行时位置，
+    // 不再把错误 delta 永久积分进 runtimeCenter。
     for (int i = 0; i < (int)objects.size(); i++)
     {
-        objects[i].updateRuntimeTransform(parallaxInputDx, parallaxInputDy);
+        objects[i].updateRuntimeTransform(parallaxCameraX, parallaxCameraY);
         objects[i].updateSprite();
     }
 
