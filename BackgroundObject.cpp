@@ -110,44 +110,44 @@ void BackgroundObject::updateSprite()
     );
 }
 
-// 功能：根据背景模式更新本帧用于绘制的运行时逻辑中心点。
-void BackgroundObject::updateRuntimeTransform(double parallaxInputDx, double parallaxInputDy)
+// 功能：根据背景模式和“视差相机参考位置”直接计算本帧运行时中心点。
+// 注意这里接收的是绝对的 Parallax Camera Position，不再是逐帧 delta。
+// 因此 runtimeCenter 不会因为某一帧错误的 Camera Delta 被永久污染。
+void BackgroundObject::updateRuntimeTransform(double parallaxCameraX, double parallaxCameraY)
 {
+    double oldRuntimeX = runtimeCenterX;
+    double oldRuntimeY = runtimeCenterY;
+
     centerX += autoScrollSpeedX;
 
     if (drawMode == BACKGROUND_FIXED_CAMERA)
     {
-        // fixed 背景把运行时中心锁到 Camera 中心，使背景看起来固定在视口里。
+        // fixed 背景直接锁到最终 View Camera。
         runtimeCenterX = gCamera.centerX;
         runtimeCenterY = gCamera.centerY;
-        vx = parallaxInputDx;
-        vy = parallaxInputDy;
-        return;
     }
-
-    if (drawMode == BACKGROUND_SINGLE_WORLD)
+    else if (drawMode == BACKGROUND_SINGLE_WORLD)
     {
-        // 普通世界背景不额外处理视差，直接使用对象自己的基础逻辑位置。
+        // 普通世界背景保持自己的世界位置。
         runtimeCenterX = centerX;
         runtimeCenterY = centerY;
-        vx = 0.0;
-        vy = 0.0;
-        return;
     }
-
-    if (drawMode == BACKGROUND_REPEAT_X)
+    else if (drawMode == BACKGROUND_REPEAT_X)
     {
-        // parallaxFactor 表示背景在屏幕上相对地图的移动比例。
-        // 0.0 接近固定在屏幕上，1.0 接近普通世界物体。
-        vx = parallaxInputDx * (1.0 - parallaxFactor);
-        vy = parallaxInputDy * (1.0 - parallaxFactor);
-        runtimeCenterX += vx + autoScrollSpeedX;
-        runtimeCenterY += vy;
-        return;
+        // parallaxFactor 表示该层相对普通世界的视差倍率。
+        // 0.0：接近固定在屏幕；1.0：普通世界；>1.0：前景反向加强。
+        runtimeCenterX =
+            centerX + parallaxCameraX * (1.0 - parallaxFactor);
+
+        runtimeCenterY =
+            centerY + parallaxCameraY * (1.0 - parallaxFactor);
+    }
+    else
+    {
+        runtimeCenterX = centerX;
+        runtimeCenterY = centerY;
     }
 
-    vx = 0.0;
-    vy = 0.0;
-    runtimeCenterX = centerX;
-    runtimeCenterY = centerY;
+    vx = runtimeCenterX - oldRuntimeX;
+    vy = runtimeCenterY - oldRuntimeY;
 }
