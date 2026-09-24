@@ -2,6 +2,7 @@
 
 #include "BackgroundObject.h"
 #include "Config.h"
+#include "Vector2D.h"
 
 // BackgroundManager:
 // 管理当前关卡中的背景对象。
@@ -16,8 +17,7 @@ private:
     // 视差系统自己的“相机参考位置”。
     // 它只累加 Camera 明确提供的 parallax delta，不直接绑定最终 View Camera，
     // 因此 Zoom / Clamp 导致的 View 重定位不会污染背景位置。
-    double parallaxCameraX;
-    double parallaxCameraY;
+    Vector2D parallaxCamera;
 
 public:
     BackgroundManager();                                 // 构造函数：预置渲染池的大小
@@ -30,7 +30,7 @@ public:
 
     void rebuildRenderObjects();
     void clear();
-    void setParallaxCameraPosition(double x, double y);
+    void setParallaxCameraPosition(const Vector2D& position);
     void addObjectFromImage2D(
         Image2D* imageResource,
         int newRenderOrder,
@@ -44,7 +44,7 @@ public:
         double newDrawH,
         double newAutoScrollSpeedX = 0.0
     );
-    void updateRuntimeTransforms(double parallaxInputDx, double parallaxInputDy);
+    void updateRuntimeTransforms(const Vector2D& parallaxInputDelta);
     void sortObjectsByRenderOrder();
     void clearObjects();
     void addObject(const BackgroundObject& object);

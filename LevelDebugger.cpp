@@ -316,13 +316,13 @@ void LevelDebugger::draw(
         std::vector<std::string> lines;
         lines.push_back("Camera");
 
-        sprintf_s(buf, "Target: %.1f, %.1f", gCamera.targetCenterX, gCamera.targetCenterY);
+        sprintf_s(buf, "Target: %.1f, %.1f", gCamera.targetCenter.x, gCamera.targetCenter.y);
         lines.push_back(buf);
 
-        sprintf_s(buf, "Logical: %.1f, %.1f", gCamera.logicalCenterX, gCamera.logicalCenterY);
+        sprintf_s(buf, "Logical: %.1f, %.1f", gCamera.logicalCenter.x, gCamera.logicalCenter.y);
         lines.push_back(buf);
 
-        sprintf_s(buf, "View: %.1f, %.1f", gCamera.centerX, gCamera.centerY);
+        sprintf_s(buf, "View: %.1f, %.1f", gCamera.viewCenter.x, gCamera.viewCenter.y);
         lines.push_back(buf);
 
         sprintf_s(buf, "Zoom: %.2f -> %.2f", gCamera.zoom, gCamera.targetZoom);
@@ -338,28 +338,28 @@ void LevelDebugger::draw(
         {
             lines.push_back("Motion Detail [F12]");
 
-            sprintf_s(buf, "Desired Dist: %.1f, %.1f", gCamera.desiredMoveX, gCamera.desiredMoveY);
+            sprintf_s(buf, "Desired Dist: %.1f, %.1f", gCamera.desiredMove.x, gCamera.desiredMove.y);
             lines.push_back(buf);
 
-            sprintf_s(buf, "Logical D: %.2f, %.2f", gCamera.logicalDx, gCamera.logicalDy);
+            sprintf_s(buf, "Logical D: %.2f, %.2f", gCamera.logicalDelta.x, gCamera.logicalDelta.y);
             lines.push_back(buf);
 
-            sprintf_s(buf, "Actual D: %.2f, %.2f", gCamera.actualDx, gCamera.actualDy);
+            sprintf_s(buf, "Actual D: %.2f, %.2f", gCamera.actualDelta.x, gCamera.actualDelta.y);
             lines.push_back(buf);
 
-            sprintf_s(buf, "View D: %.2f, %.2f", gCamera.viewDx, gCamera.viewDy);
+            sprintf_s(buf, "View D: %.2f, %.2f", gCamera.viewDelta.x, gCamera.viewDelta.y);
             lines.push_back(buf);
 
-            sprintf_s(buf, "Zoom D: %.2f, %.2f", gCamera.zoomDx, gCamera.zoomDy);
+            sprintf_s(buf, "Zoom D: %.2f, %.2f", gCamera.zoomDelta.x, gCamera.zoomDelta.y);
             lines.push_back(buf);
 
-            sprintf_s(buf, "Constraint: %.1f, %.1f", gCamera.constraintOffsetX, gCamera.constraintOffsetY);
+            sprintf_s(buf, "Constraint: %.1f, %.1f", gCamera.constraintOffset.x, gCamera.constraintOffset.y);
             lines.push_back(buf);
 
-            sprintf_s(buf, "Constraint D: %.2f, %.2f", gCamera.constraintDx, gCamera.constraintDy);
+            sprintf_s(buf, "Constraint D: %.2f, %.2f", gCamera.constraintDelta.x, gCamera.constraintDelta.y);
             lines.push_back(buf);
 
-            sprintf_s(buf, "Parallax In: %.2f, %.2f", gCamera.parallaxDx, gCamera.parallaxDy);
+            sprintf_s(buf, "Parallax In: %.2f, %.2f", gCamera.parallaxDelta.x, gCamera.parallaxDelta.y);
             lines.push_back(buf);
         }
         else

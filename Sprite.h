@@ -1,6 +1,7 @@
 ﻿#pragma once
 
 #include "Resource.h"
+#include "Vector2D.h"
 
 // sprite：
  // 单帧渲染数据容器。
@@ -67,6 +68,16 @@ struct sprite
         offsetY = newOffsetY;
     }
 
+    Vector2D getWorldCenter() const
+    {
+        return Vector2D(worldCenterX, worldCenterY);
+    }
+
+    Vector2D getWorldDrawSize() const
+    {
+        return Vector2D(worldDrawW, worldDrawH);
+    }
+
     // 功能：设置 sprite 在世界坐标中的最终绘制中心点和绘制尺寸。
     void setWorldDrawData(double newCenterX, double newCenterY, double newDrawW, double newDrawH)
     {
@@ -74,5 +85,10 @@ struct sprite
         worldCenterY = newCenterY;
         worldDrawW = newDrawW;
         worldDrawH = newDrawH;
+    }
+
+    void setWorldDrawData(const Vector2D& center, const Vector2D& drawSize)
+    {
+        setWorldDrawData(center.x, center.y, drawSize.x, drawSize.y);
     }
 };

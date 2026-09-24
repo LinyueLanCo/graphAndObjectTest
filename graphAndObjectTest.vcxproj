@@ -196,6 +196,7 @@
     <ClInclude Include="Level.h" />
     <ClInclude Include="LevelDebugger.h" />
     <ClInclude Include="MathUtils.h" />
+    <ClInclude Include="Vector2D.h" />
     <ClInclude Include="MovementHandle.h" />
     <ClInclude Include="Renderer.h" />
     <ClInclude Include="Resource.h" />
