@@ -206,6 +206,9 @@
     <ClInclude Include="MathUtils.h">
       <Filter>头文件</Filter>
     </ClInclude>
+    <ClInclude Include="Vector2D.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
     <ClInclude Include="RenderQueue.h">
       <Filter>头文件</Filter>
     </ClInclude>
