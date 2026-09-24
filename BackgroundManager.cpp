@@ -115,10 +115,8 @@ void BackgroundManager::rebuildRenderObjects()
 
             // 同步更新精灵的世界绘制数据
             repeatedObject.renderSprite.setWorldDrawData(
-                currentCenterX,
-                renderCenterY,
-                repeatDrawW,
-                repeatDrawH
+                repeatedObject.runtimeCenter,
+                Vector2D(repeatDrawW, repeatDrawH)
             );
 
             // 往右累加一个背景图宽度，准备放置下一张
