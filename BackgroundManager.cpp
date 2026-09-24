@@ -202,14 +202,14 @@ void BackgroundManager::addObjectFromImage2D(
     rebuildRenderObjects();
 }
 
-// 功能：每帧调用。先驱动所有的背景模板更新它们自身的自主漂移和受相机速度带动的视差位移，
+// 功能：每帧调用。先驱动所有背景模板更新自主漂移，并消费 Camera 明确提供的 Parallax Input Delta。
 //       然后再调用平铺算法更新最终的绘制列表。
-void BackgroundManager::updateRuntimeTransforms(double cameraVx, double cameraVy)
+void BackgroundManager::updateRuntimeTransforms(double parallaxInputDx, double parallaxInputDy)
 {
     // 遍历每一个注册 of 背景层模板，更新其坐标并同步到 Sprite 数据
     for (int i = 0; i < (int)objects.size(); i++)
     {
-        objects[i].updateRuntimeTransform(cameraVx, cameraVy);
+        objects[i].updateRuntimeTransform(parallaxInputDx, parallaxInputDy);
         objects[i].updateSprite();
     }
 
