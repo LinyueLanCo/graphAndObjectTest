@@ -141,8 +141,7 @@ void BackgroundManager::clear()
 {
     objects.clear();
     activeRenderCount = 0;
-    parallaxCameraX = 0.0;
-    parallaxCameraY = 0.0;
+    parallaxCamera = Vector2D();
 }
 
 void BackgroundManager::setParallaxCameraPosition(const Vector2D& position)
